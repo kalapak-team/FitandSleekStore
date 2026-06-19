@@ -7,7 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Services\BarcodeScanStockService;
-use App\Services\BakongKhqrService;
+use App\Services\RielpayPaymentService;
 use App\Services\OrderItemLotAllocation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 class PosSaleController extends Controller
 {
     public function __construct(
-        private readonly BakongKhqrService $bakongKhqr
+        private readonly RielpayPaymentService $rielpayPayments
     ) {
     }
 
@@ -107,21 +107,21 @@ class PosSaleController extends Controller
 
             $khqrOut = null;
             if ($validated['payment_method'] === 'khqr') {
-                $currency = strtoupper((string) config('services.bakong.currency', 'KHR'));
+                $currency = strtoupper((string) config('services.rielpay.currency', 'KHR'));
                 $payment = Payment::create([
                     'order_id' => $order->id,
-                    'provider' => 'bakong',
+                    'provider' => 'rielpay',
                     'method' => 'bakong_khqr',
                     'status' => 'pending',
                     'amount' => $subtotal,
                     'currency' => $currency,
                 ]);
                 try {
-                    $result = $this->bakongKhqr->generate($order, $payment);
+                    $result = $this->rielpayPayments->generate($order, $payment);
                 } catch (\Throwable $e) {
                     report($e);
                     $payment->update(['status' => 'failed']);
-                    $detail = config('app.debug') ? $e->getMessage() : 'Configure Bakong receive account and Node KHQR (see server logs).';
+                    $detail = config('app.debug') ? $e->getMessage() : 'Configure Rielpay API credentials on the server.';
 
                     throw ValidationException::withMessages([
                         'payment_method' => ['Unable to generate KHQR for this receipt. '.$detail],

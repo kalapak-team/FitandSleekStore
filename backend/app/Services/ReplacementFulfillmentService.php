@@ -105,7 +105,7 @@ class ReplacementFulfillmentService
                 'order_id' => $replacementOrder->id,
                 'provider' => 'replacement',
                 'amount' => 0,
-                'currency' => config('services.bakong.currency', 'USD'),
+                'currency' => config('services.rielpay.currency', 'USD'),
                 'method' => 'replacement',
                 'status' => 'paid',
             ]);

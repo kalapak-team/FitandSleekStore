@@ -217,9 +217,9 @@ class OrderController extends Controller
             // Create pending payment record
             \App\Models\Payment::create([
                 'order_id' => $order->id,
-                'provider' => $validated['payment_method'] === 'bakong_khqr' ? 'bakong' : 'card',
+                'provider' => $validated['payment_method'] === 'bakong_khqr' ? 'rielpay' : 'card',
                 'amount' => $order->total,
-                'currency' => config('services.bakong.currency', 'KHR'),
+                'currency' => config('services.rielpay.currency', 'KHR'),
                 'method' => $validated['payment_method'],
                 'status' => 'pending',
             ]);

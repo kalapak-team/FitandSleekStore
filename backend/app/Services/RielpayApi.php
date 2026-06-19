@@ -1,0 +1,114 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
+
+class RielpayApi
+{
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function createPayment(array $payload): array
+    {
+        return $this->request('post', '/api/v1/payments/create', $payload);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function checkPayment(string $md5): array
+    {
+        return $this->request('post', '/api/v1/payments/check', [
+            'md5' => strtolower(trim($md5)),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getPayment(string $billNumber): array
+    {
+        return $this->request('get', '/api/v1/payments/' . rawurlencode($billNumber));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $payload
+     * @return array<string, mixed>
+     */
+    private function request(string $method, string $path, ?array $payload = null): array
+    {
+        $baseUrl = rtrim((string) config('services.rielpay.api_url'), '/');
+        $apiKey = (string) config('services.rielpay.api_key');
+
+        if ($baseUrl === '') {
+            throw new RuntimeException('Rielpay API URL is not configured (RIELPAY_API_URL).');
+        }
+
+        if ($apiKey === '') {
+            throw new RuntimeException('Rielpay API key is not configured (RIELPAY_API_KEY).');
+        }
+
+        $headers = [
+            'Accept' => 'application/json',
+            'Authorization' => 'Bearer ' . $apiKey,
+            'X-API-Key' => $apiKey,
+        ];
+
+        if ($payload !== null) {
+            $headers['Content-Type'] = 'application/json';
+        }
+
+        try {
+            $pending = Http::timeout(25)->withHeaders($headers);
+
+            $response = match (strtolower($method)) {
+                'get' => $pending->get($baseUrl . $path),
+                'post' => $pending->post($baseUrl . $path, $payload ?? []),
+                default => throw new RuntimeException('Unsupported HTTP method: ' . $method),
+            };
+        } catch (ConnectionException $e) {
+            throw new RuntimeException('Rielpay connection failed: ' . $e->getMessage(), 0, $e);
+        }
+
+        if ($response->failed()) {
+            $this->throwForFailedResponse($response->status(), $response->json(), $response->body());
+        }
+
+        $json = $response->json();
+        if (! is_array($json)) {
+            throw new RuntimeException('Rielpay returned an invalid response.');
+        }
+
+        return $json;
+    }
+
+  /**
+     * @param  array<string, mixed>|null  $json
+     */
+    private function throwForFailedResponse(int $status, ?array $json, string $body): void
+    {
+        $message = is_string(data_get($json, 'message'))
+            ? (string) data_get($json, 'message')
+            : trim($body);
+
+        Log::warning('Rielpay API error', [
+            'status' => $status,
+            'message' => $message,
+            'errors' => data_get($json, 'errors'),
+        ]);
+
+        $userMessage = match ($status) {
+            401 => 'Payment service authentication failed. Please contact support.',
+            403 => 'Payment service is not active. Please contact support.',
+            422 => $message !== '' ? $message : 'Invalid payment request.',
+            default => 'Payment service is temporarily unavailable. Please try again.',
+        };
+
+        throw new RuntimeException($userMessage);
+    }
+}

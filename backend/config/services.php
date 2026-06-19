@@ -102,23 +102,11 @@ return [
         'verify' => env('GEMINI_VERIFY_SSL', true),
     ],
 
-    'bakong' => [
-        'base_url' => env('BAKONG_BASE_URL', 'https://api-bakong.nbc.gov.kh'),
-        'token' => env('BAKONG_TOKEN'),
-        // NBC check_transaction_by_md5 is blocked outside Cambodia (errorCode 15).
-        // forward = Cloudflare Worker path relay (default); legacy = backend/bakong-proxy/index.php
-        'proxy_url' => env('BAKONG_PROXY_URL'),
-        'proxy_style' => env('BAKONG_PROXY_STYLE', 'forward'),
-        'proxy_secret' => env('BAKONG_PROXY_SECRET'),
-        'merchant_name' => env('BAKONG_MERCHANT_NAME'),
-        'merchant_city' => env('BAKONG_MERCHANT_CITY', 'Phnom Penh'),
-        'receive_account' => env('BAKONG_RECEIVE_ACCOUNT'),
-        'node_binary' => env('KHQR_NODE_BINARY', env('NODE_BINARY', 'node')),
-        'currency' => env('BAKONG_CURRENCY', 'KHR'),
-        'expired_in' => (int) env('BAKONG_EXPIRES_IN', 300),
-        'webhook_secret' => env('BAKONG_WEBHOOK_SECRET'),
-        'verify' => env('BAKONG_VERIFY_SSL', true),
-        'ca_bundle' => env('BAKONG_CA_BUNDLE', env('GEMINI_CA_BUNDLE')),
+    'rielpay' => [
+        'api_url' => env('RIELPAY_API_URL', 'https://api-rielpay.fitandsleek.online'),
+        'api_key' => env('RIELPAY_API_KEY'),
+        'currency' => env('RIELPAY_CURRENCY', 'KHR'),
+        'expires_in' => (int) env('RIELPAY_EXPIRES_IN', 300),
     ],
 
     'aba_payway' => [

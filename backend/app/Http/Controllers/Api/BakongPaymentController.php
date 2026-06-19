@@ -3,24 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\PaidOrderInventory;
-use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Setting;
-use App\Services\BakongApi;
-use App\Services\BakongKhqrService;
+use App\Services\RielpayPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class BakongPaymentController extends Controller
 {
     public function __construct(
-        private readonly BakongApi $bakong,
-        private readonly BakongKhqrService $khqr
+        private readonly RielpayPaymentService $rielpayPayments,
     ) {
     }
 
@@ -42,14 +36,14 @@ class BakongPaymentController extends Controller
         }
 
         Payment::where('order_id', $order->id)
-            ->where('provider', 'bakong')
+            ->khqrProvider()
             ->where('status', 'pending')
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
             ->update(['status' => 'expired']);
 
         $activePayment = Payment::where('order_id', $order->id)
-            ->where('provider', 'bakong')
+            ->khqrProvider()
             ->where('status', 'pending')
             ->whereNotNull('qr_string')
             ->whereNotNull('md5')
@@ -64,7 +58,7 @@ class BakongPaymentController extends Controller
         }
 
         $payment = Payment::where('order_id', $order->id)
-            ->where('provider', 'bakong')
+            ->khqrProvider()
             ->whereIn('status', ['pending', 'failed'])
             ->latest('id')
             ->first();
@@ -73,7 +67,8 @@ class BakongPaymentController extends Controller
             $payment->update([
                 'status' => 'pending',
                 'amount' => $order->total,
-                'currency' => config('services.bakong.currency', 'KHR'),
+                'currency' => config('services.rielpay.currency', 'KHR'),
+                'provider' => 'rielpay',
                 'bill_number' => null,
                 'md5' => null,
                 'qr_string' => null,
@@ -85,22 +80,22 @@ class BakongPaymentController extends Controller
         } else {
             $payment = Payment::create([
                 'order_id' => $order->id,
-                'provider' => 'bakong',
+                'provider' => 'rielpay',
                 'method' => 'bakong_khqr',
                 'status' => 'pending',
                 'amount' => $order->total,
-                'currency' => config('services.bakong.currency', 'KHR'),
+                'currency' => config('services.rielpay.currency', 'KHR'),
             ]);
         }
 
         try {
-            $result = $this->khqr->generate($order, $payment);
+            $result = $this->rielpayPayments->generate($order, $payment);
         } catch (\Throwable $e) {
             report($e);
             $payment->update(['status' => 'failed']);
 
             $response = [
-                'message' => 'Unable to generate Bakong KHQR. Please try again.',
+                'message' => $e->getMessage() ?: 'Unable to create KHQR payment. Please try again.',
             ];
 
             if (config('app.debug')) {
@@ -118,7 +113,7 @@ class BakongPaymentController extends Controller
             }
 
             $payment->update(['bill_number' => null]);
-            $result = $this->khqr->generate($order, $payment->fresh());
+            $result = $this->rielpayPayments->generate($order, $payment->fresh());
             $this->persistKhqrResult($payment, $result);
         }
 
@@ -143,20 +138,10 @@ class BakongPaymentController extends Controller
             ));
         }
 
-        // If we somehow have a payment without an md5 (older records), regenerate a fresh KHQR
         if (empty($payment->md5)) {
             try {
-                $result = $this->khqr->generate($order, $payment);
-
-                $payment->update([
-                    'bill_number' => $result['bill_number'],
-                    'md5' => $result['md5'],
-                    'khqr_payload' => $result['payload'],
-                    'qr_string' => $result['qr_string'],
-                    'qr_image_base64' => null,
-                    'expires_at' => $result['expires_at'],
-                    'status' => 'pending',
-                ]);
+                $result = $this->rielpayPayments->generate($order, $payment);
+                $this->persistKhqrResult($payment, $result);
 
                 return response()->json($this->formatPaymentResponse($payment->fresh()));
             } catch (\Throwable $e) {
@@ -170,9 +155,9 @@ class BakongPaymentController extends Controller
         }
 
         try {
-            $response = $this->bakong->checkByMd5((string) $payment->md5);
+            $payment = $this->rielpayPayments->refreshStatus($payment, $order);
         } catch (\Throwable $e) {
-            Log::warning('Bakong status check failed', [
+            Log::warning('Rielpay status check failed', [
                 'payment_id' => $payment->id,
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
@@ -180,6 +165,7 @@ class BakongPaymentController extends Controller
 
             $payment->refresh();
             $order->refresh();
+
             if ($payment->status === 'paid' || $order->payment_status === 'paid') {
                 return response()->json(array_merge(
                     $this->formatPaymentResponse($payment),
@@ -187,139 +173,28 @@ class BakongPaymentController extends Controller
                 ));
             }
 
-            $pendingPayload = array_merge(
-                $this->formatPaymentResponse($payment),
-                ['status' => 'pending']
-            );
-
-            $pendingPayload['message'] = blank(config('services.bakong.proxy_url'))
-                ? 'Waiting for payment confirmation. Keep this screen open after you pay in your banking app.'
-                : 'Payment status check is temporarily unavailable. Keep this screen open.';
-
-            return response()->json($pendingPayload);
-        }
-
-        $responseCode = $response['responseCode'] ?? $response['response_code'] ?? null;
-        $transaction = is_array($response['data'] ?? null) ? $response['data'] : [];
-
-        if ((int) $responseCode === 0 && $this->transactionConfirmsPayment($payment, $transaction)) {
-            try {
-                DB::transaction(function () use ($payment, $order, $response, $transaction) {
-                    $payment->update([
-                        'status' => 'paid',
-                        'paid_at' => now(),
-                        'bakong_data' => $transaction,
-                        'raw_response' => $response,
-                    ]);
-
-                    if ($order->payment_status !== 'paid') {
-                        $this->markOrderAsPaid($order);
-                        $this->clearUserCart((int) $order->user_id);
-                    }
-                });
-            } catch (\Throwable $e) {
-                Log::error('Bakong payment confirmation failed', [
-                    'payment_id' => $payment->id,
-                    'order_id' => $order->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                return response()->json(array_merge(
-                    $this->formatPaymentResponse($payment->fresh()),
-                    [
-                        'status' => 'pending',
-                        'message' => 'Payment received but order update failed. Contact support with your bill number.',
-                    ]
-                ));
-            }
-
             return response()->json(array_merge(
-                $this->formatPaymentResponse($payment->fresh()),
+                $this->formatPaymentResponse($payment),
                 [
-                    'status' => 'paid',
-                    'data' => $transaction,
+                    'status' => 'pending',
+                    'message' => 'Waiting for payment confirmation. Keep this screen open after you pay in your banking app.',
                 ]
             ));
         }
 
-        if ((int) $responseCode === 0 && ! empty($transaction)) {
-            Log::info('Bakong transaction returned but did not match payment', [
-                'payment_id' => $payment->id,
-                'bill_number' => $payment->bill_number,
-                'transaction' => $transaction,
-            ]);
+        $order->refresh();
+
+        if ($payment->status === 'paid' || $order->payment_status === 'paid') {
+            return response()->json(array_merge(
+                $this->formatPaymentResponse($payment),
+                ['status' => 'paid']
+            ));
         }
 
-        $errorCode = (int) ($response['errorCode'] ?? 0);
-        $pendingPayload = array_merge(
+        return response()->json(array_merge(
             $this->formatPaymentResponse($payment),
-            ['status' => 'pending']
-        );
-
-        if ((int) $responseCode === 1 && $errorCode === 15) {
-            $pendingPayload['verification_note'] =
-                'Payment verification is blocked from this server region. Set BAKONG_PROXY_URL to a Cambodia-hosted proxy (see backend/bakong-proxy).';
-            $pendingPayload['bakong_error_code'] = 15;
-        }
-
-        if ($payment->expires_at && now()->greaterThan($payment->expires_at)) {
-            $payment->update(['status' => 'expired']);
-            $pendingPayload['status'] = 'expired';
-        }
-
-        return response()->json($pendingPayload);
-    }
-
-    /**
-     * Bakong success payloads include hash, amount, and toAccountId — not always billNumber.
-     */
-    private function transactionConfirmsPayment(Payment $payment, array $transaction): bool
-    {
-        if ($transaction === [] || ! filled(data_get($transaction, 'hash'))) {
-            return false;
-        }
-
-        $expectedAccount = $this->expectedReceiveAccount();
-        $toAccount = strtolower(trim((string) data_get($transaction, 'toAccountId', '')));
-
-        if ($expectedAccount !== '' && $toAccount !== '' && ! $this->accountsMatch($expectedAccount, $toAccount)) {
-            return false;
-        }
-
-        $paidAmount = data_get($transaction, 'amount');
-        if ($paidAmount !== null && ! $this->amountsMatch((float) $payment->amount, (float) $paidAmount, (string) $payment->currency)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    private function expectedReceiveAccount(): string
-    {
-        $fromDb = Setting::query()
-            ->where('group', 'payment')
-            ->where('key', 'bakong_receive_account')
-            ->value('value');
-
-        $account = filled($fromDb)
-            ? (string) $fromDb
-            : (string) config('services.bakong.receive_account');
-
-        return strtolower(trim($account));
-    }
-
-    private function accountsMatch(string $expected, string $actual): bool
-    {
-        return strtolower(trim($expected)) === strtolower(trim($actual));
-    }
-
-    private function amountsMatch(float $expected, float $actual, string $currency): bool
-    {
-        if (strtoupper($currency) === 'KHR') {
-            return (int) round($expected) === (int) round($actual);
-        }
-
-        return abs($expected - $actual) < 0.01;
+            ['status' => $payment->status]
+        ));
     }
 
     private function ensureOrderOwner(Order $order, Request $request): void
@@ -331,36 +206,20 @@ class BakongPaymentController extends Controller
         }
     }
 
-    private function markOrderAsPaid(Order $order): void
-    {
-        $locked = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
-
-        if ($locked->payment_status === 'paid') {
-            return;
-        }
-
-        $locked->update([
-            'payment_status' => 'paid',
-            'status' => 'processing',
-        ]);
-
-        $locked->loadMissing('items.product');
-
-        PaidOrderInventory::applyForOrder($locked);
-    }
-
     /**
      * @param  array{bill_number: string, md5: string, payload: array, qr_string: string, expires_at: \Illuminate\Support\Carbon}  $result
      */
     private function persistKhqrResult(Payment $payment, array $result): void
     {
         $payment->update([
+            'provider' => 'rielpay',
             'bill_number' => $result['bill_number'],
             'md5' => $result['md5'],
             'khqr_payload' => $result['payload'],
             'qr_string' => $result['qr_string'],
             'qr_image_base64' => null,
             'expires_at' => $result['expires_at'],
+            'raw_response' => $result['payload'],
         ]);
     }
 
@@ -376,44 +235,5 @@ class BakongPaymentController extends Controller
             'amount' => $payment->amount,
             'currency' => $payment->currency,
         ];
-    }
-
-    private function extractBillNumber(array $data): ?string
-    {
-        $direct = data_get($data, 'billNumber')
-            ?? data_get($data, 'bill_no')
-            ?? data_get($data, 'bill_number');
-
-        if (filled($direct)) {
-            return (string) $direct;
-        }
-
-        $description = trim((string) data_get($data, 'description', ''));
-        if ($description !== '' && preg_match('/ORD-[A-Z0-9-]+/i', $description, $matches)) {
-            return $matches[0];
-        }
-
-        return null;
-    }
-
-    private function billMatches(?string $actual, ?string $expected): bool
-    {
-        if (! $expected) {
-            return false;
-        }
-
-        if ($actual === null) {
-            return false;
-        }
-
-        return strcasecmp(trim((string) $actual), trim((string) $expected)) === 0;
-    }
-
-    private function clearUserCart(int $userId): void
-    {
-        $cart = Cart::with('items')->where('user_id', $userId)->first();
-        if ($cart) {
-            $cart->items()->delete();
-        }
     }
 }

@@ -9,6 +9,9 @@ class Payment extends Model
 {
     use HasFactory;
 
+    /** @var list<string> */
+    public const KHQR_PROVIDERS = ['rielpay', 'bakong'];
+
     protected $fillable = [
         'order_id',
         'provider',
@@ -70,5 +73,10 @@ class Payment extends Model
     public function scopeFailed($query)
     {
         return $query->where('status', 'failed');
+    }
+
+    public function scopeKhqrProvider($query)
+    {
+        return $query->whereIn('provider', self::KHQR_PROVIDERS);
     }
 }

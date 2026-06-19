@@ -162,9 +162,6 @@ Route::get('/brands/{slug}', [StorefrontBrandController::class, 'show']);
 Route::post('/chatbot/message', [ChatbotController::class, 'message'])->middleware('throttle:api-sensitive');
 Route::get('/chatbot/settings', [ChatbotController::class, 'settings']);
 
-// Bakong KHQR webhook (optional)
-Route::post('/payments/khqr/webhook', [PaymentController::class, 'khqrWebhook']);
-
 // Public notifications (guests)
 Route::get('/notifications/public', [NotificationController::class, 'index']);
 

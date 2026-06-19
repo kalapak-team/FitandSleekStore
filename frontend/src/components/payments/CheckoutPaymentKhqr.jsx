@@ -76,9 +76,7 @@ export default function CheckoutPaymentKhqr({
       const nextPayment = data?.payment || data;
       const nextStatus = nextPayment?.status || data?.status;
 
-      if (data?.verification_note) {
-        setVerificationNote(String(data.verification_note));
-      } else if (data?.message && nextStatus !== "paid") {
+      if (data?.message && nextStatus !== "paid") {
         setVerificationNote(String(data.message));
       } else {
         setVerificationNote("");
