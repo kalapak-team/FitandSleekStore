@@ -21,7 +21,7 @@ services:
         value: fitandsleek.online,www.fitandsleek.online,fitandsleek-official.vercel.app
       - key: RUN_MIGRATIONS
         value: "false"
-      # Media — Cloudflare R2 (bucket: fitandsleek — dash.cloudflare.com → R2)
+      # Media — Cloudflare R2 (account 29531ec2… — create bucket "fitandsleek" in dashboard)
       - key: FILESYSTEM_DISK
         value: r2
       - key: ADMIN_PROFILE_IMAGE_DISK
@@ -33,7 +33,9 @@ services:
       - key: R2_BUCKET
         value: fitandsleek
       - key: R2_ENDPOINT
-        value: https://f9e417f0e77259dc18fda6ab587a1b02.r2.cloudflarestorage.com
+        value: https://29531ec21763c961814bc2de1cf2aa75.r2.cloudflarestorage.com
+      # Set after R2 public access: custom domain media.fitandsleek.online (zone on this account)
+      # or interim https://pub-xxxxxxxx.r2.dev — also set AWS_URL to the same value on Render.
       - key: R2_PUBLIC_URL
         value: https://media.fitandsleek.online
       - key: R2_REGION
