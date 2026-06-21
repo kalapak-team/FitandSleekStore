@@ -203,6 +203,13 @@ class Media
         return ($disk ?? self::disk()) === 'cloudinary';
     }
 
+    private static function usesR2OrS3Disk(?string $disk): bool
+    {
+        $disk = $disk ?? self::disk();
+
+        return $disk === 'r2' || $disk === 's3';
+    }
+
     /**
      * @return array{cloudName: string, apiKey: string, apiSecret: string, cloudinaryUrl: string, preset: string}
      */
@@ -394,7 +401,10 @@ class Media
                 }
             }
 
-            $written = Storage::disk($disk)->put($relativePath, $contents, ['visibility' => 'public']);
+            // Cloudflare R2 rejects S3 object ACLs; bucket public access is configured in the dashboard.
+            $written = self::usesR2OrS3Disk($disk)
+                ? Storage::disk($disk)->put($relativePath, $contents)
+                : Storage::disk($disk)->put($relativePath, $contents, ['visibility' => 'public']);
             if ($written === false) {
                 throw new RuntimeException("Storage put failed on disk [{$disk}].");
             }

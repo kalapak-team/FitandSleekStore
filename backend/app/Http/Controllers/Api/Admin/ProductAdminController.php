@@ -12,6 +12,7 @@ use App\Services\ProductGalleryImageProcessor;
 use App\Support\Media;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -300,9 +301,15 @@ class ProductAdminController extends Controller
         try {
             $stored = app(ProductGalleryImageProcessor::class)->storeNormalized($request->file('image'));
         } catch (\Throwable $e) {
+            Log::error('Product gallery upload failed.', [
+                'disk' => Media::disk(),
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'message' => 'Image upload failed.',
                 'errors' => ['image' => ['Could not upload image to media storage. Please retry.']],
+                'detail' => config('app.debug') ? $e->getMessage() : null,
             ], 503);
         }
 
