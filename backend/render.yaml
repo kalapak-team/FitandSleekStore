@@ -35,7 +35,7 @@ services:
       - key: R2_ENDPOINT
         value: https://f9e417f0e77259dc18fda6ab587a1b02.r2.cloudflarestorage.com
       - key: R2_PUBLIC_URL
-        value: https://cdn.fitandsleek.online
+        value: https://media.phuemnorng-kalapakteam.space
       - key: R2_REGION
         value: auto
       - key: R2_USE_PATH_STYLE_ENDPOINT
