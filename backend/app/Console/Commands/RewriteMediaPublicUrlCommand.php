@@ -9,32 +9,53 @@ use Illuminate\Support\Facades\Schema;
 class RewriteMediaPublicUrlCommand extends Command
 {
     protected $signature = 'media:rewrite-public-url
-                            {--from=https://cdn.fitandsleek.online : Old public media origin (no trailing slash)}
-                            {--to= : New public media origin (no trailing slash)}
+                            {--from= : Comma-separated old public media origins (default: cdn.fitandsleek.online + media.phuemnorng-kalapakteam.space)}
+                            {--to=https://media.fitandsleek.online : New public media origin (no trailing slash)}
                             {--dry-run : Show changes without saving}';
 
-    protected $description = 'Replace an old R2/CDN host in stored image URLs (products, banners, categories, etc.)';
+    protected $description = 'Replace old R2/CDN hosts in stored image URLs (products, banners, categories, etc.)';
+
+    /** @var list<string> */
+    private const DEFAULT_FROM_HOSTS = [
+        'https://cdn.fitandsleek.online',
+        'https://media.phuemnorng-kalapakteam.space',
+    ];
 
     public function handle(): int
     {
-        $from = rtrim(trim((string) $this->option('from')), '/');
         $to = rtrim(trim((string) $this->option('to')), '/');
         $dryRun = (bool) $this->option('dry-run');
+        $fromRaw = trim((string) $this->option('from'));
+        $fromHosts = $fromRaw !== ''
+            ? array_values(array_filter(array_map(
+                fn (string $h) => rtrim(trim($h), '/'),
+                explode(',', $fromRaw)
+            )))
+            : self::DEFAULT_FROM_HOSTS;
 
-        if ($from === '' || $to === '') {
-            $this->error('Both --from and --to are required (e.g. --to=https://media.phuemnorng-kalapakteam.space).');
+        if ($to === '') {
+            $this->error('--to is required (e.g. --to=https://media.fitandsleek.online).');
 
             return self::FAILURE;
         }
 
-        if ($from === $to) {
-            $this->warn('--from and --to are the same; nothing to do.');
-
-            return self::SUCCESS;
+        $total = 0;
+        foreach ($fromHosts as $from) {
+            if ($from === '' || $from === $to) {
+                continue;
+            }
+            $this->info(($dryRun ? '[dry-run] ' : '')."Rewriting {$from} → {$to}");
+            $total += $this->rewriteAllTables($from, $to, $dryRun);
         }
 
-        $this->info(($dryRun ? '[dry-run] ' : '')."Rewriting {$from} → {$to}");
+        $this->newLine();
+        $this->info("Done. Rows/fields updated: {$total}");
 
+        return self::SUCCESS;
+    }
+
+    private function rewriteAllTables(string $from, string $to, bool $dryRun): int
+    {
         $total = 0;
 
         $total += $this->rewriteColumn('products', 'image_url', $from, $to, $dryRun);
@@ -54,10 +75,7 @@ class RewriteMediaPublicUrlCommand extends Command
             $total += $this->rewriteColumn('users', 'profile_image_path', $from, $to, $dryRun);
         }
 
-        $this->newLine();
-        $this->info("Done. Rows/fields updated: {$total}");
-
-        return self::SUCCESS;
+        return $total;
     }
 
     private function rewriteColumn(string $table, string $column, string $from, string $to, bool $dryRun): int
