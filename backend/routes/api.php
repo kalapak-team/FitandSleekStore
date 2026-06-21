@@ -301,6 +301,7 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     Route::post('/homepage-settings/menu-image-upload', [HomepageSettingsController::class, 'uploadMenuImage']);
 
     // Product gallery image upload
+    Route::get('/media/diagnostics', [ProductAdminController::class, 'mediaDiagnostics']);
     Route::post('/products/gallery-upload', [ProductAdminController::class, 'uploadGalleryImage']);
 
     // Barcode scan → lookup (no stock change) + sale (deduct stock)

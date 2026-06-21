@@ -198,6 +198,47 @@ class Media
         return self::url($path);
     }
 
+    public static function galleryUploadFailureMessage(\Throwable $e): string
+    {
+        $msg = strtolower($e->getMessage());
+
+        if (str_contains($msg, 'invalidaccesskeyid') || str_contains($msg, 'signaturedoesnotmatch')) {
+            return 'R2 credentials are invalid. On Render, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY from a new R2 API token (Object Read & Write).';
+        }
+        if (str_contains($msg, 'nosuchbucket')) {
+            return 'R2 bucket not found. Set AWS_BUCKET=fitandsleek on the same Cloudflare account as AWS_ENDPOINT.';
+        }
+        if (str_contains($msg, 'accessdenied') || str_contains($msg, '403')) {
+            return 'R2 token cannot write to this bucket. Create an Account API token with Object Read & Write for bucket fitandsleek.';
+        }
+        if (str_contains($msg, 'not configured')) {
+            return 'Media storage is not configured. Set FILESYSTEM_DISK=r2 and all AWS_/R2_ variables on Render, then redeploy.';
+        }
+        if (str_contains($msg, 'object is missing on disk')) {
+            return 'Upload did not persist to R2. Check AWS_ENDPOINT uses account 29531ec21763c961814bc2de1cf2aa75 and matches your API token account.';
+        }
+
+        return 'Could not upload to R2. Verify Render env (FILESYSTEM_DISK=r2, bucket, endpoint, pub URL, API token) and redeploy the backend.';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function diagnostics(): array
+    {
+        $disk = self::disk();
+
+        return [
+            'filesystem_disk' => $disk,
+            'media_disk_configured' => self::mediaDiskIsConfigured($disk),
+            'r2_configured' => self::r2IsConfigured(),
+            'bucket' => config('filesystems.disks.r2.bucket'),
+            'endpoint' => config('filesystems.disks.r2.endpoint'),
+            'public_url' => config('filesystems.disks.r2.url'),
+            'fallback_to_public' => self::fallbackToPublic(),
+        ];
+    }
+
     private static function usesCloudinaryDisk(?string $disk): bool
     {
         return ($disk ?? self::disk()) === 'cloudinary';
@@ -299,6 +340,25 @@ class Media
 
         if (self::usesCloudinaryDisk($disk)) {
             return self::uploadToCloudinary($file, $directory);
+        }
+
+        if (self::usesR2OrS3Disk($disk)) {
+            $ext = strtolower((string) $file->getClientOriginalExtension());
+            if ($ext === '') {
+                $ext = 'jpg';
+            }
+            $name = $filename ?? (Str::uuid().'.'.$ext);
+            $relative = trim($directory, '/').'/'.$name;
+            $realPath = $file->getRealPath();
+            if ($realPath === false) {
+                throw new RuntimeException('Uploaded file is not readable.');
+            }
+            $bytes = file_get_contents($realPath);
+            if ($bytes === false || $bytes === '') {
+                throw new RuntimeException('Uploaded file is empty.');
+            }
+
+            return self::put($relative, $bytes, $disk);
         }
 
         $path = $filename !== null

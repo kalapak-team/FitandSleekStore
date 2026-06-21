@@ -271,6 +271,11 @@ class ProductAdminController extends Controller
         }
     }
 
+    public function mediaDiagnostics()
+    {
+        return response()->json(Media::diagnostics());
+    }
+
     public function uploadGalleryImage(Request $request)
     {
         $request->validate([
@@ -306,9 +311,11 @@ class ProductAdminController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
+            $hint = Media::galleryUploadFailureMessage($e);
+
             return response()->json([
-                'message' => 'Image upload failed.',
-                'errors' => ['image' => ['Could not upload image to media storage. Please retry.']],
+                'message' => $hint,
+                'errors' => ['image' => [$hint]],
                 'detail' => config('app.debug') ? $e->getMessage() : null,
             ], 503);
         }

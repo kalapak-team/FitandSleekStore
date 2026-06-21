@@ -1294,6 +1294,10 @@ export default function AdminProducts({
       return e?.message || "Network error. Check your connection and that the API URL (VITE_API_BASE_URL) is correct.";
     }
     const msg = e?.response?.data?.message;
+    const imageErr = e?.response?.data?.errors?.image;
+    if (Array.isArray(imageErr) && typeof imageErr[0] === "string" && imageErr[0].trim()) {
+      return imageErr[0].trim();
+    }
     if (typeof msg === "string" && msg.trim()) return msg.trim();
     return "Failed to load/save data.";
   };
