@@ -302,7 +302,21 @@ class Media
             throw new RuntimeException('Storage did not return a file path.');
         }
 
+        self::assertObjectStored($disk, $path);
+
         return self::canonicalStoredReference($path, $disk);
+    }
+
+    private static function assertObjectStored(string $disk, string $key): void
+    {
+        if ($disk === 'public' || $disk === 'local') {
+            return;
+        }
+
+        $key = ltrim(str_replace('\\', '/', $key), '/');
+        if (! Storage::disk($disk)->exists($key)) {
+            throw new RuntimeException("Upload reported success but object is missing on disk [{$disk}]: {$key}");
+        }
     }
 
     /**
@@ -380,7 +394,12 @@ class Media
                 }
             }
 
-            Storage::disk($disk)->put($relativePath, $contents);
+            $written = Storage::disk($disk)->put($relativePath, $contents, ['visibility' => 'public']);
+            if ($written === false) {
+                throw new RuntimeException("Storage put failed on disk [{$disk}].");
+            }
+
+            self::assertObjectStored($disk, $relativePath);
 
             return self::canonicalStoredReference($relativePath, $disk);
         } catch (\Throwable $e) {

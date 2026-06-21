@@ -73,8 +73,9 @@ return [
             'url' => env('R2_PUBLIC_URL', env('AWS_URL')),
             'endpoint' => env('R2_ENDPOINT', env('AWS_ENDPOINT')),
             'use_path_style_endpoint' => env('R2_USE_PATH_STYLE_ENDPOINT', env('AWS_USE_PATH_STYLE_ENDPOINT', true)),
-            'throw' => false,
-            'report' => false,
+            'visibility' => 'public',
+            'throw' => true,
+            'report' => true,
         ],
 
         'cloudinary' => [
