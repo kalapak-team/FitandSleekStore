@@ -5,25 +5,27 @@ namespace App\Console\Commands;
 use App\Models\Product;
 use App\Support\Media;
 use Illuminate\Console\Command;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 class MigrateLocalProductImagesToCloudinaryCommand extends Command
 {
-    protected $signature = 'media:migrate-product-images-to-cloudinary
+    protected $signature = 'media:migrate-product-images
                             {--dry-run : List changes without uploading or saving}
                             {--product_id= : Migrate a single product by id}
                             {--force : Re-upload even when the reference is already an external URL}';
 
-    protected $description = 'Upload legacy /storage/product-gallery files to Cloudinary and update product image_url, gallery, and color swatches';
+    protected $aliases = ['media:migrate-product-images-to-cloudinary'];
+
+    protected $description = 'Upload legacy /storage/product-gallery files to the configured media disk (R2 or Cloudinary) and update product URLs';
 
     /** @var array<string, string> */
     private array $uploadCache = [];
 
     public function handle(): int
     {
-        if (! Media::cloudinaryIsConfigured()) {
-            $this->error('Cloudinary is not configured. Set CLOUDINARY_URL or CLOUDINARY_CLOUD_NAME + API credentials.');
+        $disk = Media::disk();
+        if (! Media::mediaDiskIsConfigured($disk)) {
+            $this->error("Media disk [{$disk}] is not configured. Check FILESYSTEM_DISK and related credentials in .env.");
 
             return self::FAILURE;
         }
@@ -43,7 +45,7 @@ class MigrateLocalProductImagesToCloudinaryCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning '.$products->count().' product(s)...');
+        $this->info(($dryRun ? '[dry-run] ' : '')."Target disk: {$disk}. Scanning ".$products->count().' product(s)...');
 
         $updatedProducts = 0;
         $uploadedFiles = 0;
@@ -148,7 +150,6 @@ class MigrateLocalProductImagesToCloudinaryCommand extends Command
 
         if (Media::isExternalUrl($reference)) {
             if ($force && $this->isLegacyExternalStorageUrl($reference)) {
-                // Broken Cloudinary/R2 URLs built from /storage paths — try local file via storage key.
                 $key = Media::storageKey($reference);
                 if ($key !== null) {
                     return $this->uploadLocalKey($key, $dryRun, $uploadedFiles, $skipped, $failed) ?? $reference;
@@ -207,7 +208,8 @@ class MigrateLocalProductImagesToCloudinaryCommand extends Command
 
         return str_contains($lower, '/storage/product-gallery/')
             || str_contains($lower, '/storage/products/')
-            || str_contains($lower, 'cdn.fitandsleek.online');
+            || str_contains($lower, 'cdn.fitandsleek.online')
+            || str_contains($lower, 'cloudinary.com');
     }
 
     private function uploadLocalKey(
@@ -229,23 +231,23 @@ class MigrateLocalProductImagesToCloudinaryCommand extends Command
             return null;
         }
 
-        $folder = dirname($key);
-        $folder = $folder === '.' ? 'product-gallery' : $folder;
+        $disk = Media::disk();
+        $publicUrl = trim((string) env('R2_PUBLIC_URL', env('AWS_URL', '')));
 
         if ($dryRun) {
-            $this->line("  [dry-run] would upload {$key} → Cloudinary ({$folder})");
+            $this->line("  [dry-run] would upload {$key} → {$disk}");
             $uploadedFiles++;
 
-            return 'https://res.cloudinary.com/example/image/upload/'.$key;
+            return $publicUrl !== ''
+                ? rtrim($publicUrl, '/').'/'.$key
+                : 'https://cdn.example.com/'.$key;
         }
 
         try {
-            $absolute = Storage::disk('public')->path($key);
-            $mime = @mime_content_type($absolute) ?: 'image/jpeg';
-            $upload = new UploadedFile($absolute, basename($absolute), $mime, null, true);
-            $url = Media::uploadToCloudinary($upload, $folder);
+            $bytes = Storage::disk('public')->get($key);
+            $url = Media::put($key, $bytes, $disk);
             $uploadedFiles++;
-            $this->line("  uploaded {$key}");
+            $this->line("  uploaded {$key} → {$url}");
 
             return $url;
         } catch (\Throwable $e) {

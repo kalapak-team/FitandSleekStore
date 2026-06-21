@@ -21,17 +21,25 @@ services:
         value: fitandsleek.online,www.fitandsleek.online,fitandsleek-official.vercel.app
       - key: RUN_MIGRATIONS
         value: "false"
-      # Media — Cloudinary (recommended production: CDN + auto resize/WebP)
+      # Media — Cloudflare R2 (bucket: fitandsleek — dash.cloudflare.com → R2)
       - key: FILESYSTEM_DISK
-        value: cloudinary
+        value: r2
       - key: ADMIN_PROFILE_IMAGE_DISK
-        value: cloudinary
+        value: r2
       - key: MEDIA_FALLBACK_TO_PUBLIC
         value: "false"
       - key: ADMIN_PROFILE_IMAGE_FALLBACK_TO_PUBLIC
         value: "false"
-      - key: CLOUDINARY_CLOUD_NAME
-        value: media-fitandsleek
+      - key: R2_BUCKET
+        value: fitandsleek
+      - key: R2_ENDPOINT
+        value: https://f9e417f0e77259dc18fda6ab587a1b02.r2.cloudflarestorage.com
+      - key: R2_PUBLIC_URL
+        value: https://cdn.fitandsleek.online
+      - key: R2_REGION
+        value: auto
+      - key: R2_USE_PATH_STYLE_ENDPOINT
+        value: "true"
       # Mail — Resend (set RESEND_API_KEY in Render dashboard; rotate if exposed)
       - key: MAIL_MAILER
         value: resend
@@ -48,5 +56,4 @@ services:
         value: fitandsleek://oauth/callback
       # Secrets (Render dashboard only): APP_KEY, DATABASE_URL, RESEND_API_KEY,
       # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET,
-      # CLOUDINARY_URL, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
-      # Optional later: switch to R2 + cdn.fitandsleek.online (see .env.example)
+      # R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY (or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)

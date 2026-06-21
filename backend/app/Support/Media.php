@@ -34,6 +34,31 @@ class Media
         return $creds['apiKey'] !== '' && $creds['apiSecret'] !== '';
     }
 
+    public static function r2IsConfigured(): bool
+    {
+        $key = trim((string) env('R2_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID', '')));
+        $secret = trim((string) env('R2_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY', '')));
+        $bucket = trim((string) env('R2_BUCKET', env('AWS_BUCKET', '')));
+        $endpoint = trim((string) env('R2_ENDPOINT', env('AWS_ENDPOINT', '')));
+
+        return $key !== '' && $secret !== '' && $bucket !== '' && $endpoint !== '';
+    }
+
+    /**
+     * Whether the configured FILESYSTEM_DISK can accept uploads (not broken / missing credentials).
+     */
+    public static function mediaDiskIsConfigured(?string $disk = null): bool
+    {
+        $disk = $disk ?? self::disk();
+
+        return match ($disk) {
+            'public', 'local' => true,
+            'cloudinary' => self::cloudinaryIsConfigured(),
+            'r2' => self::r2IsConfigured(),
+            default => true,
+        };
+    }
+
     /**
      * Disk used for URL resolution and uploads — never a broken cloudinary driver.
      */
