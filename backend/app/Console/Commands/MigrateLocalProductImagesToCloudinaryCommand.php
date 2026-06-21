@@ -209,6 +209,8 @@ class MigrateLocalProductImagesToCloudinaryCommand extends Command
         return str_contains($lower, '/storage/product-gallery/')
             || str_contains($lower, '/storage/products/')
             || str_contains($lower, 'cdn.fitandsleek.online')
+            || str_contains($lower, 'media.phuemnorng-kalapakteam.space')
+            || str_contains($lower, 'media.fitandsleek.online')
             || str_contains($lower, 'cloudinary.com');
     }
 
