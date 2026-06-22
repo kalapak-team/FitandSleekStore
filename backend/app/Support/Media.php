@@ -202,6 +202,9 @@ class Media
     {
         $msg = strtolower($e->getMessage());
 
+        if (str_contains($msg, 'accesscontrollistnotsupported') || str_contains($msg, 'x-amz-acl')) {
+            return 'R2 rejected an object ACL. Redeploy the latest backend (ACL stripping fix) and retry the upload.';
+        }
         if (str_contains($msg, 'invalidaccesskeyid') || str_contains($msg, 'signaturedoesnotmatch')) {
             return 'R2 credentials are invalid. On Render, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY from a new R2 API token (Object Read & Write).';
         }

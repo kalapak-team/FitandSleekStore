@@ -303,6 +303,15 @@ class ProductAdminController extends Controller
             ],
         ]);
 
+        if (! Media::mediaDiskIsConfigured()) {
+            $hint = 'Media storage is not configured. Set FILESYSTEM_DISK=r2 and R2/AWS credentials on Render, then redeploy.';
+
+            return response()->json([
+                'message' => $hint,
+                'errors' => ['image' => [$hint]],
+            ], 503);
+        }
+
         try {
             $stored = app(ProductGalleryImageProcessor::class)->storeNormalized($request->file('image'));
         } catch (\Throwable $e) {

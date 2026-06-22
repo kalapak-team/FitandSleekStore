@@ -85,7 +85,12 @@ use App\Http\Controllers\Api\Admin\DriverAdminController;
 use App\Http\Controllers\Api\Admin\AdminAiChatController;
 use App\Http\Controllers\Api\Admin\LoyaltyAdminController;
 
-Route::get('/health', fn() => response()->json(['ok' => true]));
+Route::get('/health', function () {
+    return response()->json([
+        'ok' => true,
+        'media' => \App\Support\Media::diagnostics(),
+    ]);
+});
 
 Route::middleware(['throttle:api'])->group(function () {
 

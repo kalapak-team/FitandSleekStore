@@ -74,6 +74,9 @@ return [
             'endpoint' => env('R2_ENDPOINT', env('AWS_ENDPOINT')),
             'use_path_style_endpoint' => env('R2_USE_PATH_STYLE_ENDPOINT', env('AWS_USE_PATH_STYLE_ENDPOINT', true)),
             // R2 public access is bucket-level (r2.dev / custom domain), not per-object ACL.
+            'options' => [
+                'before_upload' => [\App\Support\StripR2ObjectAcl::class, 'beforeUpload'],
+            ],
             'throw' => true,
             'report' => true,
         ],
