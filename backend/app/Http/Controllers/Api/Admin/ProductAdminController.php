@@ -325,7 +325,7 @@ class ProductAdminController extends Controller
             return response()->json([
                 'message' => $hint,
                 'errors' => ['image' => [$hint]],
-                'detail' => config('app.debug') ? $e->getMessage() : null,
+                'detail' => $e->getMessage(),
             ], 503);
         }
 

@@ -92,6 +92,13 @@ Route::get('/health', function () {
     ]);
 });
 
+Route::get('/media/probe', function () {
+    return response()->json([
+        'media' => \App\Support\Media::diagnostics(),
+        'probe' => \App\Support\Media::probeR2Write(),
+    ]);
+});
+
 Route::middleware(['throttle:api'])->group(function () {
 
 // Public files with CORS (for Flutter web / cross-origin clients; path = storage/app/public/...)

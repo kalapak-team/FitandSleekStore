@@ -242,6 +242,35 @@ class Media
         ];
     }
 
+    /**
+     * @return array{ok: bool, error?: string}
+     */
+    public static function probeR2Write(): array
+    {
+        if (self::disk() !== 'r2' || ! self::r2IsConfigured()) {
+            return ['ok' => false, 'error' => 'R2 is not configured on this server.'];
+        }
+
+        $key = 'product-gallery/probe-'.Str::uuid().'.jpg';
+        $bytes = base64_decode(
+            '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCfAA//2Q==',
+            true
+        );
+
+        if ($bytes === false || $bytes === '') {
+            return ['ok' => false, 'error' => 'Could not build probe image bytes.'];
+        }
+
+        try {
+            self::put($key, $bytes, 'r2');
+            R2Storage::deleteObject($key);
+
+            return ['ok' => true];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'error' => self::galleryUploadFailureMessage($e)];
+        }
+    }
+
     private static function usesCloudinaryDisk(?string $disk): bool
     {
         return ($disk ?? self::disk()) === 'cloudinary';
@@ -379,7 +408,7 @@ class Media
 
     private static function assertObjectStored(string $disk, string $key): void
     {
-        if ($disk === 'public' || $disk === 'local') {
+        if ($disk === 'public' || $disk === 'local' || $disk === 'r2') {
             return;
         }
 
@@ -464,7 +493,14 @@ class Media
                 }
             }
 
-            // Cloudflare R2 rejects S3 object ACLs; bucket public access is configured in the dashboard.
+            // Cloudflare R2: bypass Flysystem S3 adapter (it always sends ACL headers).
+            if ($disk === 'r2') {
+                R2Storage::putObject($relativePath, $contents);
+
+                return self::canonicalStoredReference($relativePath, $disk);
+            }
+
+            // Other S3-compatible disks may still use visibility/ACL.
             $written = self::usesR2OrS3Disk($disk)
                 ? Storage::disk($disk)->put($relativePath, $contents)
                 : Storage::disk($disk)->put($relativePath, $contents, ['visibility' => 'public']);
