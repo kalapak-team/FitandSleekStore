@@ -12,6 +12,7 @@ use App\Services\DeviceSessionService;
 use App\Services\SecurityAuditService;
 use App\Services\TwoFactorService;
 use App\Services\VerificationChallengeService;
+use App\Support\MailDiagnostics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -708,6 +709,7 @@ class AuthController extends Controller
         'email' => $email,
         'purpose' => $purpose,
         'error' => $e->getMessage(),
+        'mail_issues' => MailDiagnostics::issues(),
       ]);
     }
 
@@ -736,11 +738,7 @@ class AuthController extends Controller
       return 'A verification code was sent to your email.';
     }
 
-    if ($this->otpDebugEnabled() || app()->environment('local')) {
-      return 'Email delivery failed. Check your inbox and spam, or tap Resend after fixing mail settings.';
-    }
-
-    return 'We could not send the verification email. Please try again in a few minutes.';
+    return MailDiagnostics::otpDeliveryFailureMessage();
   }
 
   /** @param array{email_sent: bool} $delivery */

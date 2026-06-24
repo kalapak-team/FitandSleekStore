@@ -92,17 +92,19 @@ export function AuthDialogShell({
             <X className="h-4 w-4" />
           </DialogPrimitive.Close>
 
-          {/* Logo on dark background — always clearly visible */}
+          {/* System logo image — same asset as storefront header */}
           <Link
             to="/"
             className="mx-auto flex w-fit items-center justify-center transition-opacity hover:opacity-85"
             onClick={onClose}
           >
-            <Logo
-              className="h-[4.5rem] w-auto max-w-[260px] drop-shadow-lg brightness-0 invert"
-              src={logoUrl || "/logo.png"}
-              alt="Fit & Sleek"
-            />
+            <div className="rounded-xl bg-white px-5 py-3 shadow-md">
+              <Logo
+                className="h-[4.5rem] w-auto max-w-[260px]"
+                src={logoUrl || "/logo.png"}
+                alt="Fit & Sleek"
+              />
+            </div>
           </Link>
 
           {title ? (
@@ -181,6 +183,15 @@ export function AuthNotice({ message }) {
       <span>{message}</span>
     </div>
   );
+}
+
+export function OtpDeliveryNotice({ message, emailSent }) {
+  if (!message) return null;
+  if (emailSent === false) {
+    return <AuthError message={message} />;
+  }
+
+  return <AuthNotice message={message} />;
 }
 
 /** User-facing OTP notice (never includes the code itself). */

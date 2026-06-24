@@ -45,8 +45,10 @@ services:
       # Mail — Resend (set RESEND_API_KEY in Render dashboard; rotate if exposed)
       - key: MAIL_MAILER
         value: resend
+      # Production: verify fitandsleek.online in Resend, then use no-reply@fitandsleek.online
+      # onboarding@resend.dev only delivers to your verified Resend inbox (not customers).
       - key: MAIL_FROM_ADDRESS
-        value: onboarding@resend.dev
+        value: no-reply@fitandsleek.online
       - key: MAIL_FROM_NAME
         value: FitandSleek
       # OAuth — same Google/Facebook apps as website; secrets in Render dashboard

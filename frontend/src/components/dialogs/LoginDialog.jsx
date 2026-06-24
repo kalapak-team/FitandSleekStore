@@ -12,6 +12,7 @@ import {
   AuthFooterLink,
   AuthNotice,
   formatOtpNotice,
+  OtpDeliveryNotice,
   AUTH_PRIMARY_BTN,
   AuthSocialButtons,
   AuthTextButton,
@@ -30,6 +31,7 @@ export default function LoginDialog({ isOpen, onClose, onSwitchToRegister }) {
   });
   const [otpMode, setOtpMode] = useState(false);
   const [otpNotice, setOtpNotice] = useState("");
+  const [otpEmailSent, setOtpEmailSent] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { login, verifyOtp, resendOtp } = useAuth();
@@ -78,6 +80,7 @@ export default function LoginDialog({ isOpen, onClose, onSwitchToRegister }) {
             emailSent: result.email_sent,
           }),
         );
+        setOtpEmailSent(result.email_sent !== false);
         return;
       }
       finishLogin(result?.user || result);
@@ -144,6 +147,7 @@ export default function LoginDialog({ isOpen, onClose, onSwitchToRegister }) {
           fallback: `A new code was sent to ${otpForm.email}`,
         }),
       );
+      setOtpEmailSent(data?.email_sent !== false);
     } catch (err) {
       setError(err?.response?.data?.message || "Could not resend code");
     } finally {
@@ -155,7 +159,7 @@ export default function LoginDialog({ isOpen, onClose, onSwitchToRegister }) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <AuthDialogShell
         onClose={onClose}
-        logoUrl={settings?.header?.logo_url}
+        logoUrl={settings?.header?.logo_url || settings?.app_logo_url}
         activeTab="login"
         onTabChange={(value) => {
           if (value === "register") {
@@ -237,7 +241,7 @@ export default function LoginDialog({ isOpen, onClose, onSwitchToRegister }) {
             </>
           ) : (
             <form onSubmit={handleVerifyOtp} className="mt-7 flex flex-col gap-6">
-              <AuthNotice message={otpNotice} />
+              <OtpDeliveryNotice message={otpNotice} emailSent={otpEmailSent} />
               <AuthField id="login-otp-code" label="Verification code" icon={Lock}>
                 <input
                   id="login-otp-code"

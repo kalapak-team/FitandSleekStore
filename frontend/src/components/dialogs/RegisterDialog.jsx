@@ -12,6 +12,7 @@ import {
   AuthFooterLink,
   AuthNotice,
   formatOtpNotice,
+  OtpDeliveryNotice,
   AuthPhoneField,
   AuthSocialButtons,
   AuthTextButton,
@@ -33,6 +34,7 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
   const [otpForm, setOtpForm] = useState({ email: "", code: "", purpose: "register", challengeToken: "" });
   const [otpMode, setOtpMode] = useState(false);
   const [otpNotice, setOtpNotice] = useState("");
+  const [otpEmailSent, setOtpEmailSent] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { register, verifyOtp, resendOtp } = useAuth();
@@ -97,6 +99,7 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
             emailSent: result.email_sent,
           }),
         );
+        setOtpEmailSent(result.email_sent !== false);
         return;
       }
       finishRegister(result?.user);
@@ -147,6 +150,7 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
           fallback: `A new code was sent to ${otpForm.email}`,
         }),
       );
+      setOtpEmailSent(data?.email_sent !== false);
     } catch (err) {
       setError(err?.response?.data?.message || "Could not resend code");
     } finally {
@@ -158,7 +162,7 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <AuthDialogShell
         onClose={onClose}
-        logoUrl={settings?.header?.logo_url}
+        logoUrl={settings?.header?.logo_url || settings?.app_logo_url}
         activeTab="register"
         onTabChange={(value) => {
           if (value === "login") {
@@ -265,7 +269,7 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
             </>
           ) : (
             <form onSubmit={handleVerifyOtp} className="mt-7 flex flex-col gap-6">
-              <AuthNotice message={otpNotice} />
+              <OtpDeliveryNotice message={otpNotice} emailSent={otpEmailSent} />
               <AuthField id="register-otp-code" label="Verification code" icon={Lock}>
                 <input
                   id="register-otp-code"
