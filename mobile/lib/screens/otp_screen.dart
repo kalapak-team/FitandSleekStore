@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/admin_auth_navigation.dart';
 import '../core/api_client.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
@@ -46,7 +47,7 @@ class _OtpScreenState extends State<OtpScreen> {
         challengeToken: widget.challengeToken,
       );
       if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      navigateAfterAuthentication(context);
     } on DioException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

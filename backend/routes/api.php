@@ -384,6 +384,7 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     // Reports
     Route::get('/reports/dashboard', [ReportController::class, 'dashboard']);
     Route::get('/reports/sales', [ReportController::class, 'sales']);
+    Route::get('/reports/channel-sales', [ReportController::class, 'channelSales']);
     Route::get('/reports/monthly-driver-performance', [ReportController::class, 'monthlyDriverPerformance']);
     Route::get('/reports/top-products', [ReportController::class, 'topProducts']);
     Route::get('/reports/categories', [ReportController::class, 'categoryPerformance']);

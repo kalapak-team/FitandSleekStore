@@ -1,16 +1,23 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/admin_permissions.dart';
 import '../../core/api_client.dart';
+import '../../models/user_model.dart';
 import '../../services/admin_service.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/common/fs_button.dart';
+import '../../theme/admin_theme.dart';
+import '../../utils/admin_context.dart';
+import '../../widgets/admin/admin_access_denied.dart';
+import '../../widgets/admin/admin_ui_kit.dart';
 
 class AdminPosScreen extends StatefulWidget {
-  const AdminPosScreen({super.key});
+  const AdminPosScreen({super.key, required this.user, this.embedded = false, this.bare = false});
+
+  final UserModel user;
+  final bool embedded;
+  final bool bare;
 
   @override
   State<AdminPosScreen> createState() => _AdminPosScreenState();
@@ -90,11 +97,12 @@ class _AdminPosScreenState extends State<AdminPosScreen> {
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text('Receipt ${result.orderNumber}'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Ask customer to scan this KHQR'),
+                const Text('Ask customer to scan this KHQR'),
                 const SizedBox(height: 12),
                 QrImageView(data: result.qrString!, size: 200),
               ],
@@ -121,120 +129,181 @@ class _AdminPosScreenState extends State<AdminPosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currency = NumberFormat.simpleCurrency(name: 'USD');
+    if (!AdminPermissions.has(widget.user, 'checkout', 'view')) {
+      return AdminScreenLayout(
+        title: 'POS',
+        subtitle: 'In-store sales',
+        user: widget.user,
+        child: const AdminAccessDenied(title: 'POS access denied'),
+      );
+    }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('POS')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: _codeController,
-              decoration: const InputDecoration(
-                hintText: 'Barcode / slug / product URL',
-                prefixIcon: Icon(Icons.qr_code_scanner),
+    final fmt = AdminFmt.of(context);
+    final canSell = AdminPermissions.has(widget.user, 'checkout', 'create');
+
+    final body = Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 16),
+            children: [
+              AdminAppear(
+                index: 0,
+                child: AdminSearchField(
+                  controller: _codeController,
+                  hint: 'Barcode / slug / product URL',
+                  prefixIcon: Icons.qr_code_scanner_rounded,
+                  onSubmitted: (_) => _lookupAndAdd(),
+                ),
               ),
-              onSubmitted: (_) => _lookupAndAdd(),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FsButton(
-              label: 'Add item',
-              onPressed: _busy ? null : () => _lookupAndAdd(),
-              loading: _busy,
-            ),
-          ),
-          Expanded(
-            child: _lines.isEmpty
-                ? const Center(child: Text('Enter a barcode or slug to start'))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _lines.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final line = _lines[index];
-                      return ListTile(
-                        tileColor: AppColors.surfaceCard,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: AppColors.border),
+              const SizedBox(height: 12),
+              AdminAppear(
+                index: 1,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : () => _lookupAndAdd(),
+                  icon: _busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.add_rounded),
+                  label: const Text('Add item'),
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (_lines.isEmpty)
+                AdminAppear(
+                  index: 2,
+                  child: AdminSoftCard(
+                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                    child: Column(
+                      children: [
+                        Icon(Icons.shopping_cart_outlined, size: 48, color: AdminColors.accent.withValues(alpha: 0.5)),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Scan or enter a barcode to start',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
                         ),
-                        title: Text(line.name),
-                        subtitle: Text('${currency.format(line.unitPrice)} × ${line.qty}'),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...[
+                  for (var i = 0; i < _lines.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: AdminListRow(
+                        index: i + 2,
+                        title: _lines[i].name,
+                        subtitle: '${fmt.usd(_lines[i].unitPrice)} × ${_lines[i].qty}',
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.remove),
-                              onPressed: () {
-                                setState(() {
-                                  if (line.qty <= 1) {
-                                    _lines.removeAt(index);
-                                  } else {
-                                    _lines[index] = PosLine(
-                                      code: line.code,
-                                      name: line.name,
-                                      qty: line.qty - 1,
-                                      unitPrice: line.unitPrice,
-                                    );
-                                  }
-                                });
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add),
-                              onPressed: () {
-                                setState(() {
-                                  _lines[index] = PosLine(
-                                    code: line.code,
-                                    name: line.name,
-                                    qty: line.qty + 1,
-                                    unitPrice: line.unitPrice,
-                                  );
-                                });
-                              },
-                            ),
+                            _qtyBtn(Icons.remove_rounded, () {
+                              setState(() {
+                                if (_lines[i].qty <= 1) {
+                                  _lines.removeAt(i);
+                                } else {
+                                  final l = _lines[i];
+                                  _lines[i] = PosLine(code: l.code, name: l.name, qty: l.qty - 1, unitPrice: l.unitPrice);
+                                }
+                              });
+                            }),
+                            _qtyBtn(Icons.add_rounded, () {
+                              setState(() {
+                                final l = _lines[i];
+                                _lines[i] = PosLine(code: l.code, name: l.name, qty: l.qty + 1, unitPrice: l.unitPrice);
+                              });
+                            }),
                           ],
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                ],
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCard,
-              border: Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _paymentMethod,
-                  decoration: const InputDecoration(labelText: 'Payment method'),
-                  items: _methods
-                      .map((m) => DropdownMenuItem(value: m.$1, child: Text(m.$2)))
-                      .toList(),
-                  onChanged: _busy ? null : (v) => setState(() => _paymentMethod = v ?? 'cash'),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Total: ${currency.format(_subtotal)}',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-                FsButton(
-                  label: 'Complete sale',
-                  variant: FsButtonVariant.accent,
-                  loading: _busy,
-                  onPressed: _lines.isEmpty || _busy ? null : _completeSale,
-                ),
-              ],
-            ),
+        ),
+      ],
+    );
+
+    final checkout = Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _paymentMethod,
+            decoration: const InputDecoration(labelText: 'Payment method'),
+            items: _methods.map((m) => DropdownMenuItem(value: m.$1, child: Text(m.$2))).toList(),
+            onChanged: _busy ? null : (v) => setState(() => _paymentMethod = v ?? 'cash'),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            fmt.usd(_subtotal),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text('Total', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: !canSell || _lines.isEmpty || _busy ? null : _completeSale,
+            child: _busy
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Complete sale'),
           ),
         ],
+      ),
+    );
+
+    if (widget.bare) {
+      return AdminBackdrop(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Checkout', style: Theme.of(context).textTheme.titleLarge),
+                  Text('Full POS sale', style: Theme.of(context).textTheme.bodyMedium),
+                ],
+              ),
+            ),
+            Expanded(child: body),
+            checkout,
+          ],
+        ),
+      );
+    }
+
+    return AdminScreenLayout(
+      title: 'POS',
+      subtitle: 'In-store sales',
+      user: widget.user,
+      floatingBottom: checkout,
+      child: body,
+    );
+  }
+
+  Widget _qtyBtn(IconData icon, VoidCallback onTap) {
+    return Material(
+      color: AdminColors.accentLight,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 18, color: AdminColors.accentDark),
+        ),
       ),
     );
   }

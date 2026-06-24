@@ -454,6 +454,44 @@ class ReportController extends Controller
         ]);
     }
 
+    /** POS vs web (storefront) sales for a date range. */
+    public function channelSales(Request $request)
+    {
+        [$from, $to] = $this->resolveDateRange($request);
+
+        $rows = Order::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', '!=', 'cancelled')
+            ->select(
+                'sale_channel',
+                DB::raw('COUNT(*) as orders'),
+                DB::raw('COALESCE(SUM(total), 0) as revenue')
+            )
+            ->groupBy('sale_channel')
+            ->get();
+
+        $labels = [
+            'pos' => 'POS',
+            'storefront' => 'Web',
+            'replacement' => 'Replacement',
+        ];
+
+        $channels = $rows->map(fn ($row) => [
+            'channel' => (string) $row->sale_channel,
+            'label' => $labels[$row->sale_channel] ?? ucfirst((string) $row->sale_channel),
+            'orders' => (int) $row->orders,
+            'revenue' => round((float) $row->revenue, 2),
+        ])->values()->all();
+
+        return response()->json([
+            'channels' => $channels,
+            'period' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
+        ]);
+    }
+
     public function monthlyDriverPerformance(Request $request)
     {
         $range = $request->input('range', 'month');

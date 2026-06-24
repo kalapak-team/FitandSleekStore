@@ -6,7 +6,8 @@ import '../../core/api_client.dart';
 import '../../models/user_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/admin_service.dart';
-import '../../widgets/common/fs_button.dart';
+import '../../theme/admin_theme.dart';
+import '../../widgets/admin/admin_ui_kit.dart';
 
 class AdminProfileEditScreen extends StatefulWidget {
   const AdminProfileEditScreen({super.key, required this.user});
@@ -54,7 +55,11 @@ class _AdminProfileEditScreenState extends State<AdminProfileEditScreen> {
         address: _address.text.trim(),
       );
       if (!mounted) return;
-      context.read<AuthProvider>().updateUser(UserModel.fromJson(data));
+      final current = context.read<AuthProvider>().user!;
+      final updated = UserModel.fromJson(data).copyWith(
+        effectiveAdminPermissions: current.effectiveAdminPermissions,
+      );
+      context.read<AuthProvider>().updateUser(updated);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile updated')),
       );
@@ -72,7 +77,14 @@ class _AdminProfileEditScreenState extends State<AdminProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit admin profile')),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text('Edit admin profile'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -80,36 +92,55 @@ class _AdminProfileEditScreenState extends State<AdminProfileEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextFormField(
-                controller: _name,
-                decoration: const InputDecoration(labelText: 'Full name'),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              AdminAppear(
+                index: 0,
+                child: AdminSoftCard(
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _name,
+                        decoration: const InputDecoration(labelText: 'Full name'),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _email,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(labelText: 'Email'),
+                        validator: (v) => v == null || !v.contains('@') ? 'Invalid email' : null,
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: 'Phone'),
+                      ),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: _address,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Address'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (v) => v == null || !v.contains('@') ? 'Invalid email' : null,
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone'),
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: _address,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Address'),
-              ),
-              const SizedBox(height: 28),
-              FsButton(
-                label: 'Save changes',
-                onPressed: _saving ? null : _save,
-                loading: _saving,
-                icon: Icons.check_rounded,
+              const SizedBox(height: 24),
+              AdminAppear(
+                index: 1,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox.shrink()
+                      : const Icon(Icons.check_rounded, size: 20),
+                  label: _saving
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save changes'),
+                ),
               ),
             ],
           ),

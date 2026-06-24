@@ -6,7 +6,22 @@ import '../../l10n/l10n_extension.dart';
 import '../../models/banner_model.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/media_url.dart';
+import '../navigation/home_store_header.dart';
 import '../product_image.dart';
+
+/// Banner height sized for the scroll body (below header, above bottom nav)
+/// so Top Brands + Recommended peek on first screen — matches original home layout.
+double homeBannerHeight(BuildContext context) {
+  final media = MediaQuery.of(context);
+  final screenH = media.size.height;
+  final padding = media.padding;
+
+  const headerContent = kHomeHeaderLogoHeight + 8 + 12;
+  const bottomNavChrome = 72 + 4;
+  final bodyHeight = screenH - padding.top - headerContent - bottomNavChrome - padding.bottom;
+
+  return (bodyHeight * 0.34).clamp(175.0, 235.0);
+}
 
 class HomeBannerCarousel extends StatefulWidget {
   const HomeBannerCarousel({super.key, required this.banners});
@@ -63,8 +78,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final viewportHeight = MediaQuery.sizeOf(context).height;
-    final bannerHeight = (viewportHeight * 0.58).clamp(280.0, 520.0);
+    final bannerHeight = homeBannerHeight(context);
 
     return SizedBox(
       width: double.infinity,

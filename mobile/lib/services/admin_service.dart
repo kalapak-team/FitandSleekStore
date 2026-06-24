@@ -1,3 +1,8 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+
+import '../core/admin_report_period.dart';
 import '../core/api_client.dart';
 
 class AdminDashboardStats {
@@ -68,8 +73,12 @@ class AdminService {
 
   final ApiClient _api;
 
-  Future<AdminDashboardStats> fetchDashboard() async {
-    final res = await _api.dio.get('/admin/reports/dashboard');
+  Future<AdminDashboardStats> fetchDashboard({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+    int? periodDays,
+  }) async {
+    final params = periodDays != null ? {'period': periodDays} : period.toQueryParams();
+    final res = await _api.dio.get('/admin/reports/dashboard', queryParameters: params);
     return AdminDashboardStats.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
@@ -104,6 +113,31 @@ class AdminService {
     final body = res.data as Map;
     final user = body['user'] as Map? ?? body;
     return Map<String, dynamic>.from(user);
+  }
+
+  Future<String> uploadAdminProfileImage(File file) async {
+    final form = FormData.fromMap({
+      'profile_image': await MultipartFile.fromFile(file.path, filename: 'profile.jpg'),
+    });
+    final res = await _api.dio.post(
+      '/admin/profile/upload-image',
+      data: form,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    final data = res.data as Map;
+    return (data['profile_image_url'] ?? '').toString();
+  }
+
+  Future<void> updateAdminPassword({
+    required String currentPassword,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    await _api.dio.put('/admin/profile/password', data: {
+      'current_password': currentPassword,
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+    });
   }
 
   Future<AdminProductPage> listProducts({int page = 1, String? query}) async {
@@ -144,8 +178,12 @@ class AdminService {
     return PosSaleResult.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
-  Future<List<SalesDayRow>> fetchSales({int periodDays = 30}) async {
-    final res = await _api.dio.get('/admin/reports/sales', queryParameters: {'period': periodDays});
+  Future<List<SalesDayRow>> fetchSales({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+    int? periodDays,
+  }) async {
+    final params = periodDays != null ? {'period': periodDays} : period.toQueryParams();
+    final res = await _api.dio.get('/admin/reports/sales', queryParameters: params);
     final data = res.data as Map;
     final list = data['sales'];
     if (list is! List) return [];
@@ -164,6 +202,242 @@ class AdminService {
         .whereType<Map>()
         .map((e) => TopProductRow.fromJson(Map<String, dynamic>.from(e)))
         .toList();
+  }
+
+  Future<List<CategorySlice>> fetchProductAnalytics() async {
+    final data = await fetchProductAnalyticsData();
+    return data.byCategory;
+  }
+
+  Future<ProductAnalyticsData> fetchProductAnalyticsData() async {
+    final res = await _api.dio.get('/admin/reports/product-analytics');
+    final data = res.data as Map;
+    return ProductAnalyticsData.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<List<RevenueSlice>> fetchCategorySales({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+    int? periodDays,
+  }) async {
+    final data = await fetchCategorySalesData(period: period, periodDays: periodDays);
+    return data.revenueByCategory;
+  }
+
+  Future<CategorySalesData> fetchCategorySalesData({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+    int? periodDays,
+    int limit = 10,
+  }) async {
+    final params = {
+      ...(periodDays != null ? {'period': periodDays} : period.toQueryParams()),
+      'limit': limit,
+    };
+    final res = await _api.dio.get('/admin/reports/category-sales', queryParameters: params);
+    return CategorySalesData.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<List<CategorySlice>> fetchOrderAnalytics({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+    int? periodDays,
+  }) async {
+    final data = await fetchOrderAnalyticsData(period: period, periodDays: periodDays);
+    return data.byStatus;
+  }
+
+  Future<OrderAnalyticsData> fetchOrderAnalyticsData({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+    int? periodDays,
+  }) async {
+    final params = periodDays != null ? {'period': periodDays} : period.toQueryParams();
+    final res = await _api.dio.get('/admin/reports/order-analytics', queryParameters: params);
+    return OrderAnalyticsData.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<ChannelSalesData> fetchChannelSales({
+    AdminReportPeriod period = AdminReportPeriod.defaultPeriod,
+  }) async {
+    final res = await _api.dio.get('/admin/reports/channel-sales', queryParameters: period.toQueryParams());
+    return ChannelSalesData.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<StockAnalyticsData> fetchStockAnalytics({
+    int? fromYear,
+    int? toYear,
+    AdminReportPeriod? period,
+  }) async {
+    int from = fromYear ?? DateTime.now().year - 1;
+    int to = toYear ?? DateTime.now().year;
+    if (period != null) {
+      final range = period.stockYearRange();
+      from = range.$1;
+      to = range.$2;
+    }
+    final res = await _api.dio.get('/admin/reports/stock-analytics', queryParameters: {
+      'from_year': from,
+      'to_year': to,
+    });
+    return StockAnalyticsData.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<ScanSaleResult> submitScanSale({required String code, required int qty}) async {
+    final res = await _api.dio.post('/admin/barcode-scan/sale', data: {'code': code, 'qty': qty});
+    return ScanSaleResult.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminOrderPage> listOrders({
+    int page = 1,
+    String? search,
+    String? status,
+  }) async {
+    final res = await _api.dio.get('/admin/orders', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      'compact': 1,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (status != null && status.isNotEmpty) 'statuses[]': status,
+    });
+    return AdminOrderPage.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminOrderDetail> getOrder(int id) async {
+    final res = await _api.dio.get('/admin/orders/$id');
+    return AdminOrderDetail.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminOrderDetail> updateOrderStatus(int id, String status) async {
+    final res = await _api.dio.patch('/admin/orders/$id', data: {'status': status});
+    return AdminOrderDetail.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminPaymentPage> listPayments({
+    int page = 1,
+    String? status,
+  }) async {
+    final res = await _api.dio.get('/admin/payments', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (status != null && status.isNotEmpty) 'status': status,
+    });
+    final body = res.data as Map;
+    final paginator = body['data'] as Map? ?? body;
+    return AdminPaymentPage.fromJson(Map<String, dynamic>.from(paginator));
+  }
+
+  Future<AdminPaymentDetail> getPayment(int id) async {
+    final res = await _api.dio.get('/admin/payments/$id');
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    return AdminPaymentDetail.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<AdminPaymentDetail> verifyPayment(int id, {String? referenceCode}) async {
+    final res = await _api.dio.post('/admin/payments/$id/verify', data: {
+      if (referenceCode != null && referenceCode.isNotEmpty) 'reference_code': referenceCode,
+    });
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    return AdminPaymentDetail.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<AdminPaymentDetail> rejectPayment(int id, {String? notes}) async {
+    final res = await _api.dio.post('/admin/payments/$id/reject', data: {
+      if (notes != null) 'notes': notes,
+    });
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    return AdminPaymentDetail.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<AdminProductModel> quickUpdateProduct(int id, {int? stock, bool? isActive}) async {
+    final data = <String, dynamic>{};
+    if (stock != null) data['stock'] = stock;
+    if (isActive != null) data['is_active'] = isActive;
+    return updateProduct(id, data);
+  }
+
+  Future<AdminShipmentPage> listShipments({int page = 1, String? status}) async {
+    final res = await _api.dio.get('/admin/shipments', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (status != null && status.isNotEmpty) 'status': status,
+    });
+    return AdminShipmentPage.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminShipmentDetail> updateShipmentStatus(int id, String status) async {
+    final res = await _api.dio.patch('/admin/shipments/$id/status', data: {'status': status});
+    return AdminShipmentDetail.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminCustomerPage> listCustomers({int page = 1, String? search}) async {
+    final res = await _api.dio.get('/admin/customers', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return AdminCustomerPage.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminCustomerDetail> getCustomer(int id) async {
+    final res = await _api.dio.get('/admin/customers/$id');
+    return AdminCustomerDetail.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminContactPage> listContacts({int page = 1, String? status, String? search}) async {
+    final res = await _api.dio.get('/admin/contacts', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return AdminContactPage.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminContactRow> getContact(int id) async {
+    final res = await _api.dio.get('/admin/contacts/$id');
+    return AdminContactRow.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminContactRow> updateContact(int id, {required String status, String? adminNote}) async {
+    final res = await _api.dio.patch('/admin/contacts/$id', data: {
+      'status': status,
+      if (adminNote != null) 'admin_note': adminNote,
+    });
+    return AdminContactRow.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminReplacementPage> listReplacements({int page = 1, String? status}) async {
+    final res = await _api.dio.get('/admin/replacement-cases', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (status != null && status.isNotEmpty) 'status': status,
+    });
+    return AdminReplacementPage.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<AdminReplacementDetail> approveReplacement(int id, {String? notes}) async {
+    final res = await _api.dio.post('/admin/replacement-cases/$id/approve', data: {
+      if (notes != null) 'notes': notes,
+    });
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    return AdminReplacementDetail.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<AdminReplacementDetail> rejectReplacement(int id, {required String notes}) async {
+    final res = await _api.dio.post('/admin/replacement-cases/$id/reject', data: {'notes': notes});
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    return AdminReplacementDetail.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<PosSaleHistoryPage> fetchPosSaleHistory({int page = 1, String? search}) async {
+    final res = await _api.dio.get('/admin/pos/sale-history', queryParameters: {
+      'page': page,
+      'per_page': 20,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return PosSaleHistoryPage.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 }
 
@@ -334,6 +608,816 @@ class TopProductRow {
       totalSold: AdminDashboardStats._toInt(json['total_sold']),
       totalRevenue: AdminDashboardStats._toDouble(json['total_revenue']),
       imageUrl: product?['image_url']?.toString(),
+    );
+  }
+}
+
+class CategorySlice {
+  CategorySlice({required this.name, required this.count, required this.percentage});
+
+  final String name;
+  final int count;
+  final double percentage;
+
+  factory CategorySlice.fromJson(Map<String, dynamic> json) {
+    return CategorySlice(
+      name: (json['name'] ?? 'Other').toString(),
+      count: AdminDashboardStats._toInt(json['count']),
+      percentage: AdminDashboardStats._toDouble(json['percentage']),
+    );
+  }
+}
+
+class RevenueSlice {
+  RevenueSlice({required this.name, required this.revenue, required this.percentage});
+
+  final String name;
+  final double revenue;
+  final double percentage;
+
+  factory RevenueSlice.fromJson(Map<String, dynamic> json) {
+    return RevenueSlice(
+      name: (json['name'] ?? 'Other').toString(),
+      revenue: AdminDashboardStats._toDouble(json['revenue']),
+      percentage: AdminDashboardStats._toDouble(json['percentage']),
+    );
+  }
+}
+
+class TopCategoryRow {
+  TopCategoryRow({
+    required this.name,
+    required this.revenue,
+    required this.unitsSold,
+    required this.percentage,
+  });
+
+  final String name;
+  final double revenue;
+  final int unitsSold;
+  final double percentage;
+
+  factory TopCategoryRow.fromJson(Map<String, dynamic> json) {
+    return TopCategoryRow(
+      name: (json['name'] ?? 'Other').toString(),
+      revenue: AdminDashboardStats._toDouble(json['revenue']),
+      unitsSold: AdminDashboardStats._toInt(json['units_sold'] ?? json['total_units']),
+      percentage: AdminDashboardStats._toDouble(json['percentage']),
+    );
+  }
+}
+
+class ProductAnalyticsData {
+  ProductAnalyticsData({
+    required this.totalProducts,
+    required this.byCategory,
+    required this.byCountry,
+  });
+
+  final int totalProducts;
+  final List<CategorySlice> byCategory;
+  final List<CategorySlice> byCountry;
+
+  factory ProductAnalyticsData.fromJson(Map<String, dynamic> json) {
+    return ProductAnalyticsData(
+      totalProducts: AdminDashboardStats._toInt(json['total_products']),
+      byCategory: _sliceList(json['by_category']),
+      byCountry: _sliceList(json['by_country']),
+    );
+  }
+
+  static List<CategorySlice> _sliceList(dynamic list) {
+    if (list is! List) return [];
+    return list.whereType<Map>().map((e) => CategorySlice.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+}
+
+class CategorySalesData {
+  CategorySalesData({
+    required this.totalRevenue,
+    required this.totalUnits,
+    required this.revenueByCategory,
+    required this.topCategories,
+  });
+
+  final double totalRevenue;
+  final int totalUnits;
+  final List<RevenueSlice> revenueByCategory;
+  final List<TopCategoryRow> topCategories;
+
+  factory CategorySalesData.fromJson(Map<String, dynamic> json) {
+    final revList = json['revenue_by_category'];
+    final topList = json['top_categories'];
+    return CategorySalesData(
+      totalRevenue: AdminDashboardStats._toDouble(json['total_revenue']),
+      totalUnits: AdminDashboardStats._toInt(json['total_units']),
+      revenueByCategory: revList is List
+          ? revList.whereType<Map>().map((e) => RevenueSlice.fromJson(Map<String, dynamic>.from(e))).toList()
+          : [],
+      topCategories: topList is List
+          ? topList.whereType<Map>().map((e) => TopCategoryRow.fromJson(Map<String, dynamic>.from(e))).toList()
+          : [],
+    );
+  }
+}
+
+class OrderAnalyticsData {
+  OrderAnalyticsData({
+    required this.totalOrders,
+    required this.byStatus,
+    required this.byCategory,
+  });
+
+  final int totalOrders;
+  final List<CategorySlice> byStatus;
+  final List<CategorySlice> byCategory;
+
+  factory OrderAnalyticsData.fromJson(Map<String, dynamic> json) {
+    return OrderAnalyticsData(
+      totalOrders: AdminDashboardStats._toInt(json['total_orders']),
+      byStatus: ProductAnalyticsData._sliceList(json['by_status']),
+      byCategory: ProductAnalyticsData._sliceList(json['by_category']),
+    );
+  }
+}
+
+class ChannelSalesRow {
+  ChannelSalesRow({
+    required this.channel,
+    required this.label,
+    required this.orders,
+    required this.revenue,
+  });
+
+  final String channel;
+  final String label;
+  final int orders;
+  final double revenue;
+
+  factory ChannelSalesRow.fromJson(Map<String, dynamic> json) {
+    return ChannelSalesRow(
+      channel: (json['channel'] ?? '').toString(),
+      label: (json['label'] ?? json['channel'] ?? 'Other').toString(),
+      orders: AdminDashboardStats._toInt(json['orders']),
+      revenue: AdminDashboardStats._toDouble(json['revenue']),
+    );
+  }
+}
+
+class ChannelSalesData {
+  ChannelSalesData({required this.channels});
+
+  final List<ChannelSalesRow> channels;
+
+  ChannelSalesRow? channelOf(String key) {
+    for (final c in channels) {
+      if (c.channel == key) return c;
+    }
+    return null;
+  }
+
+  factory ChannelSalesData.fromJson(Map<String, dynamic> json) {
+    final list = json['channels'];
+    return ChannelSalesData(
+      channels: list is List
+          ? list.whereType<Map>().map((e) => ChannelSalesRow.fromJson(Map<String, dynamic>.from(e))).toList()
+          : [],
+    );
+  }
+}
+
+class StockLabelSlice {
+  StockLabelSlice({required this.name, required this.count, required this.percentage});
+
+  final String name;
+  final int count;
+  final double percentage;
+
+  factory StockLabelSlice.fromJson(Map<String, dynamic> json) {
+    return StockLabelSlice(
+      name: (json['name'] ?? 'Other').toString(),
+      count: AdminDashboardStats._toInt(json['count']),
+      percentage: AdminDashboardStats._toDouble(json['percentage']),
+    );
+  }
+}
+
+class StockAnalyticsData {
+  StockAnalyticsData({
+    required this.totalStock,
+    required this.byLabel,
+    required this.compareYears,
+  });
+
+  final int totalStock;
+  final List<StockLabelSlice> byLabel;
+  final List<int> compareYears;
+
+  factory StockAnalyticsData.fromJson(Map<String, dynamic> json) {
+    final labels = json['by_label'];
+    final years = json['compare_years'];
+    return StockAnalyticsData(
+      totalStock: AdminDashboardStats._toInt(json['total_stock']),
+      byLabel: labels is List
+          ? labels.whereType<Map>().map((e) => StockLabelSlice.fromJson(Map<String, dynamic>.from(e))).toList()
+          : [],
+      compareYears: years is List ? years.map((e) => AdminDashboardStats._toInt(e)).toList() : [],
+    );
+  }
+}
+
+class ScanSaleResult {
+  ScanSaleResult({required this.message, this.productName, this.qty});
+
+  final String message;
+  final String? productName;
+  final int? qty;
+
+  factory ScanSaleResult.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map? ?? json;
+    return ScanSaleResult(
+      message: (json['message'] ?? 'Stock updated').toString(),
+      productName: data['name']?.toString(),
+      qty: data['qty'] as int?,
+    );
+  }
+}
+
+class AdminOrderRow {
+  AdminOrderRow({
+    required this.id,
+    required this.orderNumber,
+    required this.status,
+    required this.total,
+    required this.createdAt,
+    this.customerName,
+  });
+
+  final int id;
+  final String orderNumber;
+  final String status;
+  final double total;
+  final String createdAt;
+  final String? customerName;
+
+  factory AdminOrderRow.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map?;
+    return AdminOrderRow(
+      id: json['id'] as int,
+      orderNumber: (json['order_number'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      total: AdminDashboardStats._toDouble(json['total']),
+      createdAt: (json['created_at'] ?? '').toString(),
+      customerName: user?['name']?.toString(),
+    );
+  }
+}
+
+class AdminOrderPage {
+  AdminOrderPage({required this.items, required this.currentPage, required this.hasMore});
+
+  final List<AdminOrderRow> items;
+  final int currentPage;
+  final bool hasMore;
+
+  factory AdminOrderPage.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    final items = data is List
+        ? data.whereType<Map>().map((e) => AdminOrderRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <AdminOrderRow>[];
+    final current = json['current_page'] as int? ?? 1;
+    final last = json['last_page'] as int? ?? current;
+    return AdminOrderPage(items: items, currentPage: current, hasMore: current < last);
+  }
+}
+
+class AdminPaymentRow {
+  AdminPaymentRow({
+    required this.id,
+    required this.method,
+    required this.status,
+    required this.amount,
+    required this.createdAt,
+    this.orderNumber,
+  });
+
+  final int id;
+  final String method;
+  final String status;
+  final double amount;
+  final String createdAt;
+  final String? orderNumber;
+
+  factory AdminPaymentRow.fromJson(Map<String, dynamic> json) {
+    final order = json['order'] as Map?;
+    return AdminPaymentRow(
+      id: json['id'] as int,
+      method: (json['method'] ?? json['payment_method'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      amount: AdminDashboardStats._toDouble(json['amount'] ?? order?['total']),
+      createdAt: (json['created_at'] ?? '').toString(),
+      orderNumber: order?['order_number']?.toString(),
+    );
+  }
+}
+
+class AdminPaymentPage {
+  AdminPaymentPage({required this.items, required this.currentPage, required this.hasMore});
+
+  final List<AdminPaymentRow> items;
+  final int currentPage;
+  final bool hasMore;
+
+  factory AdminPaymentPage.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    final items = data is List
+        ? data.whereType<Map>().map((e) => AdminPaymentRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <AdminPaymentRow>[];
+    final current = json['current_page'] as int? ?? 1;
+    final last = json['last_page'] as int? ?? current;
+    return AdminPaymentPage(items: items, currentPage: current, hasMore: current < last);
+  }
+}
+
+class AdminOrderItemLine {
+  AdminOrderItemLine({required this.name, required this.qty, required this.price, this.imageUrl});
+
+  final String name;
+  final int qty;
+  final double price;
+  final String? imageUrl;
+
+  factory AdminOrderItemLine.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map?;
+    return AdminOrderItemLine(
+      name: (product?['name'] ?? json['name'] ?? 'Item').toString(),
+      qty: AdminDashboardStats._toInt(json['quantity'] ?? json['qty']),
+      price: AdminDashboardStats._toDouble(json['price'] ?? json['unit_price']),
+      imageUrl: product?['image_url']?.toString(),
+    );
+  }
+}
+
+class AdminOrderDetail {
+  AdminOrderDetail({
+    required this.id,
+    required this.orderNumber,
+    required this.status,
+    required this.paymentStatus,
+    required this.total,
+    required this.createdAt,
+    this.customerName,
+    this.customerEmail,
+    this.customerPhone,
+    this.shippingAddress,
+    this.items = const [],
+  });
+
+  final int id;
+  final String orderNumber;
+  final String status;
+  final String paymentStatus;
+  final double total;
+  final String createdAt;
+  final String? customerName;
+  final String? customerEmail;
+  final String? customerPhone;
+  final String? shippingAddress;
+  final List<AdminOrderItemLine> items;
+
+  factory AdminOrderDetail.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map?;
+    final itemsRaw = json['items'];
+    return AdminOrderDetail(
+      id: AdminDashboardStats._toInt(json['id']),
+      orderNumber: (json['order_number'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+      paymentStatus: (json['payment_status'] ?? '').toString(),
+      total: AdminDashboardStats._toDouble(json['total']),
+      createdAt: (json['created_at'] ?? '').toString(),
+      customerName: user?['name']?.toString(),
+      customerEmail: user?['email']?.toString(),
+      customerPhone: user?['phone']?.toString(),
+      shippingAddress: json['shipping_address']?.toString(),
+      items: itemsRaw is List
+          ? itemsRaw.whereType<Map>().map((e) => AdminOrderItemLine.fromJson(Map<String, dynamic>.from(e))).toList()
+          : [],
+    );
+  }
+}
+
+class AdminPaymentDetail {
+  AdminPaymentDetail({
+    required this.id,
+    required this.status,
+    required this.method,
+    required this.amount,
+    required this.createdAt,
+    this.orderId,
+    this.orderNumber,
+    this.referenceCode,
+    this.customerName,
+  });
+
+  final int id;
+  final String status;
+  final String method;
+  final double amount;
+  final String createdAt;
+  final int? orderId;
+  final String? orderNumber;
+  final String? referenceCode;
+  final String? customerName;
+
+  factory AdminPaymentDetail.fromJson(Map<String, dynamic> json) {
+    final order = json['order'] as Map?;
+    final user = order?['user'] as Map?;
+    return AdminPaymentDetail(
+      id: AdminDashboardStats._toInt(json['id']),
+      status: (json['status'] ?? '').toString(),
+      method: (json['method'] ?? json['payment_method'] ?? '').toString(),
+      amount: AdminDashboardStats._toDouble(json['amount'] ?? order?['total']),
+      createdAt: (json['created_at'] ?? '').toString(),
+      orderId: order != null ? AdminDashboardStats._toInt(order['id']) : null,
+      orderNumber: order?['order_number']?.toString(),
+      referenceCode: json['reference_code']?.toString(),
+      customerName: user?['name']?.toString(),
+    );
+  }
+}
+
+class AdminShipmentRow {
+  AdminShipmentRow({
+    required this.id,
+    required this.orderId,
+    required this.status,
+    required this.trackingCode,
+    this.provider,
+    this.customerName,
+  });
+
+  final int id;
+  final int orderId;
+  final String status;
+  final String trackingCode;
+  final String? provider;
+  final String? customerName;
+
+  factory AdminShipmentRow.fromJson(Map<String, dynamic> json) {
+    final order = json['order'] as Map?;
+    final user = order?['user'] as Map?;
+    return AdminShipmentRow(
+      id: AdminDashboardStats._toInt(json['id']),
+      orderId: AdminDashboardStats._toInt(json['order_id'] ?? order?['id']),
+      status: (json['status'] ?? '').toString(),
+      trackingCode: (json['tracking_code'] ?? json['tracking_number'] ?? '').toString(),
+      provider: json['provider']?.toString(),
+      customerName: user?['name']?.toString(),
+    );
+  }
+}
+
+class AdminShipmentPage {
+  AdminShipmentPage({required this.items, required this.currentPage, required this.hasMore});
+
+  final List<AdminShipmentRow> items;
+  final int currentPage;
+  final bool hasMore;
+
+  factory AdminShipmentPage.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    final items = data is List
+        ? data.whereType<Map>().map((e) => AdminShipmentRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <AdminShipmentRow>[];
+    final current = json['current_page'] as int? ?? 1;
+    final last = json['last_page'] as int? ?? current;
+    return AdminShipmentPage(items: items, currentPage: current, hasMore: current < last);
+  }
+}
+
+class AdminShipmentDetail extends AdminShipmentRow {
+  AdminShipmentDetail({
+    required super.id,
+    required super.orderId,
+    required super.status,
+    required super.trackingCode,
+    super.provider,
+    super.customerName,
+    this.events = const [],
+  });
+
+  final List<String> events;
+
+  factory AdminShipmentDetail.fromJson(Map<String, dynamic> json) {
+    final eventsRaw = json['tracking_events'];
+    final events = eventsRaw is List
+        ? eventsRaw
+            .whereType<Map>()
+            .map((e) => (e['description'] ?? e['note'] ?? e['status'] ?? '').toString())
+            .where((s) => s.isNotEmpty)
+            .toList()
+        : <String>[];
+    final row = AdminShipmentRow.fromJson(json);
+    return AdminShipmentDetail(
+      id: row.id,
+      orderId: row.orderId,
+      status: row.status,
+      trackingCode: row.trackingCode,
+      provider: row.provider,
+      customerName: row.customerName,
+      events: events,
+    );
+  }
+}
+
+class AdminCustomerRow {
+  AdminCustomerRow({
+    required this.id,
+    required this.name,
+    required this.email,
+    this.phone,
+    this.ordersCount,
+    this.totalSpent,
+    this.loyaltyTier,
+  });
+
+  final int id;
+  final String name;
+  final String email;
+  final String? phone;
+  final int? ordersCount;
+  final double? totalSpent;
+  final String? loyaltyTier;
+
+  factory AdminCustomerRow.fromJson(Map<String, dynamic> json) {
+    return AdminCustomerRow(
+      id: AdminDashboardStats._toInt(json['id']),
+      name: (json['name'] ?? '').toString(),
+      email: (json['email'] ?? '').toString(),
+      phone: json['phone']?.toString(),
+      ordersCount: json['orders_count'] != null ? AdminDashboardStats._toInt(json['orders_count']) : null,
+      totalSpent: json['total_spent'] != null ? AdminDashboardStats._toDouble(json['total_spent']) : null,
+      loyaltyTier: json['loyalty_tier']?.toString(),
+    );
+  }
+}
+
+class AdminCustomerPage {
+  AdminCustomerPage({required this.items, required this.currentPage, required this.hasMore});
+
+  final List<AdminCustomerRow> items;
+  final int currentPage;
+  final bool hasMore;
+
+  factory AdminCustomerPage.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    final items = data is List
+        ? data.whereType<Map>().map((e) => AdminCustomerRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <AdminCustomerRow>[];
+    final current = json['current_page'] as int? ?? 1;
+    final last = json['last_page'] as int? ?? current;
+    return AdminCustomerPage(items: items, currentPage: current, hasMore: current < last);
+  }
+}
+
+class AdminCustomerDetail extends AdminCustomerRow {
+  AdminCustomerDetail({
+    required super.id,
+    required super.name,
+    required super.email,
+    super.phone,
+    super.ordersCount,
+    super.totalSpent,
+    super.loyaltyTier,
+    this.address,
+    this.createdAt,
+  });
+
+  final String? address;
+  final String? createdAt;
+
+  factory AdminCustomerDetail.fromJson(Map<String, dynamic> json) {
+    final row = AdminCustomerRow.fromJson(json);
+    return AdminCustomerDetail(
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      ordersCount: row.ordersCount,
+      totalSpent: row.totalSpent,
+      loyaltyTier: row.loyaltyTier,
+      address: json['address']?.toString(),
+      createdAt: json['created_at']?.toString(),
+    );
+  }
+}
+
+class AdminContactRow {
+  AdminContactRow({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.subject,
+    required this.message,
+    required this.status,
+    this.phone,
+    this.adminNote,
+    this.createdAt,
+  });
+
+  final int id;
+  final String name;
+  final String email;
+  final String subject;
+  final String message;
+  final String status;
+  final String? phone;
+  final String? adminNote;
+  final String? createdAt;
+
+  factory AdminContactRow.fromJson(Map<String, dynamic> json) {
+    return AdminContactRow(
+      id: AdminDashboardStats._toInt(json['id']),
+      name: (json['name'] ?? '').toString(),
+      email: (json['email'] ?? '').toString(),
+      subject: (json['subject'] ?? '').toString(),
+      message: (json['message'] ?? '').toString(),
+      status: (json['status'] ?? 'new').toString(),
+      phone: json['phone']?.toString(),
+      adminNote: json['admin_note']?.toString(),
+      createdAt: json['created_at']?.toString(),
+    );
+  }
+}
+
+class AdminContactPage {
+  AdminContactPage({required this.items, required this.currentPage, required this.hasMore, this.stats});
+
+  final List<AdminContactRow> items;
+  final int currentPage;
+  final bool hasMore;
+  final Map<String, int>? stats;
+
+  factory AdminContactPage.fromJson(Map<String, dynamic> json) {
+    final contacts = json['contacts'];
+    final items = contacts is List
+        ? contacts.whereType<Map>().map((e) => AdminContactRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <AdminContactRow>[];
+    final pagination = json['pagination'] as Map? ?? json;
+    final current = AdminDashboardStats._toInt(pagination['current_page'] ?? json['current_page'] ?? 1);
+    final last = AdminDashboardStats._toInt(pagination['last_page'] ?? json['last_page'] ?? current);
+    final statsRaw = json['stats'] as Map?;
+    return AdminContactPage(
+      items: items,
+      currentPage: current,
+      hasMore: current < last,
+      stats: statsRaw != null
+          ? statsRaw.map((k, v) => MapEntry(k.toString(), AdminDashboardStats._toInt(v)))
+          : null,
+    );
+  }
+}
+
+class AdminReplacementRow {
+  AdminReplacementRow({
+    required this.id,
+    required this.status,
+    required this.reason,
+    this.orderNumber,
+    this.customerName,
+    this.createdAt,
+  });
+
+  final int id;
+  final String status;
+  final String reason;
+  final String? orderNumber;
+  final String? customerName;
+  final String? createdAt;
+
+  factory AdminReplacementRow.fromJson(Map<String, dynamic> json) {
+    final order = json['order'] as Map?;
+    final user = order?['user'] as Map?;
+    return AdminReplacementRow(
+      id: AdminDashboardStats._toInt(json['id']),
+      status: (json['status'] ?? '').toString(),
+      reason: (json['reason'] ?? '').toString(),
+      orderNumber: order?['order_number']?.toString(),
+      customerName: user?['name']?.toString(),
+      createdAt: json['created_at']?.toString(),
+    );
+  }
+}
+
+class AdminReplacementPage {
+  AdminReplacementPage({required this.items, required this.currentPage, required this.hasMore});
+
+  final List<AdminReplacementRow> items;
+  final int currentPage;
+  final bool hasMore;
+
+  factory AdminReplacementPage.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    final items = data is List
+        ? data.whereType<Map>().map((e) => AdminReplacementRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <AdminReplacementRow>[];
+    final current = json['current_page'] as int? ?? 1;
+    final last = json['last_page'] as int? ?? current;
+    return AdminReplacementPage(items: items, currentPage: current, hasMore: current < last);
+  }
+}
+
+class AdminReplacementDetail extends AdminReplacementRow {
+  AdminReplacementDetail({
+    required super.id,
+    required super.status,
+    required super.reason,
+    super.orderNumber,
+    super.customerName,
+    super.createdAt,
+    this.notes,
+  });
+
+  final String? notes;
+
+  factory AdminReplacementDetail.fromJson(Map<String, dynamic> json) {
+    final row = AdminReplacementRow.fromJson(json);
+    return AdminReplacementDetail(
+      id: row.id,
+      status: row.status,
+      reason: row.reason,
+      orderNumber: row.orderNumber,
+      customerName: row.customerName,
+      createdAt: row.createdAt,
+      notes: json['notes']?.toString() ?? json['admin_notes']?.toString(),
+    );
+  }
+}
+
+class PosSaleHistoryRow {
+  PosSaleHistoryRow({
+    required this.id,
+    required this.orderNumber,
+    required this.total,
+    required this.paymentMethod,
+    required this.itemsCount,
+    required this.createdAt,
+    this.sellerName,
+  });
+
+  final int id;
+  final String orderNumber;
+  final double total;
+  final String paymentMethod;
+  final int itemsCount;
+  final String createdAt;
+  final String? sellerName;
+
+  factory PosSaleHistoryRow.fromJson(Map<String, dynamic> json) {
+    final seller = json['seller'] as Map?;
+    return PosSaleHistoryRow(
+      id: AdminDashboardStats._toInt(json['id']),
+      orderNumber: (json['order_number'] ?? '').toString(),
+      total: AdminDashboardStats._toDouble(json['total']),
+      paymentMethod: (json['payment_method'] ?? '').toString(),
+      itemsCount: AdminDashboardStats._toInt(json['items_count']),
+      createdAt: (json['created_at'] ?? '').toString(),
+      sellerName: seller?['name']?.toString(),
+    );
+  }
+}
+
+class PosSaleHistoryPage {
+  PosSaleHistoryPage({
+    required this.items,
+    required this.currentPage,
+    required this.hasMore,
+    this.todayTotal,
+    this.todayCount,
+  });
+
+  final List<PosSaleHistoryRow> items;
+  final int currentPage;
+  final bool hasMore;
+  final double? todayTotal;
+  final int? todayCount;
+
+  factory PosSaleHistoryPage.fromJson(Map<String, dynamic> json) {
+    final dataBlock = json['data'] as Map? ?? json;
+    final list = dataBlock['data'];
+    final items = list is List
+        ? list.whereType<Map>().map((e) => PosSaleHistoryRow.fromJson(Map<String, dynamic>.from(e))).toList()
+        : <PosSaleHistoryRow>[];
+    final current = AdminDashboardStats._toInt(dataBlock['current_page'] ?? 1);
+    final last = AdminDashboardStats._toInt(dataBlock['last_page'] ?? current);
+    final summary = json['summary'] as Map?;
+    final today = summary?['today'] as Map?;
+    return PosSaleHistoryPage(
+      items: items,
+      currentPage: current,
+      hasMore: current < last,
+      todayTotal: today != null ? AdminDashboardStats._toDouble(today['total']) : null,
+      todayCount: today != null ? AdminDashboardStats._toInt(today['count']) : null,
     );
   }
 }

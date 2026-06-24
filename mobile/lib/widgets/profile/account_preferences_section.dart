@@ -6,7 +6,6 @@ import '../../providers/app_settings_provider.dart';
 import '../../screens/faq_screen.dart';
 import '../../screens/storefront_page_screen.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/telegram_connect_button.dart';
 import 'settings_tile.dart';
 
 class AccountSectionLabel extends StatelessWidget {
@@ -60,8 +59,6 @@ class AccountPreferencesSection extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        const TelegramAccountConnectTile(),
       ],
     );
   }

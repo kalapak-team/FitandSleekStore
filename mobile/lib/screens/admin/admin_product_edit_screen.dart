@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../services/admin_service.dart';
-import '../../widgets/common/fs_button.dart';
+import '../../theme/admin_theme.dart';
+import '../../widgets/admin/admin_ui_kit.dart';
 
 class AdminProductEditScreen extends StatefulWidget {
   const AdminProductEditScreen({super.key, required this.productId});
@@ -86,9 +87,16 @@ class _AdminProductEditScreenState extends State<AdminProductEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit product')),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text('Edit product'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AdminColors.accent))
           : _error != null
               ? Center(child: Text(_error!))
               : SingleChildScrollView(
@@ -96,33 +104,52 @@ class _AdminProductEditScreenState extends State<AdminProductEditScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'Name'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _priceController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Price (USD)'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _stockController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Stock'),
-                      ),
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        title: const Text('Active on storefront'),
-                        value: _isActive,
-                        onChanged: (v) => setState(() => _isActive = v),
+                      AdminAppear(
+                        index: 0,
+                        child: AdminSoftCard(
+                          child: Column(
+                            children: [
+                              TextFormField(
+                                controller: _nameController,
+                                decoration: const InputDecoration(labelText: 'Name'),
+                              ),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: _priceController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(labelText: 'Price (USD)'),
+                              ),
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                controller: _stockController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(labelText: 'Stock'),
+                              ),
+                              const SizedBox(height: 8),
+                              SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Active on storefront'),
+                                value: _isActive,
+                                activeThumbColor: AdminColors.accent,
+                                onChanged: (v) => setState(() => _isActive = v),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
-                      FsButton(
-                        label: 'Save changes',
-                        loading: _saving,
-                        onPressed: _saving ? null : _save,
+                      AdminAppear(
+                        index: 1,
+                        child: FilledButton(
+                          onPressed: _saving ? null : _save,
+                          child: _saving
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Text('Save changes'),
+                        ),
                       ),
                     ],
                   ),

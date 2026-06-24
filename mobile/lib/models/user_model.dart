@@ -8,6 +8,7 @@ class UserModel {
     this.status,
     this.address,
     this.profileImageUrl,
+    this.effectiveAdminPermissions,
   });
 
   final int id;
@@ -18,6 +19,7 @@ class UserModel {
   final String? status;
   final String? address;
   final String? profileImageUrl;
+  final Map<String, bool>? effectiveAdminPermissions;
 
   bool get isSuperAdmin => role?.toLowerCase() == 'superadmin';
   bool get isAdmin => isSuperAdmin || role?.toLowerCase() == 'admin';
@@ -39,7 +41,13 @@ class UserModel {
         status: json['status']?.toString(),
         address: json['address']?.toString(),
         profileImageUrl: json['profile_image_url']?.toString(),
+        effectiveAdminPermissions: parseAdminPermissions(json['effective_admin_permissions']),
       );
+
+  static Map<String, bool>? parseAdminPermissions(dynamic raw) {
+    if (raw is! Map) return null;
+    return raw.map((k, v) => MapEntry(k.toString(), v == true));
+  }
 
   UserModel copyWith({
     String? name,
@@ -47,6 +55,7 @@ class UserModel {
     String? phone,
     String? address,
     String? profileImageUrl,
+    Map<String, bool>? effectiveAdminPermissions,
   }) =>
       UserModel(
         id: id,
@@ -57,5 +66,6 @@ class UserModel {
         status: status,
         address: address ?? this.address,
         profileImageUrl: profileImageUrl ?? this.profileImageUrl,
+        effectiveAdminPermissions: effectiveAdminPermissions ?? this.effectiveAdminPermissions,
       );
 }

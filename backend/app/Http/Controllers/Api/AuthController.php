@@ -664,6 +664,7 @@ class AuthController extends Controller
       'status' => $user->status,
       'address' => $user->address,
       'profile_image_url' => $user->profile_image_url,
+      ...($user->isAdmin() ? ['effective_admin_permissions' => $user->effective_admin_permissions] : []),
     ];
   }
 

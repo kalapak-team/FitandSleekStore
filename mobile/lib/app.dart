@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'core/api_client.dart';
@@ -6,6 +7,7 @@ import 'providers/app_settings_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/wishlist_provider.dart';
+import 'screens/admin/admin_shell.dart';
 import 'screens/home_shell.dart';
 import 'services/auth_service.dart';
 import 'services/customer_account_service.dart';
@@ -83,6 +85,13 @@ class FitandSleekApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: settings.themeMode,
+            locale: Locale(settings.language),
+            supportedLocales: const [Locale('en'), Locale('km')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
             home: const _RootGate(),
           );
         },
@@ -102,6 +111,10 @@ class _RootGate extends StatelessWidget {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
+    }
+
+    if (auth.isLoggedIn && auth.user?.isAdmin == true) {
+      return const AdminShell();
     }
 
     return const HomeShell();

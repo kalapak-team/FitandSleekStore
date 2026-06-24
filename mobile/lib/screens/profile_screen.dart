@@ -12,16 +12,12 @@ import '../services/customer_account_service.dart';
 import '../services/order_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/media_url.dart';
+import '../widgets/admin/admin_dashboard_return_panel.dart';
 import '../widgets/navigation/home_store_header.dart';
 import '../widgets/profile/guest_account_panel.dart';
 import '../widgets/profile/settings_tile.dart';
 import 'account_help_screen.dart';
 import 'account_settings_screen.dart';
-import 'admin/admin_dashboard_screen.dart';
-import 'admin/admin_pos_screen.dart';
-import 'admin/admin_products_screen.dart';
-import 'admin/admin_profile_edit_screen.dart';
-import 'admin/admin_reports_screen.dart';
 import 'loyalty_screen.dart';
 import 'orders_screen.dart';
 import 'replacements_screen.dart';
@@ -86,6 +82,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final user = auth.user!;
 
+    if (user.isAdmin) {
+      return AdminDashboardReturnPanel(user: user);
+    }
+
     return Column(
       children: [
         _ProfileSageHeader(
@@ -115,60 +115,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 if (_loyalty != null) ...[
                   _LoyaltyBanner(loyalty: _loyalty!),
                   const SizedBox(height: 12),
-                ],
-                if (user.isAdmin) ...[
-                  Text('Admin', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  SettingsTile(
-                    icon: Icons.dashboard_outlined,
-                    title: 'Dashboard',
-                    subtitle: 'Revenue, orders, inventory',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          appBar: AppBar(title: const Text('Admin dashboard')),
-                          body: const AdminDashboardScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SettingsTile(
-                    icon: Icons.inventory_2_outlined,
-                    title: 'Products',
-                    subtitle: 'View and edit catalog',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AdminProductsScreen()),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SettingsTile(
-                    icon: Icons.point_of_sale_outlined,
-                    title: 'POS',
-                    subtitle: 'In-store sales',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AdminPosScreen()),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SettingsTile(
-                    icon: Icons.bar_chart_outlined,
-                    title: 'Reports',
-                    subtitle: 'Sales trends',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AdminReportsScreen()),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SettingsTile(
-                    icon: Icons.admin_panel_settings_outlined,
-                    title: 'Admin profile',
-                    subtitle: 'Contact details',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => AdminProfileEditScreen(user: user)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                 ],
                 SettingsTile(
                   icon: Icons.shopping_bag_outlined,

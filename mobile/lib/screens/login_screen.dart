@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/admin_auth_navigation.dart';
 import '../core/api_client.dart';
 import '../core/auth_flow.dart';
 import '../providers/auth_provider.dart';
@@ -56,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         return;
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) navigateAfterAuthentication(context);
     } on DioException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await auth.loginWithSocial(provider);
       if (!mounted) return;
-      Navigator.of(context).pop();
+      navigateAfterAuthentication(context);
     } catch (e) {
       if (!mounted) return;
       final message = socialAuthErrorMessage(e);
