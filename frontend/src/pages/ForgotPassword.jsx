@@ -250,13 +250,11 @@ export default function ForgotPassword() {
                     style={{ background: "linear-gradient(150deg, #4a6b5e 0%, #38554a 55%, #2e4a3f 100%)" }}
                 >
                     <Link to="/" className="mx-auto flex w-fit items-center justify-center transition-opacity hover:opacity-85">
-                        <div className="rounded-xl bg-white px-5 py-3 shadow-md">
-                            <Logo
-                                className="h-16 w-auto max-w-[220px]"
-                                src={settings?.header?.logo_url || settings?.app_logo_url || "/logo.png"}
-                                alt="Fit & Sleek"
-                            />
-                        </div>
+                        <Logo
+                            className="h-16 w-auto max-w-[220px] drop-shadow-md"
+                            src={settings?.header?.logo_url || settings?.app_logo_url || "/logo.png"}
+                            alt="Fit & Sleek"
+                        />
                     </Link>
                     <h1 className="mt-5 text-center text-xl font-semibold tracking-tight text-white">
                         {step === "done" ? "All done!" : "Reset your password"}

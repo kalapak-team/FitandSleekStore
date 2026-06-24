@@ -92,19 +92,17 @@ export function AuthDialogShell({
             <X className="h-4 w-4" />
           </DialogPrimitive.Close>
 
-          {/* System logo image — same asset as storefront header */}
+          {/* System logo — transparent PNG sits directly on the header */}
           <Link
             to="/"
             className="mx-auto flex w-fit items-center justify-center transition-opacity hover:opacity-85"
             onClick={onClose}
           >
-            <div className="rounded-xl bg-white px-5 py-3 shadow-md">
-              <Logo
-                className="h-[4.5rem] w-auto max-w-[260px]"
-                src={logoUrl || "/logo.png"}
-                alt="Fit & Sleek"
-              />
-            </div>
+            <Logo
+              className="h-[4.5rem] w-auto max-w-[260px] drop-shadow-md"
+              src={logoUrl || "/logo.png"}
+              alt="Fit & Sleek"
+            />
           </Link>
 
           {title ? (
