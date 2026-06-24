@@ -6,6 +6,7 @@ import '../core/api_client.dart';
 import '../core/auth_flow.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/common/fs_button.dart';
+import '../widgets/auth/auth_branded_header.dart';
 import '../widgets/auth/auth_social_buttons.dart';
 import '../services/social_auth_service.dart';
 import 'otp_screen.dart';
@@ -101,16 +102,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Join FitandSleek',
-                  style: Theme.of(context).textTheme.headlineMedium,
+                const AuthBrandedHeader(
+                  subtitle:
+                      'Create a customer account to shop, save your cart, and track orders.',
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Create a customer account to shop, save your cart, and track orders.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,

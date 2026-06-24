@@ -3,7 +3,7 @@
      *  BRAND — kept in sync with exports/table.blade.php (Stock & Inventory PDF)
      * ─────────────────────────────────────────────────────────────────────── */
     $brandName      = 'FIT & SLEEK';
-    $logoUrl        = 'https://pub-93085525881746c1a7b523e463cbfb35.r2.dev/uploads/Fitandsleek/2026-01-30%2003.05.05.jpg';
+    $logoUrl        = \App\Support\BrandLogo::url();
 
     $headerNavy     = '#0F1923';
     $headerNavySoft = '#1B2638';

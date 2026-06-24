@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import axios from "axios";
 import { Link, useSearchParams } from "react-router-dom";
 import { resolveImageUrl } from "../../lib/images";
+import Logo from "../../components/Logo.jsx";
 import { getDeviceHeaders, getDeviceMeta } from "../../lib/device";
 import { useHomepageSettings } from "../../state/homepageSettings";
 
@@ -520,7 +521,6 @@ export default function DriverScanPage() {
     };
 
     const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.png";
-    const fallbackLogoUrl = resolveImageUrl("/logo.png");
 
     return (
         <div className="min-h-screen bg-slate-50 px-4 py-10">
@@ -721,7 +721,7 @@ export default function DriverScanPage() {
                             <div className="rounded-lg border border-slate-200 bg-[#f8fafc] p-5 border-b border-b-[#e2e8f0]">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <img src={resolveImageUrl(logoUrl)} alt="Brand logo" className="mb-3 h-16 max-w-[250px] object-contain" onError={(e) => { e.currentTarget.src = fallbackLogoUrl; }} />
+                                        <Logo src={logoUrl} alt="Brand logo" className="mb-3 h-16 max-w-[250px]" />
                                         <h4 className="text-lg font-bold text-[#497869]">Admin Invoice</h4>
                                         <p className="text-slate-600">Invoice: <span className="font-semibold text-slate-900">{receiptData.invoice_number}</span></p>
                                         <p className="text-slate-500">Date: {receiptData.invoice_date}</p>

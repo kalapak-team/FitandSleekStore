@@ -1,10 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../config/app_assets.dart';
 import '../config/app_config.dart';
 import '../utils/media_url.dart';
-import 'product_image.dart';
 
-/// Storefront logo — image from API / site static `/logo.png` (same as web [Logo.jsx]).
+/// Storefront logo — bundled asset shows instantly; optional API URL upgrades when online.
 class AppLogo extends StatefulWidget {
   const AppLogo({
     super.key,
@@ -25,8 +26,9 @@ class AppLogo extends StatefulWidget {
 
 class _AppLogoState extends State<AppLogo> {
   int _candidateIndex = 0;
+  bool _networkFailed = false;
 
-  List<String> get _candidates {
+  List<String> get _networkCandidates {
     final urls = <String>[];
     final raw = widget.logoUrl?.trim();
     if (raw != null && raw.isNotEmpty) {
@@ -37,17 +39,23 @@ class _AppLogoState extends State<AppLogo> {
     return urls.where((u) => u.isNotEmpty).toList();
   }
 
-  String get _currentUrl {
-    final list = _candidates;
-    if (list.isEmpty) return '';
+  String? get _currentNetworkUrl {
+    if (_networkFailed) return null;
+    final list = _networkCandidates;
+    if (list.isEmpty) return null;
     final i = _candidateIndex.clamp(0, list.length - 1);
     return list[i];
   }
 
   void _tryNextUrl() {
-    final list = _candidates;
+    final list = _networkCandidates;
     if (_candidateIndex + 1 < list.length) {
-      setState(() => _candidateIndex++);
+      setState(() {
+        _candidateIndex++;
+        _networkFailed = false;
+      });
+    } else {
+      setState(() => _networkFailed = true);
     }
   }
 
@@ -56,51 +64,45 @@ class _AppLogoState extends State<AppLogo> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.logoUrl != widget.logoUrl) {
       _candidateIndex = 0;
+      _networkFailed = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final networkUrl = _currentNetworkUrl;
+
     return Align(
       alignment: widget.onColoredHeader ? Alignment.center : Alignment.centerLeft,
       child: SizedBox(
         height: widget.height,
         width: widget.height * 2.75,
-        child: ProductImage(
-          key: ValueKey(_currentUrl),
-          imageUrl: _currentUrl,
-          fit: BoxFit.contain,
-          error: _buildError(context),
+        child: Stack(
+          alignment: Alignment.center,
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              AppAssets.logo,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+            ),
+            if (networkUrl != null)
+              CachedNetworkImage(
+                key: ValueKey(networkUrl),
+                imageUrl: networkUrl,
+                fit: BoxFit.contain,
+                fadeInDuration: const Duration(milliseconds: 200),
+                placeholder: (_, __) => const SizedBox.shrink(),
+                errorWidget: (_, __, ___) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _tryNextUrl();
+                  });
+                  return const SizedBox.shrink();
+                },
+              ),
+          ],
         ),
       ),
     );
-  }
-
-  Widget _buildError(BuildContext context) {
-    if (_candidateIndex + 1 < _candidates.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _tryNextUrl();
-      });
-      return SizedBox(
-        height: widget.height,
-        child: const Center(
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
-          ),
-        ),
-      );
-    }
-
-    if (widget.onColoredHeader) {
-      return Icon(
-        Icons.storefront_rounded,
-        size: widget.height * 0.55,
-        color: Colors.white.withValues(alpha: 0.9),
-      );
-    }
-
-    return Icon(Icons.storefront_outlined, size: widget.height * 0.5, color: Colors.grey);
   }
 }

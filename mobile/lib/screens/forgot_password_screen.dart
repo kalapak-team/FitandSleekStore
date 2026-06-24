@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../core/api_client.dart';
 import '../services/auth_service.dart';
+import '../widgets/auth/auth_branded_header.dart';
 import '../widgets/common/fs_button.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -62,16 +63,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Reset your password',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                const AuthBrandedHeader(
+                  title: 'Reset your password',
+                  subtitle:
+                      'Enter your account email. We will send a verification code if the account exists.',
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter your account email. We will send a verification code if the account exists.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,

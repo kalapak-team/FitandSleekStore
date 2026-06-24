@@ -4,7 +4,7 @@ import api from "../../lib/api";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 import { useHomepageSettings } from "../../state/homepageSettings";
-import { resolveImageUrl } from "../../lib/images";
+import Logo from "../../components/Logo.jsx";
 import { AdminPageLoader } from "@/components/admin/AdminLoading";
 import AdminReportExportMenu from "../../components/admin/AdminReportExportMenu.jsx";
 import { downloadBlobResponse } from "../../lib/adminReportDownload.js";
@@ -96,7 +96,6 @@ export default function AdminInvoicePage() {
 
  const isPaid = useMemo(() => invoice?.payment_status === "PAID", [invoice]);
  const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.png";
- const fallbackLogoUrl = resolveImageUrl("/logo.png");
 
  if (!permissionsReady || loading) return <AdminPageLoader />;
 
@@ -148,7 +147,7 @@ export default function AdminInvoicePage() {
  <div className="relative z-10">
  <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-[#f8fafc] dark:bg-slate-800/60 p-5">
  <div className="min-w-0">
- {logoUrl ? <img src={resolveImageUrl(logoUrl)} alt="Brand logo" className={`mb-3 object-contain ${paperSize === "thermal" ? "h-16 max-w-[250px]" : "h-20 max-w-[250px]"}`} onError={(e) => { e.currentTarget.src = fallbackLogoUrl; }} /> : null}
+ {logoUrl ? <Logo src={logoUrl} alt="Brand logo" className={`mb-3 ${paperSize === "thermal" ? "h-16 max-w-[250px]" : "h-20 max-w-[250px]"}`} /> : null}
  <h1 className="text-2xl font-bold text-[color:var(--admin-primary)]">Admin Invoice</h1>
  <p className="text-sm text-slate-600 dark:text-slate-300">Invoice #: {invoice.invoice_number}</p>
  <p className="text-sm text-slate-600 dark:text-slate-300">Date: {invoice.invoice_date}</p>

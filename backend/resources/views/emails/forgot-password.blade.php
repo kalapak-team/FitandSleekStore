@@ -9,11 +9,7 @@
         <tr>
             <td align="center" style="padding:0;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px;background-color:#ffffff;border:1px solid #dbe4f0;border-radius:12px;">
-                    <tr>
-                        <td align="center" style="padding:20px;">
-                            <img src="https://pub-93085525881746c1a7b523e463cbfb35.r2.dev/uploads/Fitandsleek/2026-01-30%2003.05.05.jpg" alt="Fit and Sleek" width="560" style="display:block;width:100%;max-width:560px;height:auto;border:0;outline:none;text-decoration:none;border-radius:10px;" />
-                        </td>
-                    </tr>
+                    @include('emails.partials.logo')
                     <tr>
                         <td style="padding:0 24px 28px 24px;font-family:Arial,Helvetica,sans-serif;color:#10233f;">
     <h2>Hello, {{ $user->name ?? $user->email }}</h2>

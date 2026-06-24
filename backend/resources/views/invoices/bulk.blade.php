@@ -3,7 +3,7 @@
      *  BRAND — kept in sync with exports/table.blade.php and reports/*.blade.php
      * ─────────────────────────────────────────────────────────────────────── */
     $brandName      = 'FIT & SLEEK';
-    $logoUrl        = 'https://pub-93085525881746c1a7b523e463cbfb35.r2.dev/uploads/Fitandsleek/2026-01-30%2003.05.05.jpg';
+    $logoUrl        = \App\Support\BrandLogo::url();
 
     $headerNavy     = '#0F1923';
     $headerNavySoft = '#1B2638';
@@ -345,7 +345,7 @@
         <div class="brand-header">
             <table>
                 <tr>
-                    <td class="logo-cell"><img src="{{ $logoUrl }}" alt="{{ $brandName }}"></td>
+                    <td class="logo-cell"><img src="{{ $invoice['logo_url'] ?? $logoUrl }}" alt="{{ $brandName }}"></td>
                     <td class="text-cell">
                         <p class="doc-title-h">Invoice</p>
                         <p class="doc-subtitle-h">#{{ $invoice['invoice_number'] }} &nbsp;·&nbsp; {{ $invoice['invoice_date'] }}</p>

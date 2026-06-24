@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../core/admin_auth_navigation.dart';
 import '../core/api_client.dart';
 import '../providers/auth_provider.dart';
-import '../theme/app_colors.dart';
+import '../widgets/auth/auth_branded_header.dart';
 import '../widgets/common/fs_button.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -84,23 +84,16 @@ class _OtpScreenState extends State<OtpScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Verify email')),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.mark_email_read_outlined, size: 56, color: AppColors.storeHeader),
-              const SizedBox(height: 16),
-              Text(
-                'Check your inbox',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontSize: 24),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.notice?.trim().isNotEmpty == true
+              AuthBrandedHeader(
+                title: 'Check your inbox',
+                subtitle: widget.notice?.trim().isNotEmpty == true
                     ? widget.notice!.trim()
                     : 'We sent a verification code to ${widget.email}',
-                style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 28),
               TextField(

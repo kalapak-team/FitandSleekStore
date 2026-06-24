@@ -6,8 +6,8 @@ import '../core/admin_auth_navigation.dart';
 import '../core/api_client.dart';
 import '../core/auth_flow.dart';
 import '../providers/auth_provider.dart';
-import '../theme/app_colors.dart';
 import '../widgets/common/fs_button.dart';
+import '../widgets/auth/auth_branded_header.dart';
 import '../widgets/auth/auth_social_buttons.dart';
 import '../services/social_auth_service.dart';
 import 'forgot_password_screen.dart';
@@ -96,31 +96,10 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.storeHeader,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Welcome back',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Sign in with your FitandSleek account. We\'ll email a verification code when needed.',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.85), height: 1.4),
-                      ),
-                    ],
-                  ),
+                const AuthBrandedHeader(
+                  title: 'Welcome back',
+                  subtitle:
+                      'Sign in with your FitandSleek account. We\'ll email a verification code when needed.',
                 ),
                 const SizedBox(height: 28),
                 TextFormField(
