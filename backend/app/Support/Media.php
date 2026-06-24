@@ -267,7 +267,11 @@ class Media
 
             return ['ok' => true];
         } catch (\Throwable $e) {
-            return ['ok' => false, 'error' => self::galleryUploadFailureMessage($e)];
+            return [
+                'ok' => false,
+                'error' => self::galleryUploadFailureMessage($e),
+                'detail' => $e->getMessage(),
+            ];
         }
     }
 
