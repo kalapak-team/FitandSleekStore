@@ -2,9 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n_extension.dart';
 import '../../models/banner_model.dart';
-import '../../theme/app_colors.dart';
 import '../../utils/media_url.dart';
 import '../navigation/home_store_header.dart';
 import '../product_image.dart';
@@ -24,9 +22,14 @@ double homeBannerHeight(BuildContext context) {
 }
 
 class HomeBannerCarousel extends StatefulWidget {
-  const HomeBannerCarousel({super.key, required this.banners});
+  const HomeBannerCarousel({
+    super.key,
+    required this.banners,
+    this.loading = false,
+  });
 
   final List<BannerModel> banners;
+  final bool loading;
 
   @override
   State<HomeBannerCarousel> createState() => _HomeBannerCarouselState();
@@ -37,7 +40,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
   Timer? _timer;
   int _index = 0;
 
-  int get _count => widget.banners.isEmpty ? 1 : widget.banners.length;
+  int get _count => widget.banners.length;
 
   @override
   void initState() {
@@ -80,6 +83,18 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
   Widget build(BuildContext context) {
     final bannerHeight = homeBannerHeight(context);
 
+    if (widget.loading) {
+      return SizedBox(
+        width: double.infinity,
+        height: bannerHeight,
+        child: const _BannerSkeleton(),
+      );
+    }
+
+    if (widget.banners.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return SizedBox(
       width: double.infinity,
       height: bannerHeight,
@@ -90,12 +105,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
               controller: _pageController,
               itemCount: _count,
               onPageChanged: (i) => setState(() => _index = i),
-              itemBuilder: (context, i) {
-                if (widget.banners.isEmpty) {
-                  return const _DefaultHeroBanner();
-                }
-                return _BannerSlide(banner: widget.banners[i]);
-              },
+              itemBuilder: (context, i) => _BannerSlide(banner: widget.banners[i]),
             ),
             if (_count > 1)
               Positioned(
@@ -125,85 +135,6 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
   }
 }
 
-class _DefaultHeroBanner extends StatelessWidget {
-  const _DefaultHeroBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryLight],
-        ),
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    l10n.heroBadge,
-                    style: const TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  l10n.heroTitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.heroTitleSecondary,
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    l10n.shopNow,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.checkroom_outlined, size: 80, color: Colors.white.withValues(alpha: 0.15)),
-        ],
-      ),
-    );
-  }
-}
-
 class _BannerSlide extends StatelessWidget {
   const _BannerSlide({required this.banner});
 
@@ -216,6 +147,21 @@ class _BannerSlide extends StatelessWidget {
     if (imageUrl.isNotEmpty) {
       return ProductImage(imageUrl: imageUrl, fit: BoxFit.cover);
     }
-    return const _DefaultHeroBanner();
+    return const _BannerSkeleton();
+  }
+}
+
+class _BannerSkeleton extends StatelessWidget {
+  const _BannerSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
   }
 }

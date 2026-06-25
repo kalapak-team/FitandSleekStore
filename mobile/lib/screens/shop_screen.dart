@@ -52,6 +52,7 @@ class ShopScreenState extends State<ShopScreen> {
   final List<ProductModel> _products = [];
   List<BannerModel> _banners = [];
   List<BrandModel> _brands = [];
+  bool _bannersLoading = true;
   int? _selectedBrandId;
   String? _selectedBrandName;
   bool _filterByCategoryId = false;
@@ -169,6 +170,7 @@ class ShopScreenState extends State<ShopScreen> {
   }
 
   Future<void> _loadHomeContent() async {
+    if (mounted) setState(() => _bannersLoading = true);
     try {
       final banners = await widget.productService.listHomeBanners();
       var brands = await widget.productService.listBrands();
@@ -195,6 +197,8 @@ class ShopScreenState extends State<ShopScreen> {
       });
     } catch (_) {
       /* banners/brands are optional — shop still works */
+    } finally {
+      if (mounted) setState(() => _bannersLoading = false);
     }
   }
 
@@ -366,7 +370,9 @@ class ShopScreenState extends State<ShopScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           if (widget.showBanner)
-            SliverToBoxAdapter(child: HomeBannerCarousel(banners: _banners)),
+            SliverToBoxAdapter(
+              child: HomeBannerCarousel(banners: _banners, loading: _bannersLoading),
+            ),
           if (widget.showBanner && _brands.isNotEmpty)
             SliverToBoxAdapter(
               child: CategoryStrip(
@@ -483,7 +489,9 @@ class ShopScreenState extends State<ShopScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           if (widget.showBanner)
-            SliverToBoxAdapter(child: HomeBannerCarousel(banners: _banners)),
+            SliverToBoxAdapter(
+              child: HomeBannerCarousel(banners: _banners, loading: _bannersLoading),
+            ),
           if (widget.showBanner && _brands.isNotEmpty)
             SliverToBoxAdapter(
               child: CategoryStrip(

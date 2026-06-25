@@ -17,6 +17,7 @@ import MegaMenuEmptyState from "./MegaMenuEmptyState.jsx";
 import MegaMenuScrollArea from "./MegaMenuScrollArea.jsx";
 import { storefrontSearchUrl as navSearch } from "../../lib/storefrontNavLinks.js";
 import { mergeTopNavDropdowns } from "../../lib/defaultTopNavDropdowns.js";
+import { mergeHeaderSettings } from "../../lib/defaultHeaderSettings.js";
 import { resolveHeaderChromeStyle } from "../../lib/storefrontChrome.js";
 
 function cn(...xs) {
@@ -402,30 +403,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
 
   // Get header settings with fallback defaults
   const footerSettings = settings?.footer || {};
-  const headerSettings = settings?.header || {
-    logo_text: "FIT&SLEEK",
-    logo_url: "/logo.png",
-    background_color: "#6e8b7e",
-    background_image: "",
-    text_color: "#ffffff",
-    search_placeholder: "Search everything",
-    search_enabled: false,
-    cart_enabled: true,
-    wishlist_enabled: true,
-    language_enabled: true,
-    free_delivery_icon: "🚚",
-    free_delivery_text: "Free delivery on orders above $40",
-    nav_visibility: {
-      newIn: true,
-      discounts: true,
-      women: true,
-      men: true,
-      sale: true,
-    },
-    custom_nav: [],
-    left_menu: [],
-    nav_labels: {},
-  };
+  const headerSettings = mergeHeaderSettings(settings?.header);
 
   const chromeStyle = useMemo(
     () => resolveHeaderChromeStyle(headerSettings, footerSettings),

@@ -12,7 +12,7 @@ class AuthBrandedHeader extends StatefulWidget {
     super.key,
     this.title,
     required this.subtitle,
-    this.logoHeight = 108,
+    this.logoHeight = 72,
   });
 
   final String? title;
@@ -41,20 +41,20 @@ class _AuthBrandedHeaderState extends State<AuthBrandedHeader> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [Color(0xFF4A6B5E), Color(0xFF38554A), Color(0xFF2E4A3F)],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: widget.logoHeight * 3.6,
+            width: widget.logoHeight * 3.2,
             height: widget.logoHeight,
             child: AppLogo(
               logoUrl: _settings.logoUrl,
@@ -64,24 +64,28 @@ class _AuthBrandedHeaderState extends State<AuthBrandedHeader> {
             ),
           ),
           if (widget.title != null && widget.title!.isNotEmpty) ...[
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
             Text(
               widget.title!,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 26,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
           ] else
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
           Text(
             widget.subtitle,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.85), height: 1.4),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.85),
+              fontSize: 14,
+              height: 1.35,
+            ),
           ),
         ],
       ),

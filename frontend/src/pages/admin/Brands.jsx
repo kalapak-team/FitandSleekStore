@@ -7,6 +7,7 @@ import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 import { useTheme } from "../../state/theme.jsx";
 import { closeSwal, errorAlert, loadingAlert, toastSuccess, warningConfirm } from "../../lib/swal";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
+import AdminModal from "../../components/admin/AdminModal.jsx";
 
 const emptyForm = {
   name: "",
@@ -77,6 +78,15 @@ export default function AdminBrands() {
   const [dragId, setDragId] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+
+  const closeCreateForm = () => {
+    if (isCreating) return;
+    setShowCreateForm(false);
+  };
+
+  const closeEditForm = () => {
+    setEditing(null);
+  };
 
   const getValidationMessage = (error) => {
     const responseMessage = error?.response?.data?.message;
@@ -239,7 +249,7 @@ export default function AdminBrands() {
 
       await api.post(`/admin/brands/${editing.id}`, fd);
 
-      setEditing(null);
+      closeEditForm();
       showSuccess("Brand updated");
       await load();
     } catch (e2) {
@@ -506,29 +516,15 @@ export default function AdminBrands() {
           </div>
         )}
 
-        {/* Create Modal */}
-        {showCreateForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-              onClick={() => !isCreating && setShowCreateForm(false)}
-            />
-            <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Add Brand</h2>
-                <button
-                  onClick={() => !isCreating && setShowCreateForm(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                  type="button"
-                  disabled={isCreating}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <form onSubmit={create} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <AdminModal
+          open={showCreateForm}
+          onClose={closeCreateForm}
+          title="Add New Brand"
+          titleId="brand-create-title"
+          maxWidthClass="max-w-3xl"
+          closeOnBackdrop={!isCreating}
+        >
+          <form onSubmit={create} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Name</label>
                   <input
@@ -640,9 +636,7 @@ export default function AdminBrands() {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
+        </AdminModal>
 
         {/* List */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -778,138 +772,138 @@ export default function AdminBrands() {
         </div>
       </div>
 
-      {/* Edit Modal */}
-      {editing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Edit Brand</h3>
-              <button
-                type="button"
-                onClick={() => setEditing(null)}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <AdminModal
+        open={!!editing}
+        onClose={closeEditForm}
+        title="Edit Brand"
+        titleId="brand-edit-title"
+        maxWidthClass="max-w-3xl"
+      >
+        {editing ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Name</label>
+                <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Name</label>
                 <input
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
                   value={editing.name}
                   onChange={(e) => setEditing((p) => ({ ...p, name: e.target.value }))}
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Slug</label>
+                <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Slug</label>
                 <input
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
                   value={editing.slug}
                   onChange={(e) => setEditing((p) => ({ ...p, slug: e.target.value }))}
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Sort order</label>
+                <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Sort order</label>
                 <input
                   type="number"
                   min={0}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
+                  className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
                   value={editing.sort_order}
                   onChange={(e) => setEditing((p) => ({ ...p, sort_order: Number(e.target.value) }))}
                 />
               </div>
-              <div className="flex items-end gap-3">
-                <label className="flex items-center gap-3 cursor-pointer select-none">
-                  <button
-                    type="button"
-                    onClick={() => setEditing((p) => ({ ...p, is_active: !p.is_active }))}
-                    className="relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-slate-300 dark:focus:ring-slate-600 dark:focus:ring-offset-slate-800"
-                    style={{ backgroundColor: editing.is_active ? (mode === 'dark' ? '#3b82f6' : '#2563eb') : (mode === 'dark' ? '#334155' : '#e2e8f0') }}
-                  >
-                    <span className="w-6 h-6 bg-white rounded-full shadow-lg transform transition-transform duration-300" style={{ transform: editing.is_active ? 'translateX(24px)' : 'translateX(4px)' }} />
-                  </button>
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Active</span>
-                </label>
-              </div>
-
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Logo (optional)</label>
-                  <div className="flex items-center gap-4 mb-3">
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                      <input
-                        type="radio"
-                        name="edit-logo-source"
-                        checked={editing.logo_source === "local"}
-                        onChange={() => setEditing((p) => ({ ...p, logo_source: "local", logo_url: p.logo_url || "" }))}
-                      />
-                      Upload local file
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                      <input
-                        type="radio"
-                        name="edit-logo-source"
-                        checked={editing.logo_source === "url"}
-                        onChange={() => setEditing((p) => ({ ...p, logo_source: "url", logo: null }))}
-                      />
-                      Use image URL
-                    </label>
-                  </div>
-                  {editing.logo_source === "url" ? (
-                    <input
-                      type="url"
-                      value={editing.logo_url || ""}
-                      onChange={(e) => setEditing((p) => ({ ...p, logo_url: e.target.value }))}
-                      placeholder="https://example.com/brand-logo.png"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
-                    />
-                  ) : (
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                      onChange={(e) => onPickFileEdit(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border file:border-black file:bg-white file:text-black"
-                    />
-                  )}
-                </div>
-                <div className="h-24 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                  {previewEdit ? (
-                    <img src={previewEdit} alt="Preview" className="h-16 w-auto object-contain" />
-                  ) : editing.logo_url ? (
-                    <img src={brandLogoSrc(editing.logo_url)} alt="Current" className="h-16 w-auto object-contain" />
-                  ) : (
-                    <span className="text-slate-400 text-sm">No logo</span>
-                  )}
-                </div>
+              <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setEditing((p) => ({ ...p, is_active: !p.is_active }))}
+                  className="relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-slate-300 dark:focus:ring-slate-600 dark:focus:ring-offset-slate-900"
+                  style={{ backgroundColor: editing.is_active ? accentColor : (mode === "dark" ? "#334155" : "#e2e8f0") }}
+                >
+                  <span
+                    className="w-5 h-5 bg-white rounded-full transform transition-transform duration-300"
+                    style={{ transform: editing.is_active ? "translateX(20px)" : "translateX(4px)" }}
+                  />
+                </button>
+                <span className="text-sm font-medium text-black dark:text-white">Active Status</span>
               </div>
             </div>
 
-            <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">Logo (optional)</label>
+                <div className="flex items-center gap-4 mb-3">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input
+                      type="radio"
+                      name="edit-logo-source"
+                      checked={editing.logo_source === "local"}
+                      onChange={() => setEditing((p) => ({ ...p, logo_source: "local", logo_url: p.logo_url || "" }))}
+                    />
+                    Upload local file
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input
+                      type="radio"
+                      name="edit-logo-source"
+                      checked={editing.logo_source === "url"}
+                      onChange={() => setEditing((p) => ({ ...p, logo_source: "url", logo: null }))}
+                    />
+                    Use image URL
+                  </label>
+                </div>
+                {editing.logo_source === "url" ? (
+                  <input
+                    type="url"
+                    value={editing.logo_url || ""}
+                    onChange={(e) => setEditing((p) => ({ ...p, logo_url: e.target.value }))}
+                    placeholder="https://example.com/brand-logo.png"
+                    className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
+                  />
+                ) : (
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={(e) => onPickFileEdit(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border file:border-black file:bg-white file:text-black"
+                  />
+                )}
+              </div>
+              <div className="h-24 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                {previewEdit ? (
+                  <img src={previewEdit} alt="Preview" className="h-16 w-auto object-contain" />
+                ) : editing.logo_url ? (
+                  <img src={brandLogoSrc(editing.logo_url)} alt="Current" className="h-16 w-auto object-contain" />
+                ) : (
+                  <span className="text-slate-400 text-sm">No logo</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
               <button
                 type="button"
-                onClick={() => setEditing(null)}
-                className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-black dark:text-slate-100 bg-white dark:bg-slate-900 hover:bg-white transition font-semibold"
+                onClick={closeEditForm}
+                className="flex-1 h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-100 font-semibold bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300"
               >
                 Cancel
               </button>
               {canEditBrands ? (
-              <button
-                type="button"
-                onClick={saveEdit}
-                className={`px-6 py-2.5 rounded-xl font-bold transition-all duration-200 border ${accentIsWhite ? 'border-slate-300' : ''}`}
-                style={{ backgroundColor: accentColor, color: accentIsWhite ? '#0b0b0f' : '#FFFFFF', borderColor: accentIsWhite ? '#cbd5e1' : accentColor }}
-              >
-                Save
-              </button>
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  className={`flex-1 h-12 rounded-xl font-semibold transition-all duration-300 border ${accentIsWhite ? "border-slate-300" : ""}`}
+                  style={{
+                    backgroundColor: accentColor,
+                    color: accentIsWhite ? "#0b0b0f" : "#FFFFFF",
+                    borderColor: accentIsWhite ? "#cbd5e1" : accentColor,
+                  }}
+                >
+                  Save Changes
+                </button>
               ) : null}
             </div>
           </div>
-        </div>
-      )}
+        ) : null}
+      </AdminModal>
     </div>
   );
 }
