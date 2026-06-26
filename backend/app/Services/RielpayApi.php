@@ -147,8 +147,11 @@ class RielpayApi
         $userMessage = match ($status) {
             401 => 'Payment service authentication failed. Please contact support.',
             403 => 'Payment service is not active. Please contact support.',
+            404 => $message !== '' ? $message : 'Payment service endpoint not found.',
+            405 => 'Payment deeplink is not available on Rielpay yet. Rebuild and deploy the Rielpay backend.',
             422 => $message !== '' ? $message : 'Invalid payment request.',
-            default => 'Payment service is temporarily unavailable. Please try again.',
+            500, 502, 503 => $message !== '' ? $message : 'Payment service error. Please try again.',
+            default => $message !== '' ? $message : 'Payment service is temporarily unavailable. Please try again.',
         };
 
         throw new RuntimeException($userMessage);
