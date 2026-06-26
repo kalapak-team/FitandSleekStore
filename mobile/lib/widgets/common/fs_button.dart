@@ -31,11 +31,18 @@ class FsButton extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
           )
         : Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
-              Text(label),
+              if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 8)],
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ],
           );
 

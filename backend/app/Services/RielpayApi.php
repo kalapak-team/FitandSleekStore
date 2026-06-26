@@ -37,6 +37,48 @@ class RielpayApi
     }
 
     /**
+     * NBC Bakong deeplink via Rielpay (Cambodia egress + BAKONG_TOKEN on Rielpay host).
+     *
+     * @param  array{app_name?: string, app_icon_url?: string, app_deep_link_callback?: string}|null  $sourceInfo
+     */
+    public function generateDeeplink(string $qr, ?array $sourceInfo = null): string
+    {
+        $qr = trim($qr);
+        if ($qr === '') {
+            throw new RuntimeException('QR string is required for deeplink generation.');
+        }
+
+        $iconUrl = (string) config('services.rielpay.deeplink_icon_url');
+        if ($iconUrl === '') {
+            $iconUrl = rtrim((string) config('app.url'), '/') . '/logo.png';
+        }
+
+        $sourceInfo ??= [
+            'app_name' => (string) config('services.rielpay.deeplink_app_name', 'FitandSleek'),
+            'app_icon_url' => $iconUrl,
+            'app_deep_link_callback' => (string) config(
+                'services.rielpay.deeplink_callback',
+                'fitandsleek://payment/callback'
+            ),
+        ];
+
+        $response = $this->request('post', '/api/v1/payments/deeplink', [
+            'qr' => $qr,
+            'source_info' => $sourceInfo,
+        ]);
+
+        $shortLink = is_string(data_get($response, 'short_link'))
+            ? (string) data_get($response, 'short_link')
+            : '';
+
+        if ($shortLink === '') {
+            throw new RuntimeException('Rielpay did not return a deeplink short_link.');
+        }
+
+        return $shortLink;
+    }
+
+    /**
      * @param  array<string, mixed>|null  $payload
      * @return array<string, mixed>
      */

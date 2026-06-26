@@ -107,6 +107,12 @@ return [
         'api_key' => env('RIELPAY_API_KEY'),
         'currency' => env('RIELPAY_CURRENCY', 'KHR'),
         'expires_in' => (int) env('RIELPAY_EXPIRES_IN', 300),
+        'deeplink_app_name' => env('RIELPAY_DEEPLINK_APP_NAME', env('BAKONG_DEEPLINK_APP_NAME', 'FitandSleek')),
+        'deeplink_icon_url' => env('RIELPAY_DEEPLINK_ICON_URL', env('BAKONG_DEEPLINK_ICON_URL')),
+        'deeplink_callback' => env(
+            'RIELPAY_DEEPLINK_CALLBACK',
+            env('BAKONG_DEEPLINK_CALLBACK', 'fitandsleek://payment/callback')
+        ),
     ],
 
     'aba_payway' => [

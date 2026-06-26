@@ -8,7 +8,7 @@ import '../widgets/navigation/home_store_header.dart';
 
 void openCartScreen(BuildContext context) {
   final count = context.read<CartProvider>().count;
-  final l10n = context.l10n;
+  final l10n = context.l10nRead;
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (ctx) => Scaffold(

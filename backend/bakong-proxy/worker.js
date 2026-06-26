@@ -1,14 +1,8 @@
 /**
- * Cloudflare Worker — Bakong NBC MD5 check proxy (Cambodia edge egress).
+ * Cloudflare Worker — Bakong NBC API proxy (Cambodia edge egress).
  *
- * Drop-in replacement for index.php. Works with Laravel BakongApi via:
- *   BAKONG_PROXY_URL=https://bakong-proxy.<account>.workers.dev
- *   BAKONG_PROXY_SECRET=<optional shared secret>
- *
- * Cloudflare dashboard → Worker → Settings → Variables:
- *   BAKONG_TOKEN          (Secret) — same JWT as Render
- *   BAKONG_PROXY_SECRET   (Secret, optional) — must match Render if set
- *   BAKONG_BASE_URL       (Text, optional) — default https://api-bakong.nbc.gov.kh
+ * POST {"md5":"..."}  → check_transaction_by_md5
+ * POST {"qr":"...", "sourceInfo":{...}}  → generate_deeplink_by_qr
  */
 
 const JSON_HEADERS = { 'Content-Type': 'application/json; charset=utf-8' };
@@ -43,15 +37,25 @@ export default {
       return json(400, { message: 'Invalid JSON body' });
     }
 
-    const md5 = String(payload?.md5 || '')
-      .trim()
-      .toLowerCase();
-    if (md5 === '') {
-      return json(422, { message: 'md5 is required' });
-    }
-
     const baseUrl = (env.BAKONG_BASE_URL || 'https://api-bakong.nbc.gov.kh').replace(/\/$/, '');
-    const targetUrl = `${baseUrl}/v1/check_transaction_by_md5`;
+    const qr = String(payload?.qr || '').trim();
+
+    let targetUrl;
+    let nbcBody;
+    if (qr !== '') {
+      targetUrl = `${baseUrl}/v1/generate_deeplink_by_qr`;
+      nbcBody = { qr };
+      if (payload?.sourceInfo && typeof payload.sourceInfo === 'object') {
+        nbcBody.sourceInfo = payload.sourceInfo;
+      }
+    } else {
+      const md5 = String(payload?.md5 || '').trim().toLowerCase();
+      if (md5 === '') {
+        return json(422, { message: 'md5 or qr is required' });
+      }
+      targetUrl = `${baseUrl}/v1/check_transaction_by_md5`;
+      nbcBody = { md5 };
+    }
 
     try {
       const upstream = await fetch(targetUrl, {
@@ -61,7 +65,7 @@ export default {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({ md5 }),
+        body: JSON.stringify(nbcBody),
       });
 
       const body = await upstream.text();

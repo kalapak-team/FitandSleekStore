@@ -73,7 +73,7 @@ class CartScreenState extends State<CartScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.moveToWishlist)),
+      SnackBar(content: Text(context.l10nRead.moveToWishlist)),
     );
   }
 

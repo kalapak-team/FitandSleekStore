@@ -73,11 +73,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Future<void> _openReplacement(OrderModel order) async {
-    final l10n = context.l10n;
     final submitted = await ReplacementRequestSheet.show(context, order: order);
     if (submitted == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.replacementSubmitted)),
+        SnackBar(content: Text(context.l10nRead.replacementSubmitted)),
       );
     }
   }
@@ -149,99 +148,102 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 return Material(
                                   color: Theme.of(context).colorScheme.surface,
                                   borderRadius: BorderRadius.circular(16),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(16),
-                                    onTap: () => Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => OrderDetailScreen(order: order),
-                                      ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      '#${order.orderNumber}',
-                                                      style: TextStyle(fontWeight: FontWeight.w700, color: onSurface),
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Text(
-                                                      order.status.replaceAll('_', ' '),
-                                                      style: Theme.of(context).textTheme.bodyMedium,
-                                                    ),
-                                                    if (order.shipment?.trackingCode != null) ...[
-                                                      const SizedBox(height: 4),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        InkWell(
+                                          borderRadius: BorderRadius.circular(12),
+                                          onTap: () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => OrderDetailScreen(order: order),
+                                            ),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(bottom: 12),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
                                                       Text(
-                                                        '${l10n.trackingNumber}: ${order.shipment!.trackingCode}',
+                                                        '#${order.orderNumber}',
                                                         style: TextStyle(
-                                                          color: onSurfaceVariant,
-                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: onSurface,
                                                         ),
                                                       ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        order.status.replaceAll('_', ' '),
+                                                        style: Theme.of(context).textTheme.bodyMedium,
+                                                      ),
+                                                      if (order.shipment?.trackingCode != null) ...[
+                                                        const SizedBox(height: 4),
+                                                        Text(
+                                                          '${l10n.trackingNumber}: ${order.shipment!.trackingCode}',
+                                                          style: TextStyle(
+                                                            color: onSurfaceVariant,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ],
-                                                  ],
-                                                ),
-                                              ),
-                                              Text(
-                                                currency.format(order.total),
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w800,
-                                                  color: AppColors.primary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: FsButton(
-                                                  label: l10n.trackOrder,
-                                                  icon: Icons.local_shipping_outlined,
-                                                  onPressed: () => Navigator.of(context).push(
-                                                    MaterialPageRoute(
-                                                      builder: (_) => OrderTrackingScreen(order: order),
-                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                              if (canReplace) ...[
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: FsButton(
-                                                    label: l10n.requestReplacement,
-                                                    variant: FsButtonVariant.outline,
-                                                    onPressed: () => _openReplacement(order),
+                                                Text(
+                                                  currency.format(order.total),
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    color: AppColors.primary,
                                                   ),
                                                 ),
                                               ],
-                                            ],
+                                            ),
                                           ),
+                                        ),
+                                        const Divider(height: 1),
+                                        const SizedBox(height: 12),
+                                        FsButton(
+                                          label: l10n.trackOrder,
+                                          icon: Icons.local_shipping_outlined,
+                                          variant: FsButtonVariant.accent,
+                                          onPressed: () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) => OrderTrackingScreen(order: order),
+                                            ),
+                                          ),
+                                        ),
+                                        if (canReplace) ...[
                                           const SizedBox(height: 8),
-                                          TelegramConnectButton(
-                                            orderNumber: order.orderNumber,
-                                            compact: true,
+                                          FsButton(
+                                            label: l10n.requestReplacement,
+                                            variant: FsButtonVariant.outline,
+                                            icon: Icons.sync_alt_rounded,
+                                            onPressed: () => _openReplacement(order),
                                           ),
-                                          if (order.shipment?.externalTrackingUrl != null) ...[
-                                            const SizedBox(height: 8),
-                                            TextButton.icon(
+                                        ],
+                                        const SizedBox(height: 8),
+                                        TelegramConnectButton(orderNumber: order.orderNumber),
+                                        if (order.shipment?.externalTrackingUrl != null) ...[
+                                          const SizedBox(height: 4),
+                                          Align(
+                                            alignment: Alignment.center,
+                                            child: TextButton.icon(
                                               onPressed: () async {
                                                 final uri = Uri.tryParse(order.shipment!.externalTrackingUrl!);
-                                                if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                                if (uri != null) {
+                                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                                }
                                               },
                                               icon: const Icon(Icons.open_in_new, size: 16),
                                               label: Text(l10n.openTrackingLink),
                                             ),
-                                          ],
+                                          ),
                                         ],
-                                      ),
+                                      ],
                                     ),
                                   ),
                                 );

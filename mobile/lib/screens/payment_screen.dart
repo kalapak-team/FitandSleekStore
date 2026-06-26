@@ -1,12 +1,20 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/api_client.dart';
+import '../l10n/l10n_extension.dart';
+import '../l10n/storefront_l10n.dart';
+import '../models/khqr_bank_option.dart';
 import '../models/order_model.dart';
 import '../models/payment_model.dart';
 import '../services/payment_service.dart';
@@ -21,6 +29,7 @@ class PaymentScreen extends StatefulWidget {
     required this.orderNumber,
     required this.amount,
     this.currency = 'KHR',
+    this.bank = KhqrBankId.aba,
     this.onPaid,
   });
 
@@ -28,6 +37,7 @@ class PaymentScreen extends StatefulWidget {
   final String orderNumber;
   final double amount;
   final String currency;
+  final KhqrBankId bank;
   final VoidCallback? onPaid;
 
   @override
@@ -43,6 +53,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Timer? _countdownTimer;
   Duration _remaining = Duration.zero;
   bool _creating = false;
+  bool _showQr = false;
+  bool _openingBankApp = false;
+
+  KhqrBankOption get _bank => KhqrBankOption.byId(widget.bank);
 
   @override
   void initState() {
@@ -64,9 +78,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final diff = expiresAt.difference(DateTime.now());
       if (!mounted) return;
       setState(() => _remaining = diff.isNegative ? Duration.zero : diff);
-      if (diff.isNegative) {
-        _countdownTimer?.cancel();
-      }
+      if (diff.isNegative) _countdownTimer?.cancel();
     }
     tick();
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
@@ -76,7 +88,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     _pollTimer?.cancel();
     final paymentId = _payment?.paymentId;
     if (paymentId == null || paymentId == 0) return;
-
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkStatus());
   }
 
@@ -145,8 +156,84 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return NumberFormat.simpleCurrency(name: 'USD').format(amount);
   }
 
+  Future<void> _openBankingApp() async {
+    if (_openingBankApp) return;
+    final paymentId = _payment?.paymentId;
+    if (paymentId == null || paymentId == 0) return;
+
+    setState(() => _openingBankApp = true);
+    try {
+      final shortLink = await context.read<PaymentService>().fetchBakongDeeplink(paymentId);
+      final opened = await launchUrl(
+        Uri.parse(shortLink),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10nRead.bankAppNotInstalled)),
+        );
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final msg = context.read<ApiClient>().apiMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      if (widget.bank != KhqrBankId.aba) {
+        await _sharePayment();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10nRead.paymentUnavailable)),
+      );
+    } finally {
+      if (mounted) setState(() => _openingBankApp = false);
+    }
+  }
+
+  Future<void> _sharePayment() async {
+    final qrString = _payment?.qrString;
+    if (qrString == null || qrString.isEmpty) return;
+
+    final bill = _payment?.billNumber ?? widget.orderNumber;
+    final text =
+        'FitandSleek\nOrder: ${widget.orderNumber}\nBill: $bill\nAmount: ${_formatAmount()}\n\nPay with any Bakong / KHQR banking app.';
+
+    try {
+      final painter = QrPainter(
+        data: qrString,
+        version: QrVersions.auto,
+        gapless: true,
+        eyeStyle: const QrEyeStyle(color: Colors.black),
+        dataModuleStyle: const QrDataModuleStyle(color: Colors.black),
+      );
+      final imageData = await painter.toImageData(512, format: ui.ImageByteFormat.png);
+      if (imageData != null) {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/khqr-${widget.orderNumber}.png');
+        await file.writeAsBytes(imageData.buffer.asUint8List());
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: text,
+          subject: 'FitandSleek payment ${widget.orderNumber}',
+        );
+        return;
+      }
+    } catch (_) {
+      // Fall back to text-only share.
+    }
+
+    await Share.share(text, subject: 'FitandSleek payment ${widget.orderNumber}');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final isKm = l10n.isKm;
+    final theme = Theme.of(context);
+    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
+    final payLabel = _bank.payButtonLabelEn(isKm);
+    final isAba = widget.bank == KhqrBankId.aba;
+
     return Scaffold(
       appBar: AppBar(title: Text('Pay #${widget.orderNumber}')),
       body: SingleChildScrollView(
@@ -156,85 +243,144 @@ class _PaymentScreenState extends State<PaymentScreen> {
           children: [
             Text(
               _formatAmount(),
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Scan with any Bakong / KHQR app',
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
+            if (_payment?.billNumber != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                l10n.billLabel(_payment!.billNumber!),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(color: onSurfaceVariant),
+              ),
+            ],
+            const SizedBox(height: 20),
             if (_creating || _status == 'loading')
               const Center(child: CircularProgressIndicator())
             else if (_status == 'paid')
               _StatusCard(
                 icon: Icons.check_circle_outline,
                 color: AppColors.success,
-                title: 'Payment received',
-                subtitle: 'Your order is being processed.',
+                title: l10n.paymentReceived,
+                subtitle: l10n.paymentProcessingOrder,
               )
             else if (_status == 'expired')
               _StatusCard(
                 icon: Icons.timer_off_outlined,
                 color: AppColors.warning,
-                title: 'QR expired',
-                subtitle: 'Generate a new code to continue.',
+                title: l10n.paymentQrExpired,
+                subtitle: l10n.paymentRegenerateQr,
               )
             else if (_error != null)
               _StatusCard(
                 icon: Icons.error_outline,
                 color: AppColors.error,
-                title: 'Payment unavailable',
+                title: l10n.paymentUnavailable,
                 subtitle: _error!,
               )
             else if (_payment?.hasQr == true) ...[
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
+              _MobilePaySteps(l10n: l10n, isAba: isAba),
+              const SizedBox(height: 20),
+              FsButton(
+                label: payLabel,
+                variant: FsButtonVariant.accent,
+                icon: Icons.account_balance_outlined,
+                loading: _openingBankApp,
+                onPressed: _openingBankApp ? null : _openBankingApp,
+              ),
+              if (!isAba) ...[
+                const SizedBox(height: 10),
+                FsButton(
+                  label: l10n.sharePayment,
+                  variant: FsButtonVariant.outline,
+                  icon: Icons.ios_share_outlined,
+                  onPressed: _sharePayment,
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (isAba) ...[
+                if (!_showQr)
+                  Align(
+                    alignment: Alignment.center,
+                    child: TextButton(
+                      onPressed: () => setState(() => _showQr = true),
+                      child: Text(l10n.showQrCode),
+                    ),
+                  )
+                else ...[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => setState(() => _showQr = false),
+                      child: Text(l10n.hideQrCode),
+                    ),
                   ),
-                  child: QrImageView(
-                    data: _payment!.qrString!,
-                    version: QrVersions.auto,
-                    size: 220,
-                    backgroundColor: Colors.white,
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: QrImageView(
+                        data: _payment!.qrString!,
+                        version: QrVersions.auto,
+                        size: 200,
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ] else ...[
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: QrImageView(
+                      data: _payment!.qrString!,
+                      version: QrVersions.auto,
+                      size: 200,
+                      backgroundColor: Colors.white,
+                    ),
                   ),
                 ),
-              ),
-              if (_payment?.billNumber != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
-                  'Bill: ${_payment!.billNumber}',
+                  l10n.mobileKhqrQrHint,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(color: onSurfaceVariant),
                 ),
               ],
               if (_remaining > Duration.zero) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
-                  'Expires in ${_remaining.inMinutes}:${(_remaining.inSeconds % 60).toString().padLeft(2, '0')}',
+                  l10n.expiresInLabel(
+                    '${_remaining.inMinutes}:${(_remaining.inSeconds % 60).toString().padLeft(2, '0')}',
+                  ),
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: theme.textTheme.bodyMedium,
                 ),
               ],
               const SizedBox(height: 12),
-              _StatusPill(status: _status),
+              _StatusPill(status: _status, waitingLabel: l10n.paymentWaiting),
             ],
             if (_note != null) ...[
               const SizedBox(height: 16),
-              Text(_note!, style: Theme.of(context).textTheme.bodySmall),
+              Text(_note!, style: theme.textTheme.bodySmall),
             ],
             const SizedBox(height: 24),
             if (_status != 'paid')
               FsButton(
-                label: _status == 'expired' || _error != null ? 'Regenerate QR' : 'Refresh status',
+                label: _status == 'expired' || _error != null
+                    ? l10n.paymentRegenerateQr
+                    : l10n.refreshPaymentStatus,
                 onPressed: _creating
                     ? null
                     : () {
@@ -251,7 +397,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               TelegramConnectButton(orderNumber: widget.orderNumber),
               const SizedBox(height: 12),
               FsButton(
-                label: 'Done',
+                label: l10n.done,
                 variant: FsButtonVariant.accent,
                 onPressed: () => Navigator.of(context).pop(true),
               ),
@@ -259,6 +405,82 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MobilePaySteps extends StatelessWidget {
+  const _MobilePaySteps({required this.l10n, required this.isAba});
+
+  final StorefrontL10n l10n;
+  final bool isAba;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.storeHeader.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.storeHeader.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.mobileKhqrTitle,
+            style: TextStyle(fontWeight: FontWeight.w700, color: onSurface),
+          ),
+          const SizedBox(height: 12),
+          _StepRow(number: '1', text: isAba ? l10n.mobileAbaStep1 : l10n.mobileKhqrStep1, onSurfaceVariant: onSurfaceVariant),
+          const SizedBox(height: 8),
+          _StepRow(number: '2', text: l10n.mobileKhqrStep2, onSurfaceVariant: onSurfaceVariant),
+          const SizedBox(height: 8),
+          _StepRow(number: '3', text: l10n.mobileKhqrStep3, onSurfaceVariant: onSurfaceVariant),
+        ],
+      ),
+    );
+  }
+}
+
+class _StepRow extends StatelessWidget {
+  const _StepRow({
+    required this.number,
+    required this.text,
+    required this.onSurfaceVariant,
+  });
+
+  final String number;
+  final String text;
+  final Color onSurfaceVariant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.storeHeader,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            number,
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text, style: TextStyle(color: onSurfaceVariant, height: 1.35)),
+        ),
+      ],
     );
   }
 }
@@ -299,13 +521,14 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
+  const _StatusPill({required this.status, required this.waitingLabel});
 
   final String status;
+  final String waitingLabel;
 
   @override
   Widget build(BuildContext context) {
-    final label = status.replaceAll('_', ' ');
+    final label = status == 'pending' ? waitingLabel : status.replaceAll('_', ' ');
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -313,10 +536,7 @@ class _StatusPill extends StatelessWidget {
           color: AppColors.accent.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          'Status: $label',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
       ),
     );
   }

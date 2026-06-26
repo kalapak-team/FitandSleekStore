@@ -55,6 +55,13 @@ class AddressModel {
         'is_default': isDefault,
       };
 
+  /// Payload for `/checkout` — matches web storefront (full saved address object).
+  Map<String, dynamic> toCheckoutPayload() => {
+        'id': id,
+        ...toPayload(),
+        if ((formattedAddress ?? '').trim().isNotEmpty) 'formatted_address': formattedAddress!.trim(),
+      };
+
   AddressModel copyWith({
     String? label,
     String? receiverName,

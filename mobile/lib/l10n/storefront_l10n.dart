@@ -184,7 +184,7 @@ class StorefrontL10n {
   String loyaltyDiscount(int percent) => _t('Checkout discount: $percent%', 'បញ្ចុះតម្លៃពេលទូទាត់: $percent%');
   String loyaltyNextTier(int points, String tier) =>
       _t('Need $points pts to reach $tier', 'ត្រូវការ $points pts ដើម្បីឈានដល់ $tier');
-  String get requestReplacement => _t('Request Replacement', 'Request Replacement');
+  String get requestReplacement => _t('Request Replacement', 'ស្នើសុំជំនួស');
   String get replacementsEmpty => _t('No replacement requests', 'មិនមាន Replacement');
   String get replacementsEmptySub =>
       _t('Tap below to request a replacement for a delivered order.', 'ចុចខាងក្រោមដើម្បីស្នើ Replacement សម្រាប់ការបញ្ជាទិញដែលបានដឹកជញ្ជូន។');
@@ -273,6 +273,63 @@ class StorefrontL10n {
   String get orderTrackingTitle => _t('Order Tracking', 'តាមដានការបញ្ជាទិញ');
   String get orderTrackingHeading => orderTrackingTitle;
   String get deliveryAddress => _t('Delivery address', 'អាសយដ្ឋានដឹកជញ្ជូន');
+  String get selectShippingAddress =>
+      _t('Select a shipping address', 'ជ្រើសរើសអាសយដ្ឋានដឹកជញ្ជូន');
+  String get useDifferentAddress =>
+      _t('Use a different address', 'ប្រើអាសយដ្ឋានផ្សេង');
+  String get useSavedAddress =>
+      _t('Use saved address', 'ប្រើអាសយដ្ឋានដែលមាន');
+  String get placeOrder => _t('Place order', 'បញ្ជាទិញ');
+  String get orderTotalLabel => _t('Order total', 'សរុបការបញ្ជាទិញ');
+  String get paymentMethodTitle => _t('Payment method', 'មធ្យោបាយបង់ប្រាក់');
+  String get bankAppNotInstalled => _t(
+        'Banking app not found. Install ABA Mobile or share the QR code.',
+        'រកមិនឃើញកម្មវិធីធនាគារ។ ដំឡើង ABA Mobile ឬចែករំលែក QR។',
+      );
+  String get paymentKhqrNote => _t(
+        'Payment: Bakong KHQR (complete payment after placing the order).',
+        'ទូទាត់៖ Bakong KHQR (បញ្ចប់ការទូទាត់បន្ទាប់ពីបញ្ជាទិញ)។',
+      );
+  String get payInBankingApp => _t('Pay in banking app', 'បង់ក្នុងកម្មវិធីធនាគារ');
+  String get sharePayment => _t('Share payment', 'ចែករំលែកការទូទាត់');
+  String get showQrCode => _t('Show QR code', 'បង្ហាញ QR');
+  String get hideQrCode => _t('Hide QR code', 'លាក់ QR');
+  String get mobileKhqrTitle =>
+      _t('Complete payment in your bank app', 'បញ្ចប់ការទូទាត់ក្នុងកម្មវិធីធនាគារ');
+  String get mobileKhqrStep1 => _t(
+        'Open your banking app and scan the QR code below.',
+        'បើកកម្មវិធីធនាគារ ហើយស្កេន QR ខាងក្រោម។',
+      );
+  String get mobileAbaStep1 => _t(
+        'Tap Pay with ABA Mobile — we open ABA with the amount ready (via Bakong deeplink).',
+        'ចុច «បង់ជាមួយ ABA Mobile» — យើងបើក ABA ជាមួយចំនួនទឹកប្រាក់រួចហើយ (តាម Bakong deeplink)។',
+      );
+  String get mobileKhqrStep2 => _t(
+        'Confirm the amount and pay in that app.',
+        'បញ្ជាក់ចំនួនទឹកប្រាក់ ហើយបង់ក្នុងកម្មវិធីនោះ។',
+      );
+  String get mobileKhqrStep3 => _t(
+        'Return here — we confirm payment automatically.',
+        'ត្រឡប់មកទីនេះ — យើងបញ្ជាក់ការទូទាត់ដោយស្វ័យប្រវត្តិ។',
+      );
+  String get mobileKhqrQrHint => _t(
+        'Only needed if you pay from another phone.',
+        'ត្រូវការតែបើអ្នកបង់ពីទូរស័ព្ទមួយទៀត។',
+      );
+  String get paymentWaiting => _t('Waiting for payment…', 'កំពុងរង់ចាំការទូទាត់…');
+  String get paymentReceived => _t('Payment received', 'បានទទួលការទូទាត់');
+  String get paymentProcessingOrder => _t('Your order is being processed.', 'ការបញ្ជាទិញកំពុងដំណើរការ។');
+  String get paymentQrExpired => _t('QR expired', 'QR ផុតកំណត់');
+  String get paymentRegenerateQr => _t('Generate new payment', 'បង្កើតការទូទាត់ថ្មី');
+  String get refreshPaymentStatus => _t('Refresh status', 'ផ្ទុកស្ថានភាពម្តងទៀត');
+  String get paymentUnavailable => _t('Payment unavailable', 'មិនអាចទូទាត់បាន');
+  String billLabel(String bill) => _t('Bill: $bill', 'វិក្កយបត្រ៖ $bill');
+  String expiresInLabel(String time) => _t('Expires in $time', 'ផុតកំណត់ក្នុង $time');
+  String get paymentCopiedHint => _t(
+        'Bill copied. Open your banking app to pay.',
+        'បានចម្លងវិក្កយបត្រ។ បើកកម្មវិធីធនាគារដើម្បីបង់។',
+      );
+  String get done => _t('Done', 'រួចរាល់');
 
   List<String> get orderTrackingSteps => [
         _t('Order Placed', 'ការបញ្ជាទិញ'),

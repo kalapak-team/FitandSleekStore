@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\RielpayApi;
 use App\Services\RielpayPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,7 @@ class BakongPaymentController extends Controller
 {
     public function __construct(
         private readonly RielpayPaymentService $rielpayPayments,
+        private readonly RielpayApi $rielpayApi,
     ) {
     }
 
@@ -196,6 +198,41 @@ class BakongPaymentController extends Controller
             $this->formatPaymentResponse($payment),
             ['status' => $payment->status]
         ));
+    }
+
+    public function deeplink(Payment $payment, Request $request): JsonResponse
+    {
+        $payment->load('order');
+        $order = $payment->order;
+
+        if (! $order) {
+            return response()->json(['message' => 'Payment order not found'], 404);
+        }
+
+        $this->ensureOrderOwner($order, $request);
+
+        if ($order->payment_status === 'paid' || $payment->status === 'paid') {
+            return response()->json(['message' => 'Order already paid.'], 409);
+        }
+
+        if (blank($payment->qr_string)) {
+            return response()->json(['message' => 'QR payment is not ready yet.'], 422);
+        }
+
+        try {
+            $shortLink = $this->rielpayApi->generateDeeplink((string) $payment->qr_string);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => $e->getMessage() ?: 'Unable to generate payment deeplink.',
+            ], 500);
+        }
+
+        return response()->json([
+            'payment_id' => $payment->id,
+            'short_link' => $shortLink,
+        ]);
     }
 
     private function ensureOrderOwner(Order $order, Request $request): void

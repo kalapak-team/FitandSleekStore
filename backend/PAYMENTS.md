@@ -9,23 +9,31 @@ RIELPAY_API_URL=https://api-norng-rielpay.fitandsleek.online
 RIELPAY_API_KEY=your_live_or_test_key
 RIELPAY_CURRENCY=KHR
 RIELPAY_EXPIRES_IN=300
+
+# Optional — mobile tap-to-pay metadata (sent to Rielpay → NBC generate_deeplink_by_qr)
+RIELPAY_DEEPLINK_APP_NAME=FitandSleek
+RIELPAY_DEEPLINK_ICON_URL=https://www.fitandsleek.online/logo.png
+RIELPAY_DEEPLINK_CALLBACK=fitandsleek://payment/callback
 ```
 
 Health check: `GET {RIELPAY_API_URL}/up` → `Application up`
 
 ## Flow
 
-1. Checkout with `bakong_khqr` → `POST /api/payments/bakong/create` (storefront) creates payment via Rielpay.
-2. Response includes `qr_string` — shown in checkout UI (no local KHQR generation).
-3. Client polls `GET /api/payments/bakong/status/{payment}` every 3s until `paid` or `expired`.
-4. Backend calls Rielpay `POST /api/v1/payments/check` with `md5`.
+1. Checkout with `bakong_khqr` → `POST /api/payments/bakong/create` creates payment via Rielpay.
+2. Response includes `qr_string` — shown in checkout UI.
+3. **Mobile tap-to-pay:** `POST /api/payments/bakong/deeplink/{payment}` calls Rielpay `POST /api/v1/payments/deeplink` → NBC `generate_deeplink_by_qr` → returns `short_link`.
+4. Client polls `GET /api/payments/bakong/status/{payment}` every 3s until `paid` or `expired`.
+5. Backend calls Rielpay `POST /api/v1/payments/check` with `md5`.
 
-## Removed (do not configure)
+```
+FitandSleek → Rielpay (API key) → NBC (BAKONG_TOKEN on Rielpay host) → short_link
+```
 
-- `BAKONG_*` env vars, NBC API token, `KHQR_NODE_BINARY`, `bakong-proxy`, NBC webhook route.
+No `BAKONG_PROXY_URL` or `BAKONG_TOKEN` required on FitandSleek / Render.
 
 ## Merchant settings
 
 Bakong account and merchant display name are configured in the Rielpay merchant dashboard (`merchant-norng-rielpay.fitandsleek.online`).
 
-Admin **Payment Settings** still controls whether KHQR is enabled and optional display labels for receipts.
+Admin **Payment Settings** controls whether KHQR is enabled and optional display labels for receipts.

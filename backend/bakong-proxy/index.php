@@ -2,14 +2,18 @@
 /**
  * Minimal Bakong NBC API proxy — deploy on a Cambodia-hosted server/VPS.
  *
- * NBC blocks check_transaction_by_md5 from outside Cambodia (errorCode 15 on Render/US hosts).
- * Point Render BAKONG_PROXY_URL to this script, e.g.:
- *   BAKONG_PROXY_URL=https://your-cambodia-host.example.com/bakong-proxy
+ * NBC blocks many API calls from outside Cambodia (errorCode 15 on US/Render hosts).
+ * Point BAKONG_PROXY_URL to this script, e.g.:
+ *   BAKONG_PROXY_URL=https://proxyapp.fitandsleek.online/index.php
+ *
+ * Supported POST bodies:
+ *   {"md5":"..."}  → /v1/check_transaction_by_md5
+ *   {"qr":"...", "sourceInfo":{...}}  → /v1/generate_deeplink_by_qr
  *
  * Required env on the Cambodia host:
  *   BAKONG_TOKEN=your_nbc_api_token
  * Optional:
- *   BAKONG_PROXY_SECRET=shared_secret   (must match Render BAKONG_PROXY_SECRET)
+ *   BAKONG_PROXY_SECRET=shared_secret   (must match backend BAKONG_PROXY_SECRET)
  *   BAKONG_BASE_URL=https://api-bakong.nbc.gov.kh
  */
 
@@ -46,15 +50,25 @@ if (! is_array($payload)) {
     exit;
 }
 
-$md5 = strtolower(trim((string) ($payload['md5'] ?? '')));
-if ($md5 === '') {
-    http_response_code(422);
-    echo json_encode(['message' => 'md5 is required']);
-    exit;
-}
-
 $baseUrl = rtrim(getenv('BAKONG_BASE_URL') ?: 'https://api-bakong.nbc.gov.kh', '/');
-$url = $baseUrl . '/v1/check_transaction_by_md5';
+
+$qr = trim((string) ($payload['qr'] ?? ''));
+if ($qr !== '') {
+    $nbcBody = ['qr' => $qr];
+    if (isset($payload['sourceInfo']) && is_array($payload['sourceInfo'])) {
+        $nbcBody['sourceInfo'] = $payload['sourceInfo'];
+    }
+    $url = $baseUrl . '/v1/generate_deeplink_by_qr';
+} else {
+    $md5 = strtolower(trim((string) ($payload['md5'] ?? '')));
+    if ($md5 === '') {
+        http_response_code(422);
+        echo json_encode(['message' => 'md5 or qr is required']);
+        exit;
+    }
+    $nbcBody = ['md5' => $md5];
+    $url = $baseUrl . '/v1/check_transaction_by_md5';
+}
 
 $ch = curl_init($url);
 curl_setopt_array($ch, [
@@ -66,7 +80,7 @@ curl_setopt_array($ch, [
         'Content-Type: application/json',
         'Accept: application/json',
     ],
-    CURLOPT_POSTFIELDS => json_encode(['md5' => $md5], JSON_UNESCAPED_UNICODE),
+    CURLOPT_POSTFIELDS => json_encode($nbcBody, JSON_UNESCAPED_UNICODE),
 ]);
 
 $body = curl_exec($ch);

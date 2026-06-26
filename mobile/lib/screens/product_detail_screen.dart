@@ -223,11 +223,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       }
 
       if (buyNow && !auth.isLoggedIn) {
+        final l10n = context.l10nRead;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.l10n.addedToCartSignIn),
+            content: Text(l10n.addedToCartSignIn),
             action: SnackBarAction(
-              label: context.l10n.signIn,
+              label: l10n.signIn,
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
               ),
@@ -238,7 +239,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.addedToCart)),
+        SnackBar(content: Text(context.l10nRead.addedToCart)),
       );
     } on DioException catch (e) {
       if (!mounted) return;

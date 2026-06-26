@@ -252,6 +252,8 @@ Route::middleware(['auth:sanctum', 'device.bound'])->group(function () {
 
     // Bakong KHQR (Node generated)
     Route::post('/payments/bakong/create', [BakongPaymentController::class, 'create']);
+    Route::post('/payments/bakong/deeplink/{payment}', [BakongPaymentController::class, 'deeplink'])
+        ->whereNumber('payment');
     Route::get('/payments/bakong/status/{payment}', [BakongPaymentController::class, 'status'])
         ->whereNumber('payment')
         ->middleware('throttle:30,1');
