@@ -35,6 +35,7 @@ const StatusPill = ({ status }) => {
     pending:  { label: "Waiting", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
     paid:     { label: "Paid ✓",  cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
     expired:  { label: "Expired", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+    error:    { label: "Failed",  cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
     idle:     { label: "Idle",    cls: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
   };
   const { label, cls } = map[status] || map.idle;

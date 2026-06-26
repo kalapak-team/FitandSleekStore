@@ -103,7 +103,7 @@ return [
     ],
 
     'rielpay' => [
-        'api_url' => env('RIELPAY_API_URL', 'https://api-rielpay.fitandsleek.online'),
+        'api_url' => env('RIELPAY_API_URL', 'https://api-norng-rielpay.fitandsleek.online'),
         'api_key' => env('RIELPAY_API_KEY'),
         'currency' => env('RIELPAY_CURRENCY', 'KHR'),
         'expires_in' => (int) env('RIELPAY_EXPIRES_IN', 300),

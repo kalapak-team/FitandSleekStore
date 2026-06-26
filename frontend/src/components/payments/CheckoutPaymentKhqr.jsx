@@ -154,7 +154,7 @@ export default function CheckoutPaymentKhqr({
       onClose={onClose}
       qrImageBase64={payment?.qr_image_base64}
       qrString={payment?.qr_string}
-      billNumber={payment?.bill_number || orderNumber}
+      billNumber={payment?.bill_number}
       md5={payment?.md5}
       expiresAt={payment?.expires_at}
       status={status}

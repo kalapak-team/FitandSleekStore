@@ -60,7 +60,7 @@ final class RielpayDiagnostics
             $response = Http::timeout(10)->get($apiUrl.'/up');
             $body = trim((string) $response->body());
 
-            if ($response->successful() && str_contains(strtolower($body), 'up')) {
+            if ($response->successful() && str_contains(strtolower($body), 'application up')) {
                 return [
                     'ok' => true,
                     'status' => $response->status(),
@@ -68,11 +68,23 @@ final class RielpayDiagnostics
                 ];
             }
 
+            $apiPing = Http::timeout(10)
+                ->acceptJson()
+                ->post($apiUrl.'/api/v1/payments/check', ['md5' => '']);
+
+            if (in_array($apiPing->status(), [401, 422], true)) {
+                return [
+                    'ok' => true,
+                    'status' => $apiPing->status(),
+                    'body' => 'Rielpay API reachable',
+                ];
+            }
+
             return [
                 'ok' => false,
                 'status' => $response->status(),
-                'body' => $body !== '' ? $body : null,
-                'error' => self::explainProbeFailure($response->status(), $body),
+                'body' => $body !== '' ? mb_substr($body, 0, 120) : null,
+                'error' => self::explainProbeFailure($response->status(), $body, $apiUrl),
             ];
         } catch (\Throwable $e) {
             return [
@@ -82,10 +94,10 @@ final class RielpayDiagnostics
         }
     }
 
-    private static function explainProbeFailure(int $status, string $body): string
+    private static function explainProbeFailure(int $status, string $body, string $apiUrl): string
     {
         if ($status === 530 || str_contains($body, '1033')) {
-            return 'Rielpay gateway is offline (Cloudflare 530). Start api-rielpay.fitandsleek.online or fix its Cloudflare tunnel.';
+            return 'Rielpay gateway is offline (Cloudflare 530). Point RIELPAY_API_URL at the healthy norng-rielpay host (e.g. https://api-norng-rielpay.fitandsleek.online) or fix the tunnel route for '.$apiUrl.'.';
         }
 
         if ($status === 401 || $status === 403) {

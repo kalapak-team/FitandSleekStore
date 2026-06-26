@@ -1,11 +1,11 @@
 # Payments — Rielpay KHQR
 
-Fitandsleek uses [Rielpay](https://api-rielpay.fitandsleek.online) for Bakong KHQR payments. NBC/Bakong credentials and Cambodia egress live in Rielpay — not in this app.
+Fitandsleek uses [Rielpay](https://api-norng-rielpay.fitandsleek.online) for Bakong KHQR payments. NBC/Bakong credentials and Cambodia egress live in Rielpay — not in this app.
 
 ## Environment
 
 ```ini
-RIELPAY_API_URL=https://api-rielpay.fitandsleek.online
+RIELPAY_API_URL=https://api-norng-rielpay.fitandsleek.online
 RIELPAY_API_KEY=your_live_or_test_key
 RIELPAY_CURRENCY=KHR
 RIELPAY_EXPIRES_IN=300
@@ -26,6 +26,6 @@ Health check: `GET {RIELPAY_API_URL}/up` → `Application up`
 
 ## Merchant settings
 
-Bakong account and merchant display name are configured in the Rielpay merchant dashboard (`merchant-rielpay.fitandsleek.online`).
+Bakong account and merchant display name are configured in the Rielpay merchant dashboard (`merchant-norng-rielpay.fitandsleek.online`).
 
 Admin **Payment Settings** still controls whether KHQR is enabled and optional display labels for receipts.
