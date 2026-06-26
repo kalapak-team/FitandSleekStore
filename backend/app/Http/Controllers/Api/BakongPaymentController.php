@@ -96,10 +96,11 @@ class BakongPaymentController extends Controller
 
             $response = [
                 'message' => $e->getMessage() ?: 'Unable to create KHQR payment. Please try again.',
+                'detail' => $e->getMessage(),
             ];
 
             if (config('app.debug')) {
-                $response['detail'] = $e->getMessage();
+                $response['exception'] = $e::class;
             }
 
             return response()->json($response, 500);

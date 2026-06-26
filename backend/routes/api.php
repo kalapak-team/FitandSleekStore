@@ -103,6 +103,10 @@ Route::get('/mail/probe', function () {
     return response()->json(\App\Support\MailDiagnostics::summary());
 });
 
+Route::get('/rielpay/probe', function () {
+    return response()->json(\App\Support\RielpayDiagnostics::summary());
+});
+
 Route::middleware(['throttle:api'])->group(function () {
 
 // Public files with CORS (for Flutter web / cross-origin clients; path = storage/app/public/...)
