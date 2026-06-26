@@ -224,9 +224,14 @@ class BakongPaymentController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
+            $message = $e->getMessage() ?: 'Unable to generate payment deeplink.';
+            $status = str_contains($message, 'deeplink from our provider') ? 422 : 500;
+
             return response()->json([
-                'message' => $e->getMessage() ?: 'Unable to generate payment deeplink.',
-            ], 500);
+                'message' => $message,
+                'error_code' => $status === 422 ? 4 : null,
+                'fallback' => 'scan_qr',
+            ], $status);
         }
 
         return response()->json([

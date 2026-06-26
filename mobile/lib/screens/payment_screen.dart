@@ -176,14 +176,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = context.read<ApiClient>().apiMessage(e);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      if (widget.bank != KhqrBankId.aba) {
-        await _sharePayment();
-      }
+      setState(() => _showQr = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            msg.contains('deeplink') || msg.contains('provider') || msg.contains('unavailable')
+                ? context.l10nRead.deeplinkUnavailableScanQr
+                : msg,
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
+      setState(() => _showQr = true);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10nRead.paymentUnavailable)),
+        SnackBar(content: Text(context.l10nRead.deeplinkUnavailableScanQr)),
       );
     } finally {
       if (mounted) setState(() => _openingBankApp = false);

@@ -316,6 +316,10 @@ class StorefrontL10n {
         'Only needed if you pay from another phone.',
         'ត្រូវការតែបើអ្នកបង់ពីទូរស័ព្ទមួយទៀត។',
       );
+  String get deeplinkUnavailableScanQr => _t(
+        'Tap-to-pay is unavailable right now. Scan the QR code with ABA Mobile instead.',
+        'មិនអាចបើកកម្មវិធីធនាគារបានឥឡូវនេះទេ។ សូមស្កេន QR ជាមួយ ABA Mobile។',
+      );
   String get paymentWaiting => _t('Waiting for payment…', 'កំពុងរង់ចាំការទូទាត់…');
   String get paymentReceived => _t('Payment received', 'បានទទួលការទូទាត់');
   String get paymentProcessingOrder => _t('Your order is being processed.', 'ការបញ្ជាទិញកំពុងដំណើរការ។');
