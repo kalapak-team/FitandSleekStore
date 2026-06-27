@@ -6,17 +6,12 @@ cd /var/www/html
 # Host-mounted composer.lock can be newer than vendor baked into the image (e.g. after git pull).
 if [ -f composer.lock ]; then
   if [ ! -f vendor/composer/installed.json ] || [ composer.lock -nt vendor/composer/installed.json ]; then
-    composer install --no-interaction --prefer-dist --optimize-autoloader
+    composer install --no-interaction --no-dev --optimize-autoloader --no-scripts \
+      || (composer clear-cache \
+        && composer install --no-interaction --no-dev --optimize-autoloader --no-scripts) \
+      || (composer clear-cache \
+        && composer install --no-interaction --no-dev --optimize-autoloader --no-scripts --prefer-source)
   fi
-fi
-
-# KHQR Node deps (shared by web + workers)
-if [ -d node-khqr ]; then
-  cd node-khqr
-  if [ ! -d node_modules/ts-khqr ]; then
-    npm ci --omit=dev
-  fi
-  cd /var/www/html
 fi
 
 # Laravel writable dirs: .dockerignore intentionally excludes runtime caches,
