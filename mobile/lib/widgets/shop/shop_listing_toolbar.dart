@@ -55,17 +55,14 @@ class _FilterButton extends StatelessWidget {
     final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return Material(
-      color: Colors.transparent,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -97,50 +94,52 @@ class _SortButton extends StatelessWidget {
 
   Future<void> _openSortMenu(BuildContext context) async {
     final l10n = context.l10n;
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
-    final bottomRight = box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay);
-
-    final selected = await showMenu<String>(
+    final selected = await showModalBottomSheet<String>(
       context: context,
-      color: Theme.of(context).colorScheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      position: RelativeRect.fromRect(
-        Rect.fromLTRB(topLeft.dx, bottomRight.dy + 4, bottomRight.dx, topLeft.dy),
-        Offset.zero & overlay.size,
+      useRootNavigator: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      items: l10n.sortOptions
-          .map(
-            (option) => PopupMenuItem<String>(
-              value: option.value,
-              height: 44,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 22,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    l10n.sortBy,
+                    style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ),
+              ...l10n.sortOptions.map(
+                (option) => ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                  leading: SizedBox(
+                    width: 24,
                     child: option.value == sort
                         ? Icon(
                             Icons.check_rounded,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
+                            color: Theme.of(sheetContext).colorScheme.primary,
                           )
                         : null,
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      option.label,
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-                    ),
-                  ),
-                ],
+                  title: Text(option.label),
+                  onTap: () => Navigator.pop(sheetContext, option.value),
+                ),
               ),
-            ),
-          )
-          .toList(),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
 
     if (selected != null && selected != sort) {
@@ -158,6 +157,7 @@ class _SortButton extends StatelessWidget {
     return Material(
       color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openSortMenu(context),
         borderRadius: BorderRadius.circular(12),

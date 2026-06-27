@@ -25,6 +25,10 @@ class ShipmentTrackingController extends Controller
             return response()->json(['message' => 'Shipment not found'], 404);
         }
 
+        if (! $shipment->order?->isPaymentSuccessful()) {
+            return response()->json(['message' => 'Shipment not found'], 404);
+        }
+
         return response()->json([
             'message' => 'Shipment retrieved',
             'data' => [

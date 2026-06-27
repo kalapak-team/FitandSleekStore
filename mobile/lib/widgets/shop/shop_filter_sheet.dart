@@ -27,6 +27,7 @@ class ShopFilterSheet extends StatefulWidget {
 
     return showModalBottomSheet<ProductFilters>(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       useSafeArea: true,
       enableDrag: false,

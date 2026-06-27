@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n_extension.dart';
 import '../../models/product_model.dart';
 import '../../theme/app_colors.dart';
 
@@ -47,19 +48,19 @@ class VariantPickerSheet extends StatelessWidget {
 
   String get _title => kind == VariantPickerKind.size ? 'Size' : 'Color';
 
-  String? _stockLabel(String option) {
+  bool _isSoldOut(String option) {
     final qty = product.sellableQtyForOption(
       isSize: kind == VariantPickerKind.size,
       option: option,
       otherSelected: otherSelectedValue,
     );
-    if (qty == null) return null;
-    if (qty <= 0) return '(Sold out)';
-    return '($qty left in stock)';
+    if (qty == null) return false;
+    return qty <= 0;
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final theme = Theme.of(context);
     final onSurface = theme.colorScheme.onSurface;
     final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
@@ -92,8 +93,7 @@ class VariantPickerSheet extends StatelessWidget {
               separatorBuilder: (_, __) => Divider(height: 1, indent: 16, endIndent: 16, color: theme.dividerColor),
               itemBuilder: (context, index) {
                 final option = options[index];
-                final stockLabel = _stockLabel(option);
-                final soldOut = stockLabel == '(Sold out)';
+                final soldOut = _isSoldOut(option);
                 final isSelected = selectedValue != null &&
                     selectedValue!.trim().toLowerCase() == option.trim().toLowerCase();
 
@@ -107,15 +107,15 @@ class VariantPickerSheet extends StatelessWidget {
                       color: soldOut ? onSurfaceVariant : onSurface,
                     ),
                   ),
-                  trailing: stockLabel == null
-                      ? null
-                      : Text(
-                          stockLabel,
-                          style: TextStyle(
+                  trailing: soldOut
+                      ? Text(
+                          l10n.soldOut,
+                          style: const TextStyle(
                             fontSize: 13,
-                            color: soldOut ? AppColors.textMuted : AppColors.error,
+                            color: AppColors.textMuted,
                           ),
-                        ),
+                        )
+                      : null,
                   onTap: soldOut ? null : () => Navigator.of(context).pop(option),
                 );
               },

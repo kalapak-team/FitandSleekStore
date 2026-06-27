@@ -70,6 +70,10 @@ class StorefrontL10n {
 
   // Home
   String get topBrands => _t('Top Brands', 'ម៉ាកល្បីៗ');
+  String get productsByBrand => _t('Products by this brand', 'ទំនិញតាមម៉ាកនេះ');
+  String get soldOut => _t('Sold out', 'អស់ស្តុក');
+  String get stockNotEnough =>
+      _t('Not enough stock for this quantity.', 'ស្តុកមិនគ្រប់គ្រាន់សម្រាប់ចំនួនដែលអ្នកជ្រើស។');
   String get newArrivals => _t('New Arrivals', 'មកថ្មី');
   String get seeAll => _t('See All', 'មើលទាំងអស់');
   String get chipAll => _t('All', 'ទាំងអស់');
@@ -102,6 +106,11 @@ class StorefrontL10n {
       _t('Sign in to checkout. Your cart is saved on this device.', 'ចូលគណនីដើម្បីទូទាត់។ កន្ត្រកត្រូវបានរក្សាទុកលើឧបករណ៍នេះ។');
   String get checkoutNote =>
       _t('Pay with Bakong KHQR after placing your order.', 'បង់ប្រាក់ដោយ Bakong KHQR បន្ទាប់ពីបញ្ជាទិញ។');
+  String get adminCannotCheckout => _t(
+        'Admin accounts cannot place customer orders. Use Admin → Checkout (POS) for in-store sales.',
+        'គណនីអ្នកគ្រប់គ្រងមិនអាចបញ្ជាទិញជាអតិថិជនបានទេ។ សូមប្រើ Admin → Checkout (POS) សម្រាប់លក់ក្នុងហាង។',
+      );
+  String get adminOpenPosCheckout => _t('Open Admin Checkout (POS)', 'បើក Admin Checkout (POS)');
   String get addedToCart => _t('Added to cart', 'បានបន្ថែមកន្ត្រក');
   String get addedToCartSignIn => _t('Added to cart. Sign in to checkout.', 'បានបន្ថែមកន្ត្រក។ ចូលដើម្បីទូទាត់។');
   String get signIn => _t('Sign in', 'ចូល');

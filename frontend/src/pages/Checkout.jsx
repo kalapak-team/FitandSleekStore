@@ -11,6 +11,7 @@ import KhqrSuccessModal from "../components/alerts/KhqrSuccessModal";
 import { requestDeliveryPin } from "../lib/geolocation";
 import { resolveImageUrl } from "../lib/images";
 import { DEFAULT_DELIVERY_RATES, resolveDeliveryFee } from "../lib/deliveryFee.js";
+import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 
 const KHQR_REDIRECT_SECONDS = 60;
 
@@ -186,45 +187,6 @@ export default function Checkout() {
     setMsg("");
     setMsgType("");
 
-    const showStockLimitAlert = async (stock, requestedQuantity) => {
-      const safeStock = Number.isFinite(Number(stock)) ? Math.max(0, Number(stock)) : 0;
-      const safeRequested = Number.isFinite(Number(requestedQuantity)) ? Math.max(1, Number(requestedQuantity)) : 1;
-
-      const swalBase = {
-        confirmButtonColor: "#567D74",
-        customClass: {
-          popup: "font-sans",
-          title: "font-sans",
-          htmlContainer: "font-sans",
-          confirmButton: "font-sans",
-        },
-      };
-
-      if (safeStock === 0) {
-        await Swal.fire({
-          icon: "error",
-          text: "សោកស្តាយ! ទំនិញនេះអស់ពីស្តុកហើយ (Out of Stock)",
-          ...swalBase,
-        });
-        return;
-      }
-
-      if (safeRequested > safeStock) {
-        await Swal.fire({
-          icon: "warning",
-          text: `ស្តុកមានកំណត់! យើងមានសល់ត្រឹមតែ ${safeStock} ប៉ុណ្ណោះ (Only ${safeStock} left in stock)`,
-          ...swalBase,
-        });
-        return;
-      }
-
-      await Swal.fire({
-        icon: "warning",
-        text: `ស្តុកមានកំណត់! យើងមានសល់ត្រឹមតែ ${safeStock} ប៉ុណ្ណោះ (Only ${safeStock} left in stock)`,
-        ...swalBase,
-      });
-    };
-
     const tryHandleStockError = async (err) => {
       const payload = err?.response?.data || {};
       const message = String(payload?.message || err?.message || "");
@@ -235,18 +197,14 @@ export default function Checkout() {
       }
 
       const payloadStock = Number(payload?.stock);
-      const payloadRequested = Number(payload?.requested_quantity);
       const textMatches = message.match(/\d+/g);
       const messageStock = textMatches?.length ? Number(textMatches[textMatches.length - 1]) : NaN;
 
       const inferredStock = Number.isFinite(payloadStock)
         ? payloadStock
         : (Number.isFinite(messageStock) ? messageStock : (lower.includes("out of stock") ? 0 : Number(cartItems?.[0]?.product?.stock || 0)));
-      const inferredRequested = Number.isFinite(payloadRequested)
-        ? payloadRequested
-        : Number(cartItems?.[0]?.quantity || 1);
 
-      await showStockLimitAlert(inferredStock, inferredRequested);
+      await showStockLimitAlert({ stock: inferredStock });
       return true;
     };
 

@@ -115,6 +115,7 @@ class CustomerProfileController extends Controller
     public function getOrders(Request $request)
     {
         $orders = Order::where('user_id', auth()->id())
+            ->paymentSuccessful()
             ->with(['items.product', 'shipment'])
             ->orderByDesc('created_at')
             ->paginate($request->get('per_page', 10));
@@ -395,6 +396,7 @@ class CustomerProfileController extends Controller
     public function getActivity(Request $request)
     {
         $activity = Order::where('user_id', auth()->id())
+            ->paymentSuccessful()
             ->select('id', 'status', 'total', 'created_at')
             ->orderByDesc('created_at')
             ->limit(20)

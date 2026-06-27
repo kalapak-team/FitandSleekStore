@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../core/admin_report_period.dart';
 import '../core/api_client.dart';
+import '../models/brand_model.dart';
 
 class AdminDashboardStats {
   AdminDashboardStats({
@@ -89,6 +90,17 @@ class AdminService {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<List<BrandModel>> fetchBrands() async {
+    final res = await _api.dio.get('/admin/brands');
+    final raw = res.data is Map ? res.data['data'] : res.data;
+    if (raw is! List) return [];
+    return raw
+        .whereType<Map>()
+        .map((e) => BrandModel.fromJson(Map<String, dynamic>.from(e)))
+        .where((b) => b.id > 0 && b.name.isNotEmpty)
+        .toList();
   }
 
   Future<Map<String, dynamic>> fetchAdminProfile() async {

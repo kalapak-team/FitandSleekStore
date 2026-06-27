@@ -54,6 +54,7 @@ class OrderController extends Controller
     {
         $orders = Order::with(['items.product.category', 'shipment'])
             ->where('user_id', $request->user()->id)
+            ->paymentSuccessful()
             ->orderByDesc('id')
             ->paginate(10);
 
@@ -81,6 +82,14 @@ class OrderController extends Controller
         }
 
         if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        if ((int) $order->user_id !== (int) $request->user()->id) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        if (! $order->isPaymentSuccessful()) {
             return response()->json(['message' => 'Order not found'], 404);
         }
 
@@ -114,6 +123,13 @@ class OrderController extends Controller
 
     public function checkout(Request $request)
     {
+        $user = $request->user();
+        if ($user && ! $user->canPlaceStorefrontOrder()) {
+            return response()->json([
+                'message' => 'Admin accounts cannot place customer orders. Use Admin → Checkout / POS for in-store sales.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'payment_method' => 'required|in:bakong_khqr,card_visa',
             'shipping_address' => 'required|array',

@@ -146,6 +146,12 @@ class User extends Authenticatable
         return $this->role === 'customer';
     }
 
+    /** Storefront checkout (web/mobile shop) — not in-store POS/admin sales. */
+    public function canPlaceStorefrontOrder(): bool
+    {
+        return ! $this->isAdmin();
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

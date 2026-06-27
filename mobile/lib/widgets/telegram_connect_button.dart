@@ -85,20 +85,22 @@ class _TelegramConnectButtonState extends State<TelegramConnectButton> {
         : l10n.connectTelegram;
 
     return SizedBox(
-      width: widget.compact ? null : double.infinity,
+      width: double.infinity,
       child: FilledButton.icon(
         onPressed: _open,
         style: FilledButton.styleFrom(
           backgroundColor: const Color(0xFF229ED9),
           foregroundColor: Colors.white,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.compact ? 16 : 20,
-            vertical: widget.compact ? 12 : 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         icon: Icon(widget.compact ? Icons.send_outlined : Icons.telegram, size: 20),
-        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        label: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }

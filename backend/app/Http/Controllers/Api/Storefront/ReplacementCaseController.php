@@ -20,7 +20,7 @@ class ReplacementCaseController extends Controller
         $user = $request->user();
 
         $cases = ReplacementCase::query()
-            ->whereHas('order', fn ($q) => $q->where('user_id', $user->id))
+            ->whereHas('order', fn ($q) => $q->where('user_id', $user->id)->paymentSuccessful())
             ->with(ReplacementCaseService::defaultEagerLoad())
             ->orderByDesc('id')
             ->paginate($request->get('per_page', 10));
@@ -34,7 +34,7 @@ class ReplacementCaseController extends Controller
 
         $cases = ReplacementCase::query()
             ->where('order_id', $orderId)
-            ->whereHas('order', fn ($q) => $q->where('user_id', $user->id))
+            ->whereHas('order', fn ($q) => $q->where('user_id', $user->id)->paymentSuccessful())
             ->with(ReplacementCaseService::defaultEagerLoad())
             ->orderByDesc('id')
             ->get();
@@ -59,6 +59,10 @@ class ReplacementCaseController extends Controller
         $order = Order::with('items')->findOrFail($validated['order_id']);
         if ($order->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (! $order->isPaymentSuccessful()) {
+            return response()->json(['message' => 'Replacement requests are only available for paid orders.'], 422);
         }
 
         $case = $this->replacementCaseService->createCase(

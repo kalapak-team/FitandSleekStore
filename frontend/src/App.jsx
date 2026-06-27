@@ -72,6 +72,7 @@ import ExtendedHomepageManager from "./pages/ExtendedHomepageManager.jsx";
 import DriverScanPage from "./pages/driver/Scan.jsx";
 import { useAuth, TOKEN_KEY } from "./state/auth.jsx";
 import { useTheme } from "./state/theme.jsx";
+import { canPlaceStorefrontOrder } from "./app/redirectAfterAuth.js";
 import { AdminContentSkeleton } from "./components/admin/AdminLoading.jsx";
 
 /** Old URLs used `/admin/barcode-qr`; preserve redirects after rename to `/admin/stock-inventory`. */
@@ -138,6 +139,16 @@ function RequireAuth({ children }) {
   const { user, booted } = useAuth();
   if (!booted) return <CustomerPageSkeleton />;
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function RequireStorefrontCustomer({ children }) {
+  const { user, booted } = useAuth();
+  if (!booted) return <CustomerPageSkeleton />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canPlaceStorefrontOrder(user)) {
+    return <Navigate to="/admin" replace />;
+  }
   return children;
 }
 
@@ -262,9 +273,9 @@ export default function App() {
           <Route
             path="/checkout"
             element={
-              <RequireAuth>
+              <RequireStorefrontCustomer>
                 <Checkout />
-              </RequireAuth>
+              </RequireStorefrontCustomer>
             }
           />
           <Route

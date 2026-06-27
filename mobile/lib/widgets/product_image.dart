@@ -13,12 +13,14 @@ class ProductImage extends StatelessWidget {
     super.key,
     required this.imageUrl,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.placeholder,
     this.error,
   });
 
   final String imageUrl;
   final BoxFit fit;
+  final Alignment alignment;
   final Widget? placeholder;
   final Widget? error;
 
@@ -49,7 +51,7 @@ class ProductImage extends StatelessWidget {
       if (bytes == null) {
         return error ?? _defaultError();
       }
-      return Image.memory(bytes, fit: fit, gaplessPlayback: true);
+      return Image.memory(bytes, fit: fit, alignment: alignment, gaplessPlayback: true);
     }
 
     // Web `<img>` renders SVG; Flutter needs flutter_svg (Nike, ZARA, UNIQLO, etc.).
@@ -57,6 +59,7 @@ class ProductImage extends StatelessWidget {
       return SvgPicture.network(
         imageUrl,
         fit: fit,
+        alignment: alignment,
         placeholderBuilder: (_) => placeholder ?? _defaultPlaceholder(),
         errorBuilder: (_, __, ___) => error ?? _defaultError(),
       );
@@ -68,6 +71,7 @@ class ProductImage extends StatelessWidget {
       return Image.network(
         imageUrl,
         fit: fit,
+        alignment: alignment,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
           return placeholder ?? _defaultPlaceholder();
@@ -79,6 +83,7 @@ class ProductImage extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: imageUrl,
       fit: fit,
+      alignment: alignment,
       placeholder: (_, __) => placeholder ?? _defaultPlaceholder(),
       errorWidget: (_, __, ___) => error ?? _defaultError(),
     );

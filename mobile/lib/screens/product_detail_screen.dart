@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -94,6 +96,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _detailsExpanded = false;
   List<ProductModel> _similarProducts = [];
   late final PageController _pageController;
+  Timer? _galleryTimer;
 
   @override
   void initState() {
@@ -104,8 +107,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   @override
   void dispose() {
+    _galleryTimer?.cancel();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _startGalleryAutoPlay() {
+    _galleryTimer?.cancel();
+    final count = _imageUrls.length;
+    if (count <= 1) return;
+    _galleryTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+      final next = (_activeImage + 1) % count;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   Future<void> _load() async {
@@ -124,6 +143,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           _selectedColor = product.colors.first;
         }
       });
+      _startGalleryAutoPlay();
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -194,6 +214,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  int? _sellableCap(ProductModel product) {
+    if (product.variantLotPrices.isEmpty || _selectedSize == null) return null;
+    return product.sellableQtyForOption(
+      isSize: true,
+      option: _selectedSize!,
+      otherSelected: _selectedColor,
+    );
+  }
+
   Future<void> _addToCart({bool buyNow = false}) async {
     final auth = context.read<AuthProvider>();
     final product = _product!;
@@ -202,6 +231,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       setState(() => _sizeError = true);
       return;
     }
+
+    final cap = _sellableCap(product);
+    if (cap != null && cap <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.soldOut)),
+      );
+      return;
+    }
+    if (cap != null && _quantity > cap) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.stockNotEnough)),
+      );
+      return;
+    }
+
     setState(() => _adding = true);
     try {
       await context.read<CartProvider>().addProduct(
@@ -214,6 +258,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       if (!mounted) return;
 
       if (buyNow && auth.isLoggedIn) {
+        if (auth.user?.canPlaceStorefrontOrder == false) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.adminCannotCheckout)),
+          );
+          return;
+        }
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => CheckoutScreen(cart: context.read<CartProvider>().cartModel),
@@ -252,7 +302,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   void _changeQuantity(int delta) {
-    setState(() => _quantity = (_quantity + delta).clamp(1, 99));
+    final product = _product;
+    if (product == null) return;
+
+    final cap = _sellableCap(product);
+    final next = _quantity + delta;
+    if (next < 1) return;
+
+    if (cap != null && cap <= 0 && delta > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.soldOut)),
+      );
+      return;
+    }
+    if (cap != null && cap > 0 && next > cap) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.stockNotEnough)),
+      );
+      return;
+    }
+
+    final maxQty = cap != null && cap > 0 ? cap : 99;
+    setState(() => _quantity = next.clamp(1, maxQty));
   }
 
   @override
@@ -273,8 +344,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _buildStickyTopActions() {
+    final topInset = MediaQuery.paddingOf(context).top;
     return Positioned(
-      top: MediaQuery.paddingOf(context).top + 8,
+      top: topInset + 8,
       left: 12,
       right: 12,
       child: Row(
@@ -311,13 +383,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final displaySizes = product.displaySizesForColor(_selectedColor);
     final bottomInset = MediaQuery.paddingOf(context).bottom + 96;
     final l10n = context.l10n;
+    final topInset = MediaQuery.paddingOf(context).top;
+    final heroHeight = (MediaQuery.sizeOf(context).height - topInset) * 0.66;
     const titleFontSize = 20.0;
     const titleLineHeight = 1.25;
     const titleMaxLines = 2;
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: _buildHeroGallery(imageUrls)),
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ColoredBox(
+                color: Theme.of(context).colorScheme.surface,
+                child: SizedBox(height: topInset),
+              ),
+              SizedBox(
+                height: heroHeight,
+                child: _buildHeroGallery(imageUrls, heroHeight),
+              ),
+            ],
+          ),
+        ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           sliver: SliverList(
@@ -412,10 +500,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _buildHeroGallery(List<String> imageUrls) {
-    final width = MediaQuery.sizeOf(context).width;
-    final heroHeight = width * 1.15;
-
+  Widget _buildHeroGallery(List<String> imageUrls, double heroHeight) {
     return SizedBox(
       height: heroHeight,
       child: Stack(
@@ -423,7 +508,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         children: [
           if (imageUrls.isEmpty)
             ColoredBox(
-              color: Colors.grey.shade200,
+              color: const Color(0xFFF3F4F6),
               child: Icon(Icons.image_outlined, size: 72, color: Colors.grey.shade400),
             )
           else
@@ -439,16 +524,19 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ProductImage(imageUrl: imageUrls[i], fit: BoxFit.cover),
-                    if (imageUrls.length > 1)
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: _overlayIconButton(
-                          icon: Icons.zoom_out_map,
-                          onTap: () => _openImageZoom(i),
-                        ),
+                    ProductImage(
+                      imageUrl: imageUrls[i],
+                      fit: BoxFit.cover,
+                      alignment: const Alignment(0, -0.12),
+                    ),
+                    Positioned(
+                      right: 12,
+                      bottom: 20,
+                      child: _overlayIconButton(
+                        icon: Icons.zoom_out_map,
+                        onTap: () => _openImageZoom(i),
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -457,42 +545,27 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 14,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(imageUrls.length, (i) {
-                      final active = _activeImage == i;
-                      return GestureDetector(
-                        onTap: () => _goToImage(i),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: active ? 18 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: active ? AppColors.primary : Colors.white.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(12),
+              bottom: 10,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(imageUrls.length, (i) {
+                  final active = _activeImage == i;
+                  return GestureDetector(
+                    onTap: () => _goToImage(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: active ? 18 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: active
+                            ? AppColors.primary
+                            : Colors.white.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
-                    child: Text(
-                      '${_activeImage + 1} / ${imageUrls.length}',
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
+                  );
+                }),
               ),
             ),
         ],
@@ -606,7 +679,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         : selected
             ? Colors.white
             : onSurface;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(

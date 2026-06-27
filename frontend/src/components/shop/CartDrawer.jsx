@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { useCart } from "../../state/cart";
 import { useAuth } from "../../state/auth";
 import { resolveImageUrl } from "../../lib/images";
+import { useLanguage } from "../../lib/i18n.jsx";
+import { canPlaceStorefrontOrder } from "../../app/redirectAfterAuth.js";
 
 function Money({ value }) {
   const n = Number(value || 0);
@@ -14,6 +16,8 @@ export default function CartDrawer({ open, onClose }) {
   const { cart, total, loading, updateQty, remove } = useCart();
   const items = cart?.items || [];
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const storefrontCheckout = canPlaceStorefrontOrder(user);
 
   const getPriceMeta = (item) => {
     const unitPaid = Number(item?.unit_price || item?.product?.final_price || item?.product?.price || 0);
@@ -121,20 +125,31 @@ export default function CartDrawer({ open, onClose }) {
             <Link onClick={onClose} to="/cart" className="h-11 rounded-full border border-zinc-200 hover:bg-zinc-50 flex items-center justify-center text-sm font-semibold transition-colors">
               View Cart
             </Link>
-            <Link
-              onClick={(e) => {
-                if (!user) {
-                  e.preventDefault();
-                  window.dispatchEvent(new Event("fs:open-login"));
-                  return;
-                }
-                onClose();
-              }}
-              to="/checkout"
-              className="h-11 rounded-full bg-zinc-950 hover:bg-zinc-900 text-white flex items-center justify-center text-sm font-semibold transition-colors"
-            >
-              Checkout
-            </Link>
+            {storefrontCheckout || !user ? (
+              <Link
+                onClick={(e) => {
+                  if (!user) {
+                    e.preventDefault();
+                    window.dispatchEvent(new Event("fs:open-login"));
+                    return;
+                  }
+                  onClose();
+                }}
+                to="/checkout"
+                className="h-11 rounded-full bg-zinc-950 hover:bg-zinc-900 text-white flex items-center justify-center text-sm font-semibold transition-colors"
+              >
+                {t('checkout')}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title={t('adminCannotCheckout')}
+                className="h-11 rounded-full bg-zinc-200 text-zinc-500 flex items-center justify-center text-sm font-semibold cursor-not-allowed"
+              >
+                {t('checkout')}
+              </button>
+            )}
           </div>
         </div>
       </div>

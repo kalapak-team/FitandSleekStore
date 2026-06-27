@@ -11,6 +11,7 @@ import '../../screens/admin/admin_payment_detail_screen.dart';
 import '../../screens/admin/admin_replacements_screen.dart';
 import '../../screens/admin/admin_sale_history_screen.dart';
 import '../../screens/admin/admin_shipments_screen.dart';
+import '../../screens/admin/admin_brands_screen.dart';
 import '../../widgets/navigation/admin_bottom_nav.dart';
 
 /// Push admin module screens from search, notifications, dashboard.
@@ -59,6 +60,10 @@ abstract final class AdminNavigation {
 
   static void openSaleHistory(BuildContext context, {required UserModel user}) {
     _push(context, AdminSaleHistoryScreen(user: user));
+  }
+
+  static void openBrands(BuildContext context, {required UserModel user}) {
+    _push(context, AdminBrandsScreen(user: user));
   }
 
   /// Parse admin notification link e.g. `/admin/orders?id=42`

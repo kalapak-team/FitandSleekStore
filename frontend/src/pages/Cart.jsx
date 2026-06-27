@@ -4,6 +4,10 @@ import { useCart } from "../state/cart";
 import { useAuth } from "../state/auth";
 import { resolveImageUrl } from "../lib/images";
 import { useLanguage } from "../lib/i18n.jsx";
+import { canPlaceStorefrontOrder } from "../app/redirectAfterAuth.js";
+import { remainingSellableQty, sellableQtyForVariantLine } from "../lib/variantMatrix.js";
+import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
+import api from "../lib/api";
 function Money({ value }) {
   const n = Number(value || 0);
   return <span>${n.toFixed(2)}</span>;
@@ -15,6 +19,7 @@ export default function CartPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const nav = useNavigate();
+  const storefrontCheckout = canPlaceStorefrontOrder(user);
   const [loyalty, setLoyalty] = React.useState(null);
 
   React.useEffect(() => {
@@ -41,6 +46,33 @@ export default function CartPage() {
   const loyaltyPercent = Number(loyalty?.discount_percent || 0);
   const loyaltyDiscountAmount = loyaltyPercent > 0 ? (Number(total || 0) * loyaltyPercent) / 100 : 0;
   const loyaltyTotal = Math.max(Number(total || 0) - loyaltyDiscountAmount, 0);
+
+  const changeQty = async (item, nextQty) => {
+    const safeNext = Math.max(1, Number(nextQty) || 1);
+    const product = item?.product;
+    if (product && safeNext > (item.quantity || 1)) {
+      const cap = sellableQtyForVariantLine(product, item.color, item.size);
+      const remaining = remainingSellableQty(
+        product,
+        item.color,
+        item.size,
+        items.filter((row) => row.id !== item.id)
+      );
+      if (safeNext > remaining) {
+        await showStockLimitAlert({ stock: cap, requestedQuantity: safeNext });
+        return;
+      }
+    }
+    try {
+      await updateQty(item.id, safeNext);
+    } catch (err) {
+      const msg = String(err?.message || "");
+      if (msg.includes("STOCK_LIMIT") || msg.toLowerCase().includes("stock")) {
+        const cap = sellableQtyForVariantLine(product, item.color, item.size);
+        await showStockLimitAlert({ stock: cap, requestedQuantity: safeNext });
+      }
+    }
+  };
 
   const getPriceMeta = (item) => {
     const unitPaid = Number(item?.unit_price || item?.product?.final_price || item?.product?.price || 0);
@@ -125,9 +157,9 @@ export default function CartPage() {
 
                     <div className="mt-3 flex items-center justify-between">
                       <div className="inline-flex items-center rounded-full border border-zinc-200">
-                        <button className="h-10 sm:h-12 w-10 sm:w-12 text-base" onClick={() => updateQty(it.id, Math.max(1, (it.quantity || 1) - 1))}>−</button>
+                        <button className="h-10 sm:h-12 w-10 sm:w-12 text-base" onClick={() => changeQty(it, Math.max(1, (it.quantity || 1) - 1))}>−</button>
                         <div className="w-10 sm:w-12 text-center text-sm sm:text-base font-semibold">{it.quantity}</div>
-                        <button className="h-10 sm:h-12 w-10 sm:w-12 text-base" onClick={() => updateQty(it.id, (it.quantity || 1) + 1)}>+</button>
+                        <button className="h-10 sm:h-12 w-10 sm:w-12 text-base" onClick={() => changeQty(it, (it.quantity || 1) + 1)}>+</button>
                       </div>
 
                       <div className="text-right">
@@ -168,17 +200,38 @@ export default function CartPage() {
             </div>
           ) : null}
 
-          <Link
-            to="/checkout"
-            onClick={(e) => {
-              if (user) return;
-              e.preventDefault();
-              window.dispatchEvent(new Event("fs:open-login"));
-            }}
-            className="mt-5 w-full rounded-xl bg-black text-white py-4 font-bold hover:opacity-90 active:scale-95 transition-all duration-200 flex items-center justify-center"
-          >
-            {t('checkout')}
-          </Link>
+          {storefrontCheckout || !user ? (
+            <Link
+              to="/checkout"
+              onClick={(e) => {
+                if (user) return;
+                e.preventDefault();
+                window.dispatchEvent(new Event("fs:open-login"));
+              }}
+              className="mt-5 w-full rounded-xl bg-black text-white py-4 font-bold hover:opacity-90 active:scale-95 transition-all duration-200 flex items-center justify-center"
+            >
+              {t('checkout')}
+            </Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled
+                className="mt-5 w-full rounded-xl bg-zinc-300 text-zinc-600 py-4 font-bold cursor-not-allowed flex items-center justify-center"
+              >
+                {t('checkout')}
+              </button>
+              <p className="mt-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                {t('adminCannotCheckout')}
+              </p>
+              <Link
+                to="/admin/checkout"
+                className="mt-2 block text-center text-xs font-semibold text-zinc-700 underline"
+              >
+                {t('adminUsePosCheckout')}
+              </Link>
+            </>
+          )}
 
           <p className="mt-3 text-xs text-zinc-500">
             {t('checkoutNoteStart')} <code className="font-mono">POST /api/checkout</code> {t('checkoutNoteEnd')}

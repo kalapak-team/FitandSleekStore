@@ -23,6 +23,7 @@ import '../widgets/shop/shop_filter_sheet.dart';
 import '../widgets/shop/shop_listing_toolbar.dart';
 import 'home_section_products_screen.dart';
 import 'product_detail_screen.dart';
+import 'brand_products_screen.dart';
 
 class ShopScreen extends StatefulWidget {
   const ShopScreen({
@@ -32,7 +33,6 @@ class ShopScreen extends StatefulWidget {
     this.showBanner = true,
     this.isHomeTab = false,
     this.onSectionSeeAll,
-    this.onBrandBrowse,
   });
 
   final ProductService productService;
@@ -40,7 +40,6 @@ class ShopScreen extends StatefulWidget {
   final bool showBanner;
   final bool isHomeTab;
   final ValueChanged<HomeSectionBrowse>? onSectionSeeAll;
-  final ValueChanged<int?>? onBrandBrowse;
 
   @override
   State<ShopScreen> createState() => ShopScreenState();
@@ -72,6 +71,7 @@ class ShopScreenState extends State<ShopScreen> {
   String? _error;
   int _page = 1;
   bool _hasMore = true;
+  int _productsRequestId = 0;
 
   @override
   void initState() {
@@ -155,10 +155,6 @@ class ShopScreenState extends State<ShopScreen> {
     _loadProducts(reset: true);
   }
 
-  void selectBrand(int? id) {
-    _onBrandSelected(id);
-  }
-
   Future<void> _loadFilterOptions() async {
     try {
       final options = await widget.productService.fetchFilterOptions();
@@ -211,27 +207,49 @@ class ShopScreenState extends State<ShopScreen> {
   }
 
   void _onBrandSelected(int? id) {
-    if (widget.isHomeTab && widget.onBrandBrowse != null) {
-      widget.onBrandBrowse!(id);
+    if (id == null) {
+      if (_filterByCategoryId && !widget.isHomeTab) {
+        setState(() {
+          _selectedBrandId = null;
+          _selectedBrandName = null;
+        });
+        _loadProducts(reset: true);
+      }
       return;
     }
+
     BrandModel? match;
-    if (id != null) {
-      for (final b in _brands) {
-        if (b.id == id) {
-          match = b;
-          break;
-        }
+    for (final b in _brands) {
+      if (b.id == id) {
+        match = b;
+        break;
       }
     }
-    setState(() {
-      _selectedBrandId = id;
-      _selectedBrandName = match?.name;
-    });
-    _loadProducts(reset: true);
+    if (match == null) return;
+
+    if (_filterByCategoryId) {
+      setState(() {
+        _sectionBrowse = null;
+        _selectedBrandId = id;
+        _selectedBrandName = match!.name;
+      });
+      _loadProducts(reset: true);
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BrandProductsScreen(
+          brand: match!,
+          productService: widget.productService,
+          apiClient: widget.apiClient,
+        ),
+      ),
+    );
   }
 
   Future<void> _loadProducts({required bool reset}) async {
+    final requestId = ++_productsRequestId;
     if (reset) {
       setState(() {
         _loading = true;
@@ -249,7 +267,7 @@ class ShopScreenState extends State<ShopScreen> {
         filters: widget.isHomeTab ? null : _filters,
         sectionBrowse: _sectionBrowse,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _productsRequestId) return;
       setState(() {
         _products
           ..clear()
@@ -260,13 +278,13 @@ class ShopScreenState extends State<ShopScreen> {
         _loading = false;
       });
     } on DioException catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _productsRequestId) return;
       setState(() {
         _error = widget.apiClient.apiMessage(e);
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _productsRequestId) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -276,6 +294,7 @@ class ShopScreenState extends State<ShopScreen> {
 
   Future<void> _loadMore() async {
     if (!_hasMore) return;
+    final requestId = _productsRequestId;
     setState(() => _loadingMore = true);
     try {
       final nextPage = _page + 1;
@@ -287,7 +306,7 @@ class ShopScreenState extends State<ShopScreen> {
         filters: widget.isHomeTab ? null : _filters,
         sectionBrowse: _sectionBrowse,
       );
-      if (!mounted) return;
+      if (!mounted || requestId != _productsRequestId) return;
       setState(() {
         _products.addAll(page.items);
         _page = page.currentPage;
@@ -372,14 +391,6 @@ class ShopScreenState extends State<ShopScreen> {
           if (widget.showBanner)
             SliverToBoxAdapter(
               child: HomeBannerCarousel(banners: _banners, loading: _bannersLoading),
-            ),
-          if (widget.showBanner && _brands.isNotEmpty)
-            SliverToBoxAdapter(
-              child: CategoryStrip(
-                brands: _brands,
-                selectedId: _selectedBrandId,
-                onSelected: _onBrandSelected,
-              ),
             ),
           SliverToBoxAdapter(
             child: ShopListingToolbar(

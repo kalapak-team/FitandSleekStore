@@ -108,13 +108,6 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
-  void _openBrandInShop(int? brandId) {
-    setState(() => _nav = MobileNavItem.shop);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _catalogShopKey.currentState?.selectBrand(brandId);
-    });
-  }
-
   Future<void> _openNotifications() async {
     await showNotificationsSheet(context);
     if (!mounted) return;
@@ -155,7 +148,6 @@ class _HomeShellState extends State<HomeShell> {
         showBanner: true,
         isHomeTab: true,
         onSectionSeeAll: _openSectionInShop,
-        onBrandBrowse: _openBrandInShop,
       ),
       SearchTabScreen(
         key: _searchTabKey,

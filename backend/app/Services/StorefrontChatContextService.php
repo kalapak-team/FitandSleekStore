@@ -320,6 +320,7 @@ class StorefrontChatContextService
     {
         return Order::query()
             ->where('user_id', $user->id)
+            ->paymentSuccessful()
             ->orderByDesc('id')
             ->limit(3)
             ->get(['id', 'order_number', 'status', 'total', 'created_at'])

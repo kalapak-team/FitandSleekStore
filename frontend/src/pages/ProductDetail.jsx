@@ -30,6 +30,7 @@ import {
   sellableQtyForVariantLine,
 } from "../lib/variantMatrix.js";
 import { hasStorefrontAdminDiscount, resolveStorefrontPriceDisplay } from "../lib/storefrontLotPrice.js";
+import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 
 function Money({ value }) {
   const n = Number(value || 0);
@@ -327,35 +328,6 @@ export default function ProductDetail() {
       if (Number.isFinite(lastNumber)) return lastNumber;
     }
     return Number.isFinite(Number(fallbackStock)) ? Math.max(0, Number(fallbackStock)) : 0;
-  };
-
-  const showStockLimitAlert = async ({ stock, requestedQuantity }) => {
-    const safeStock = Number.isFinite(Number(stock)) ? Math.max(0, Number(stock)) : 0;
-    const safeRequested = Number.isFinite(Number(requestedQuantity)) ? Math.max(1, Number(requestedQuantity)) : 1;
-
-    if (safeStock === 0) {
-      await Swal.fire({
-        icon: "error",
-        text: "សោកស្តាយ! ទំនិញនេះអស់ពីស្តុកហើយ (Out of Stock)",
-        ...swalBase,
-      });
-      return;
-    }
-
-    if (safeRequested > safeStock) {
-      await Swal.fire({
-        icon: "warning",
-        text: `ស្តុកមានកំណត់! យើងមានសល់ត្រឹមតែ ${safeStock} ប៉ុណ្ណោះ (Only ${safeStock} left in stock)`,
-        ...swalBase,
-      });
-      return;
-    }
-
-    await Swal.fire({
-      icon: "warning",
-      text: `ស្តុកមានកំណត់! យើងមានសល់ត្រឹមតែ ${safeStock} ប៉ុណ្ណោះ (Only ${safeStock} left in stock)`,
-      ...swalBase,
-    });
   };
 
   const add = async () => {

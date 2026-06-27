@@ -30,6 +30,7 @@ class ProductService {
     String? query,
     int? categoryId,
     int? brandId,
+    String? brandSlug,
     String? gender,
     ProductFilters? filters,
     HomeSectionBrowse? sectionBrowse,
@@ -73,6 +74,7 @@ class ProductService {
           browse!.parentCategory!.isNotEmpty)
         'parent_category': browse.parentCategory,
       if (brandIds.isNotEmpty) 'brand_id': brandIds.join(','),
+      if (brandSlug != null && brandSlug.trim().isNotEmpty) 'brand_slug': brandSlug.trim(),
       if (gender != null && gender.isNotEmpty) 'gender': gender,
       'sort': active.sort,
       if (active.minPrice != null) 'min_price': active.minPrice,
@@ -117,7 +119,7 @@ class ProductService {
     return raw
         .whereType<Map>()
         .map((e) => BrandModel.fromJson(Map<String, dynamic>.from(e)))
-        .where((b) => b.name.isNotEmpty)
+        .where((b) => b.id > 0 && b.name.isNotEmpty)
         .toList();
   }
 

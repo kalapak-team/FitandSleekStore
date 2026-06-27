@@ -26,6 +26,9 @@ class UserModel {
   bool get isDriver => role?.toLowerCase() == 'driver';
   bool get isCustomer => !isAdmin && !isDriver;
 
+  /// Storefront shop checkout — admins use Admin → Checkout (POS).
+  bool get canPlaceStorefrontOrder => !isAdmin;
+
   String get roleLabel {
     final r = role?.trim();
     if (r == null || r.isEmpty) return 'Customer';

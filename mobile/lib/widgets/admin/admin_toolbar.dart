@@ -273,6 +273,9 @@ class _AdminSearchSheetState extends State<_AdminSearchSheet> {
       case 'page-sale-history':
         AdminNavigation.openSaleHistory(context, user: user);
         return;
+      case 'page-brands':
+        AdminNavigation.openBrands(context, user: user);
+        return;
     }
     final uri = Uri.parse('${AppConfig.storefrontUrl}${item.path}');
     if (await canLaunchUrl(uri)) {

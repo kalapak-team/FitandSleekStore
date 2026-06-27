@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    /** @var list<string> */
+    public const PAID_PAYMENT_STATUSES = ['paid', 'completed', 'success', 'succeeded'];
+
     protected $fillable = [
         'user_id',
         'parent_order_id',
@@ -86,5 +90,24 @@ class Order extends Model
         }
 
         return null;
+    }
+
+    public function isPaymentSuccessful(): bool
+    {
+        return in_array(
+            strtolower((string) ($this->payment_status ?? '')),
+            self::PAID_PAYMENT_STATUSES,
+            true
+        );
+    }
+
+    public function scopePaymentSuccessful(Builder $query): Builder
+    {
+        $placeholders = implode(',', array_fill(0, count(self::PAID_PAYMENT_STATUSES), '?'));
+
+        return $query->whereRaw(
+            'LOWER(COALESCE(payment_status, "")) IN ('.$placeholders.')',
+            self::PAID_PAYMENT_STATUSES
+        );
     }
 }

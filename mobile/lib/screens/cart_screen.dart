@@ -14,6 +14,7 @@ import '../widgets/common/fs_empty_state.dart';
 import '../widgets/product_image.dart';
 import 'checkout_screen.dart';
 import 'login_screen.dart';
+import '../screens/admin/admin_shell.dart';
 import 'product_detail_screen.dart';
 import '../services/product_service.dart';
 
@@ -47,6 +48,31 @@ class CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _updateQty(CartItemModel item, int nextQty) async {
+    if (nextQty > item.quantity) {
+      final product = item.product;
+      if (product != null && product.variantLotPrices.isNotEmpty) {
+        final cap = product.sellableQtyForOption(
+          isSize: item.size != null && item.size!.isNotEmpty,
+          option: item.size ?? item.color ?? '',
+          otherSelected: item.size != null && item.size!.isNotEmpty ? item.color : item.size,
+        );
+        if (cap != null && cap <= 0) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.soldOut)),
+          );
+          return;
+        }
+        if (cap != null && nextQty > cap) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.stockNotEnough)),
+          );
+          return;
+        }
+      }
+    }
+
     final auth = context.read<AuthProvider>();
     await context.read<CartProvider>().updateQuantity(
           isLoggedIn: auth.isLoggedIn,
@@ -117,6 +143,8 @@ class CartScreenState extends State<CartScreen> {
     final onSurfaceVariant = cs.onSurfaceVariant;
     final cardColor = theme.cardTheme.color ?? cs.surface;
     final borderColor = theme.dividerTheme.color ?? cs.outline;
+
+    final canStorefrontCheckout = auth.user?.canPlaceStorefrontOrder ?? true;
 
     if (cart.loading && cart.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -248,21 +276,32 @@ class CartScreenState extends State<CartScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  auth.isLoggedIn ? l10n.checkoutNote : l10n.guestCartNote,
+                  auth.isLoggedIn
+                      ? (canStorefrontCheckout ? l10n.checkoutNote : l10n.adminCannotCheckout)
+                      : l10n.guestCartNote,
                   style: theme.textTheme.bodySmall?.copyWith(
-                        color: onSurfaceVariant,
+                        color: canStorefrontCheckout ? onSurfaceVariant : AppColors.warning,
                       ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 FsButton(
-                  label: auth.isLoggedIn ? l10n.proceedCheckout : l10n.signInCheckout,
+                  label: auth.isLoggedIn
+                      ? (canStorefrontCheckout ? l10n.proceedCheckout : l10n.adminOpenPosCheckout)
+                      : l10n.signInCheckout,
                   variant: FsButtonVariant.accent,
-                  icon: Icons.lock_outline,
+                  icon: canStorefrontCheckout ? Icons.lock_outline : Icons.point_of_sale_rounded,
                   onPressed: () {
                     if (!auth.isLoggedIn) {
                       Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                      return;
+                    }
+                    if (!canStorefrontCheckout) {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const AdminShell()),
+                        (_) => false,
                       );
                       return;
                     }
@@ -314,6 +353,9 @@ class _CartItemCard extends StatelessWidget {
     this.onTap,
   });
 
+  static const double _imageWidth = 118;
+  static const double _imageHeight = 148;
+
   final CartItemModel item;
   final NumberFormat currency;
   final _CartPriceMeta priceMeta;
@@ -349,60 +391,31 @@ class _CartItemCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor.withValues(alpha: 0.65)),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: imageUrl.isEmpty
-                            ? ColoredBox(
-                                color: cs.surfaceContainerHighest,
-                                child: Icon(Icons.image_outlined, color: onSurfaceVariant),
-                              )
-                            : ProductImage(imageUrl: imageUrl, fit: BoxFit.cover),
-                      ),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
+                      border: Border.all(color: borderColor.withValues(alpha: 0.5)),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: 80,
-                      child: InkWell(
-                        onTap: onMoveToWishlist,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.favorite_border, size: 12, color: onSurfaceVariant),
-                              const SizedBox(width: 2),
-                              Expanded(
-                                child: Text(
-                                  l10n.moveToWishlist,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                        color: onSurfaceVariant,
-                                        fontSize: 9,
-                                        height: 1.1,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    child: SizedBox(
+                      width: _imageWidth,
+                      height: _imageHeight,
+                      child: imageUrl.isEmpty
+                          ? Icon(Icons.image_outlined, color: onSurfaceVariant, size: 36)
+                          : ProductImage(imageUrl: imageUrl, fit: BoxFit.cover),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,7 +430,8 @@ class _CartItemCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                                fontSize: 15,
+                                height: 1.25,
                                 color: onSurface,
                               ),
                             ),
@@ -432,7 +446,7 @@ class _CartItemCard extends StatelessWidget {
                         ],
                       ),
                       if (product?.categoryName != null) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         Text(
                           product!.categoryName!,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -445,53 +459,85 @@ class _CartItemCard extends StatelessWidget {
                         Text(
                           variantParts.join(' · '),
                           style: theme.textTheme.bodySmall?.copyWith(
-                                color: onSurfaceVariant.withValues(alpha: 0.8),
+                                color: onSurfaceVariant.withValues(alpha: 0.85),
                               ),
                         ),
                       ],
-                      const SizedBox(height: 8),
-                      if (priceMeta.hasDiscount) ...[
-                        Text(
-                          currency.format(priceMeta.unitOriginal),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                                color: onSurfaceVariant,
-                                decoration: TextDecoration.lineThrough,
-                              ),
-                        ),
-                        if (priceMeta.discountPercent != null)
-                          Text(
-                            '(${priceMeta.discountPercent}% off)',
-                            style: theme.textTheme.labelSmall?.copyWith(
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (priceMeta.hasDiscount) ...[
+                                  Text(
+                                    currency.format(priceMeta.unitOriginal),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                          color: onSurfaceVariant,
+                                          decoration: TextDecoration.lineThrough,
+                                        ),
+                                  ),
+                                  if (priceMeta.discountPercent != null)
+                                    Text(
+                                      '(${priceMeta.discountPercent}% off)',
+                                      style: theme.textTheme.labelSmall?.copyWith(
+                                            color: onSurfaceVariant,
+                                          ),
+                                    ),
+                                ],
+                                Text(
+                                  currency.format(priceMeta.linePaid),
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                        color: priceMeta.hasDiscount ? AppColors.error : onSurface,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: borderColor),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _QtyButton(icon: Icons.remove, onTap: onDecrease, iconColor: onSurface),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: Text(
+                                    '${item.quantity}',
+                                    style: TextStyle(fontWeight: FontWeight.w700, color: onSurface),
+                                  ),
+                                ),
+                                _QtyButton(icon: Icons.add, onTap: onIncrease, iconColor: onSurface),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: onMoveToWishlist,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: Icon(Icons.favorite_border, size: 16, color: onSurfaceVariant),
+                          label: Text(
+                            l10n.moveToWishlist,
+                            style: theme.textTheme.labelMedium?.copyWith(
                                   color: onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
                                 ),
                           ),
-                      ],
-                      Text(
-                        currency.format(priceMeta.linePaid),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                              color: priceMeta.hasDiscount ? AppColors.error : onSurface,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: borderColor),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _QtyButton(icon: Icons.remove, onTap: onDecrease, iconColor: onSurface),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text(
-                                '${item.quantity}',
-                                style: TextStyle(fontWeight: FontWeight.w700, color: onSurface),
-                              ),
-                            ),
-                            _QtyButton(icon: Icons.add, onTap: onIncrease, iconColor: onSurface),
-                          ],
                         ),
                       ),
                     ],

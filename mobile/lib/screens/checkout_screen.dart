@@ -9,6 +9,8 @@ import '../models/address_model.dart';
 import '../models/cart_model.dart';
 import '../models/khqr_bank_option.dart';
 import '../models/order_model.dart';
+import '../providers/auth_provider.dart';
+import '../screens/admin/admin_shell.dart';
 import '../services/order_service.dart';
 import '../services/profile_service.dart';
 import '../theme/app_colors.dart';
@@ -180,6 +182,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final user = context.watch<AuthProvider>().user;
+    if (user != null && !user.canPlaceStorefrontOrder) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.proceedCheckout)),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(Icons.storefront_outlined, size: 48, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(height: 16),
+              Text(
+                l10n.adminCannotCheckout,
+                style: Theme.of(context).textTheme.bodyLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FsButton(
+                label: l10n.adminOpenPosCheckout,
+                variant: FsButtonVariant.accent,
+                icon: Icons.point_of_sale_rounded,
+                onPressed: () {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const AdminShell()),
+                    (_) => false,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final currency = NumberFormat.simpleCurrency(name: 'USD');
     final onSurface = Theme.of(context).colorScheme.onSurface;
     final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
