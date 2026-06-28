@@ -35,37 +35,31 @@ function resolveMediaUrl(url) {
   return url.startsWith("http") ? url : resolveImageUrl(url);
 }
 
-const THUMB_SIZE_CLASS = "h-[5.25rem] w-[5.25rem] sm:h-24 sm:w-24";
-
-function NotificationThumbnail({ item }) {
+function getItemMedia(item) {
   const mediaUrl = item.media_url ? resolveMediaUrl(item.media_url) : "";
   const mediaType = inferMediaType(item.media_url, item.media_type);
+  return { mediaUrl, mediaType };
+}
 
-  if (mediaUrl && mediaType === "image") {
-    return (
-      <div className={`${THUMB_SIZE_CLASS} shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm`}>
-        <img
-          src={mediaUrl}
-          alt=""
-          className="h-full w-full object-cover"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      </div>
-    );
-  }
+function NotificationIconThumb({ type }) {
+  return (
+    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-2xl">
+      {getNotificationIcon(type)}
+    </div>
+  );
+}
 
-  if (mediaUrl && mediaType === "video") {
+function NotificationMediaHero({ mediaUrl, mediaType }) {
+  if (mediaType === "video") {
     return (
-      <div className={`relative ${THUMB_SIZE_CLASS} shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-900 shadow-sm`}>
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-900">
         <video
           src={mediaUrl}
-          className="h-full w-full object-cover opacity-80"
+          className="h-full w-full object-cover opacity-90"
           muted
           playsInline
         />
-        <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white">
+        <span className="absolute inset-0 flex items-center justify-center text-base font-semibold text-white">
           ▶
         </span>
       </div>
@@ -73,9 +67,81 @@ function NotificationThumbnail({ item }) {
   }
 
   return (
-    <div className={`flex ${THUMB_SIZE_CLASS} shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-2xl shadow-sm`}>
-      {getNotificationIcon(item.type)}
+    <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100">
+      <img
+        src={mediaUrl}
+        alt=""
+        className="h-full w-full object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
     </div>
+  );
+}
+
+function NotificationRowBody({ item, storefrontPath, formatTime }) {
+  const { mediaUrl, mediaType } = getItemMedia(item);
+  const hasMedia = Boolean(mediaUrl && (mediaType === "image" || mediaType === "video"));
+
+  if (hasMedia) {
+    return (
+      <div className="w-full">
+        <NotificationMediaHero mediaUrl={mediaUrl} mediaType={mediaType} />
+        <div className="mt-3 px-0.5">
+          <p
+            className={`text-sm leading-snug ${
+              item.is_read ? "font-medium text-zinc-700" : "font-semibold text-zinc-900"
+            }`}
+          >
+            {item.title || "Notification"}
+          </p>
+          {item.message ? (
+            <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-zinc-500">{item.message}</p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {formatTime ? (
+              <span className="text-[11px] text-zinc-400">{formatTime(item.created_at)}</span>
+            ) : null}
+            {storefrontPath ? (
+              <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[#6F8B7F]">
+                View
+                <ExternalLink className="h-3 w-3" aria-hidden />
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <NotificationIconThumb type={item.type} />
+      <div className="min-w-0 flex-1">
+        <p
+          className={`text-sm leading-snug ${
+            item.is_read ? "font-medium text-zinc-700" : "font-semibold text-zinc-900"
+          }`}
+        >
+          {item.title || "Notification"}
+        </p>
+        {item.message ? (
+          <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-zinc-500">{item.message}</p>
+        ) : null}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {formatTime ? (
+            <span className="text-[11px] text-zinc-400">{formatTime(item.created_at)}</span>
+          ) : null}
+          {storefrontPath ? (
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[#6F8B7F]">
+              View
+              <ExternalLink className="h-3 w-3" aria-hidden />
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -99,11 +165,10 @@ export default function NotificationDrawer({
         onClick={onClose}
       />
       <div
-        className="absolute right-0 top-0 flex h-full w-full max-w-[min(100vw,22rem)] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-md"
+        className="absolute right-0 top-0 flex h-full w-full max-w-[min(100vw,24rem)] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-lg"
         role="dialog"
         aria-label="Notifications"
       >
-        {/* Header */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 px-4">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#6F8B7F]/10 text-[#6F8B7F]">
@@ -112,9 +177,7 @@ export default function NotificationDrawer({
             <div>
               <h2 className="text-sm font-semibold text-zinc-900">Notifications</h2>
               {unreadCount > 0 ? (
-                <p className="text-[11px] text-zinc-500">
-                  {unreadCount} unread
-                </p>
+                <p className="text-[11px] text-zinc-500">{unreadCount} unread</p>
               ) : null}
             </div>
           </div>
@@ -139,7 +202,6 @@ export default function NotificationDrawer({
           </div>
         </div>
 
-        {/* List */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16">
@@ -160,7 +222,11 @@ export default function NotificationDrawer({
             <ul className="divide-y divide-zinc-100">
               {notifications.map((item) => {
                 const storefrontPath = resolveStorefrontPath(item.link_url);
-                const rowClassName = `flex w-full gap-4 px-4 py-4 text-left transition-colors hover:bg-zinc-50 ${
+                const { mediaUrl, mediaType } = getItemMedia(item);
+                const hasMedia = Boolean(mediaUrl && (mediaType === "image" || mediaType === "video"));
+                const rowClassName = `${
+                  hasMedia ? "block" : "flex"
+                } relative w-full gap-4 px-4 py-4 text-left transition-colors hover:bg-zinc-50 ${
                   item.is_read ? "bg-white" : "bg-emerald-50/40"
                 } ${storefrontPath ? "cursor-pointer" : ""}`;
 
@@ -173,44 +239,14 @@ export default function NotificationDrawer({
 
                 const rowContent = (
                   <>
-                    <div className="relative shrink-0 pt-0.5">
-                      <NotificationThumbnail item={item} />
-                      {!item.is_read ? (
-                        <span className="absolute -left-1.5 top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-                      ) : null}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`text-sm leading-snug ${
-                          item.is_read
-                            ? "font-medium text-zinc-700"
-                            : "font-semibold text-zinc-900"
-                        }`}
-                      >
-                        {item.title || "Notification"}
-                      </p>
-
-                      {item.message ? (
-                        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-zinc-500">
-                          {item.message}
-                        </p>
-                      ) : null}
-
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        {formatTime ? (
-                          <span className="text-[11px] text-zinc-400">
-                            {formatTime(item.created_at)}
-                          </span>
-                        ) : null}
-                        {storefrontPath ? (
-                          <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[#6F8B7F]">
-                            View
-                            <ExternalLink className="h-3 w-3" aria-hidden />
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
+                    {!item.is_read ? (
+                      <span className="absolute left-2 top-4 z-10 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    ) : null}
+                    <NotificationRowBody
+                      item={item}
+                      storefrontPath={storefrontPath}
+                      formatTime={formatTime}
+                    />
                   </>
                 );
 
