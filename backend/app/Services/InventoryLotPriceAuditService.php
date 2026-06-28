@@ -109,6 +109,7 @@ class InventoryLotPriceAuditService
             InventoryLotPriceEvent::ACTION_APPLY_LOT_DISCOUNT => 'Applied lot discount',
             InventoryLotPriceEvent::ACTION_UPDATE_LOT_DISCOUNT => 'Updated lot discount',
             InventoryLotPriceEvent::ACTION_REMOVE_LOT_DISCOUNT => 'Removed lot discount',
+            InventoryLotPriceEvent::ACTION_SET_UNIT_PRICE => 'Set lot sell price',
             InventoryLotPriceEvent::ACTION_UPDATE_SKU_PRICING => 'Updated from SKU pricing',
             default => ucfirst(str_replace('_', ' ', $action)),
         };

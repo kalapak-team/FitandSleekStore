@@ -64,6 +64,12 @@ class InventoryLotAdminController extends BaseAdminController
             ]);
         }
 
+        if ($action === InventoryLotBulkService::ACTION_SET_UNIT_PRICE) {
+            $request->validate([
+                'unit_price' => ['required', 'numeric', 'min:0'],
+            ]);
+        }
+
         $result = $this->bulk->apply(
             $action,
             $labelIds,
@@ -79,6 +85,7 @@ class InventoryLotAdminController extends BaseAdminController
             InventoryLotBulkService::ACTION_REVERT_CLEARANCE => 'Selected stock reverted from clearance.',
             InventoryLotBulkService::ACTION_APPLY_LOT_DISCOUNT => 'Lot discount applied to selected stock.',
             InventoryLotBulkService::ACTION_REMOVE_LOT_DISCOUNT => 'Lot discount removed from selected stock.',
+            InventoryLotBulkService::ACTION_SET_UNIT_PRICE => 'Lot sell price updated for selected stock.',
             default => 'Bulk update completed.',
         };
 

@@ -19,6 +19,8 @@ class InventoryLotPriceEvent extends Model
 
     public const ACTION_REMOVE_LOT_DISCOUNT = 'remove_lot_discount';
 
+    public const ACTION_SET_UNIT_PRICE = 'set_unit_price';
+
     public const ACTION_UPDATE_SKU_PRICING = 'update_sku_pricing';
 
     protected $fillable = [

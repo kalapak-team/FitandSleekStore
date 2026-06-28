@@ -24,6 +24,8 @@ class InventoryLotBulkService
 
     public const ACTION_REMOVE_LOT_DISCOUNT = 'remove_lot_discount';
 
+    public const ACTION_SET_UNIT_PRICE = 'set_unit_price';
+
     /** @var list<string> */
     public const ACTIONS = [
         self::ACTION_SET_ON_HOLD,
@@ -32,6 +34,7 @@ class InventoryLotBulkService
         self::ACTION_REVERT_CLEARANCE,
         self::ACTION_APPLY_LOT_DISCOUNT,
         self::ACTION_REMOVE_LOT_DISCOUNT,
+        self::ACTION_SET_UNIT_PRICE,
     ];
 
     public function __construct(
@@ -275,6 +278,7 @@ class InventoryLotBulkService
             self::ACTION_REVERT_CLEARANCE => $this->applyRevertClearance($lot, $userId),
             self::ACTION_APPLY_LOT_DISCOUNT => $this->applyLotDiscount($lot, $params, $userId),
             self::ACTION_REMOVE_LOT_DISCOUNT => $this->applyRemoveLotDiscount($lot, $userId),
+            self::ACTION_SET_UNIT_PRICE => $this->applySetUnitPrice($lot, $params, $userId),
             default => false,
         };
     }
@@ -434,6 +438,41 @@ class InventoryLotBulkService
             InventoryLotPriceEvent::ACTION_REMOVE_LOT_DISCOUNT,
             $before,
             $this->priceAudit->snapshot($updated),
+        );
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function applySetUnitPrice(InventoryLot $lot, array $params, int $userId): bool
+    {
+        if (! array_key_exists('unit_price', $params) || $params['unit_price'] === null) {
+            return false;
+        }
+
+        $unitPrice = round((float) $params['unit_price'], 2);
+        if ($unitPrice < 0) {
+            return false;
+        }
+
+        if ($lot->price_rule === InventoryLot::PRICE_FIXED
+            && round((float) ($lot->unit_price ?? 0), 2) === $unitPrice
+            && $lot->price_percent === null) {
+            return false;
+        }
+
+        $before = $this->priceAudit->snapshot($lot);
+        $updated = $this->lots->setFixedUnitPrice($lot, $unitPrice);
+
+        $this->priceAudit->record(
+            $updated,
+            $userId,
+            InventoryLotPriceEvent::ACTION_SET_UNIT_PRICE,
+            $before,
+            $this->priceAudit->snapshot($updated),
+            ['unit_price' => $unitPrice],
         );
 
         return true;

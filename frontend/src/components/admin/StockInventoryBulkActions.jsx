@@ -7,14 +7,36 @@ import { ADMIN_LIST_FIELD_CLASS } from "../../lib/adminListQuery.js";
 import AdminModal from "./AdminModal.jsx";
 import InventorySellStrategyCard from "./InventorySellStrategyCard.jsx";
 
-const BULK_ACTIONS = [
-  { id: "set_on_hold", label: "Set on hold" },
-  { id: "release_hold", label: "Release hold" },
-  { id: "mark_clearance", label: "Mark as clearance", modal: "clearance" },
-  { id: "revert_clearance", label: "Revert to active" },
-  { id: "apply_lot_discount", label: "Lot discount", modal: "discount" },
-  { id: "remove_lot_discount", label: "Remove discount" },
+const BULK_MENU_GROUPS = [
+  {
+    id: "status",
+    label: "Hold & clearance",
+    items: [
+      { id: "set_on_hold", label: "Set on hold" },
+      { id: "release_hold", label: "Release hold" },
+      { id: "mark_clearance", label: "Mark as clearance", modal: "clearance" },
+      { id: "revert_clearance", label: "Revert to active" },
+    ],
+  },
+  {
+    id: "pricing",
+    label: "Pricing",
+    items: [
+      { id: "set_unit_price", label: "Set lot price", modal: "unit_price" },
+      { id: "apply_lot_discount", label: "Lot discount", modal: "discount" },
+      { id: "remove_lot_discount", label: "Remove discount" },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Store",
+    items: [{ id: "sell_strategy", label: "Sell old / newer first…", strategy: true }],
+  },
 ];
+
+const BULK_ACTION_BY_ID = Object.fromEntries(
+  BULK_MENU_GROUPS.flatMap((group) => group.items.map((item) => [item.id, item])),
+);
 
 function previewLine(preview, variantMode) {
   if (!preview) return "Loading lots…";
@@ -101,6 +123,8 @@ export default function StockInventoryBulkActions({
   const [err, setErr] = useState("");
   const [discountOpen, setDiscountOpen] = useState(false);
   const [discountPercent, setDiscountPercent] = useState("");
+  const [unitPriceOpen, setUnitPriceOpen] = useState(false);
+  const [bulkUnitPrice, setBulkUnitPrice] = useState("");
   const [clearanceOpen, setClearanceOpen] = useState(false);
   const [clearancePrice, setClearancePrice] = useState("");
   const [clearancePercent, setClearancePercent] = useState("");
@@ -172,6 +196,7 @@ export default function StockInventoryBulkActions({
       });
       setDiscountOpen(false);
       setClearanceOpen(false);
+      setUnitPriceOpen(false);
       setMenuOpen(false);
       await loadPreview();
       onDone?.();
@@ -184,8 +209,14 @@ export default function StockInventoryBulkActions({
     }
   };
 
-  const handleAction = async (action) => {
+  const handleAction = async (actionId) => {
+    const action = BULK_ACTION_BY_ID[actionId];
+    if (!action) return;
     setMenuOpen(false);
+    if (action.strategy) {
+      setStrategyOpen(true);
+      return;
+    }
     if (action.modal === "discount") {
       setDiscountPercent("");
       setDiscountOpen(true);
@@ -196,6 +227,12 @@ export default function StockInventoryBulkActions({
       setClearancePrice("");
       setClearancePercent("");
       setClearanceOpen(true);
+      setErr("");
+      return;
+    }
+    if (action.modal === "unit_price") {
+      setBulkUnitPrice("");
+      setUnitPriceOpen(true);
       setErr("");
       return;
     }
@@ -252,12 +289,26 @@ export default function StockInventoryBulkActions({
     await runBulk("mark_clearance", payload);
   };
 
+  const submitUnitPrice = async (e) => {
+    e.preventDefault();
+    const price = Number(bulkUnitPrice);
+    if (!Number.isFinite(price) || price < 0) {
+      setErr("Enter a valid sell price (0 or higher).");
+      return;
+    }
+    const confirmed = await confirmBulkChange("Set lot price", {
+      variantMode,
+      selectionCount,
+      preview,
+    });
+    if (!confirmed) return;
+    await runBulk("set_unit_price", { unit_price: price });
+  };
+
   if (!hasSelection) return null;
 
   const badgeLabel = selectionLabel || `${selectionCount} selected`;
-
-  const quickActions = BULK_ACTIONS.filter((a) => ["set_on_hold", "release_hold", "mark_clearance"].includes(a.id));
-  const moreActions = BULK_ACTIONS.filter((a) => !quickActions.includes(a));
+  const lotsDisabled = busy || previewLoading || (preview?.lot_count ?? 0) === 0;
 
   return (
     <>
@@ -274,72 +325,66 @@ export default function StockInventoryBulkActions({
               </span>
             </div>
             <p className="mt-1 text-[11px] text-emerald-900/70 dark:text-emerald-200/70">
-              Bulk actions update inventory lots for your selection. Per-lot editing in SKU details still works as before.
+              Use <span className="font-medium">Bulk actions</span> for hold, clearance, and pricing — per-lot edits stay in SKU details.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {canEdit ? (
-              <>
-                {quickActions.map((action) => (
-                  <button
-                    key={action.id}
-                    type="button"
-                    disabled={busy || previewLoading || (preview?.lot_count ?? 0) === 0}
-                    onClick={() => void handleAction(action)}
-                    className="inline-flex h-9 items-center rounded-lg border border-emerald-300/80 bg-white px-3 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-                <div className="relative" ref={menuRef}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setMenuOpen((v) => !v)}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                  >
-                    More
-                    <ChevronDown className="h-4 w-4" aria-hidden />
-                  </button>
-                  {menuOpen ? (
-                    <div className="absolute right-0 z-20 mt-1 min-w-[11rem] rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
-                      {moreActions.map((action) => (
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300/80 bg-white px-3.5 text-xs font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900"
+                >
+                  Bulk actions
+                  <ChevronDown className="h-4 w-4" aria-hidden />
+                </button>
+                {menuOpen ? (
+                  <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                    {BULK_MENU_GROUPS.map((group, groupIndex) => (
+                      <div key={group.id}>
+                        {groupIndex > 0 ? (
+                          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                        ) : null}
+                        <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          {group.label}
+                        </p>
+                        {group.items.map((action) => (
+                          <button
+                            key={action.id}
+                            type="button"
+                            disabled={action.strategy ? busy : lotsDisabled}
+                            onClick={() => void handleAction(action.id)}
+                            className="flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                    {onClearSelection ? (
+                      <>
+                        <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                         <button
-                          key={action.id}
                           type="button"
-                          disabled={busy || (preview?.lot_count ?? 0) === 0}
-                          onClick={() => void handleAction(action)}
-                          className="flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            onClearSelection();
+                          }}
+                          className="flex w-full px-3 py-2 text-left text-sm text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
                         >
-                          {action.label}
+                          Clear selection
                         </button>
-                      ))}
-                      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setStrategyOpen(true);
-                        }}
-                        className="flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        Sell old / newer first…
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <p className="text-xs text-slate-500 dark:text-slate-400">View only — no bulk edit permission</p>
             )}
-            <button
-              type="button"
-              onClick={onClearSelection}
-              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
-            >
-              Clear selection
-            </button>
           </div>
         </div>
       </div>
@@ -421,6 +466,41 @@ export default function StockInventoryBulkActions({
             </button>
             <button type="submit" disabled={busy} className="inline-flex h-9 items-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900">
               {busy ? "Applying…" : "Mark all clearance"}
+            </button>
+          </div>
+        </form>
+      </AdminModal>
+
+      <AdminModal open={unitPriceOpen} onClose={() => setUnitPriceOpen(false)} title="Bulk set lot sell price" maxWidthClass="max-w-md">
+        <form onSubmit={(e) => void submitUnitPrice(e)} className="space-y-4 p-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Set the same fixed sell price on {preview?.lot_count ?? "all"} linked inventory lot
+            {(preview?.lot_count ?? 0) !== 1 ? "s" : ""}. Does not change listing status (active / clearance / on hold).
+          </p>
+          {err ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+              {err}
+            </div>
+          ) : null}
+          <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+            Sell price (USD)
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              className={ADMIN_LIST_FIELD_CLASS}
+              value={bulkUnitPrice}
+              onChange={(e) => setBulkUnitPrice(e.target.value)}
+              placeholder="e.g. 29.99"
+            />
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setUnitPriceOpen(false)} className="inline-flex h-9 items-center rounded-lg border border-slate-200 px-4 text-sm font-medium text-slate-600 dark:border-slate-600 dark:text-slate-300">
+              Cancel
+            </button>
+            <button type="submit" disabled={busy} className="inline-flex h-9 items-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900">
+              {busy ? "Applying…" : "Apply to all"}
             </button>
           </div>
         </form>

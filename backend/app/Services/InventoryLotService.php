@@ -708,6 +708,17 @@ class InventoryLotService
         return $lot->fresh();
     }
 
+    public function setFixedUnitPrice(InventoryLot $lot, float $unitPrice): InventoryLot
+    {
+        $lot->unit_price = round(max(0, $unitPrice), 2);
+        $lot->price_rule = InventoryLot::PRICE_FIXED;
+        $lot->price_percent = null;
+        $lot->save();
+        $this->afterLotMutation($lot->fresh());
+
+        return $lot->fresh();
+    }
+
     /**
      * @return array{rows: \Illuminate\Support\Collection, summary: array<string, array{on_hand: int, received: int, sold: int, lot_count: int}>}
      */
