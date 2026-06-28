@@ -95,7 +95,7 @@ export default function AdminInvoicePage() {
  }, [orderId, permissionsReady, canViewOrders]);
 
  const isPaid = useMemo(() => invoice?.payment_status === "PAID", [invoice]);
- const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.svg";
+ const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.png";
 
  if (!permissionsReady || loading) return <AdminPageLoader />;
 

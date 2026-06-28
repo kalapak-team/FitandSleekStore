@@ -1,5 +1,5 @@
-/** Default bundled site logo for the React storefront (SVG). */
-export const SITE_LOGO_WEB_PATH = "/logo.svg";
+/** Default bundled site logo for the React storefront (raster banner — visible on sage chrome). */
+export const SITE_LOGO_WEB_PATH = "/logo.png";
 
 const SITE_LOGO_BASENAMES = new Set(["logo.png", "logo.svg"]);
 
@@ -20,7 +20,7 @@ export function isBundledSiteLogo(src) {
   return SITE_LOGO_BASENAMES.has(base);
 }
 
-/** Map legacy `/logo.png` to SVG; keep custom uploaded logos unchanged. */
+/** Map legacy bundled logo paths to PNG; keep custom uploaded logos unchanged. */
 export function normalizeSiteLogoForWeb(src) {
   if (!src || isBundledSiteLogo(src)) return SITE_LOGO_WEB_PATH;
   return String(src).trim();

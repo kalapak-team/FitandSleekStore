@@ -281,7 +281,7 @@ export default function AdminLayout() {
   const [navBadges, setNavBadges] = useState({ orders: 0, messages: 0 });
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileInputRef = useRef(null);
-  const logoSrc = settings?.header?.logo_url || "/logo.svg";
+  const logoSrc = settings?.header?.logo_url || "/logo.png";
 
   useEffect(() => {
     if (!user || isSuperAdminUser(user)) return;

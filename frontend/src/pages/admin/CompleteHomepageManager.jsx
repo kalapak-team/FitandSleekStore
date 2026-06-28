@@ -178,7 +178,7 @@ export default function CompleteHomepageManager() {
  // Header data
  const [headerSettings, setHeaderSettings] = useState({
  logo_text: 'FIT&SLEEK',
- logo_url: '/logo.svg',
+ logo_url: '/logo.png',
  background_color: DEFAULT_CHROME_BACKGROUND,
  background_image: '',
  text_color: DEFAULT_CHROME_TEXT,
