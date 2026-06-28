@@ -17,7 +17,6 @@ export const DEFAULT_HEADER_SETTINGS = {
     discounts: true,
     women: true,
     men: true,
-    brands: true,
     sale: true,
   },
   custom_nav: [],
