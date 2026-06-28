@@ -2,12 +2,14 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\AddsBrandMailHeaders;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 class ForgotPasswordMail extends Mailable
 {
+    use AddsBrandMailHeaders;
     use Queueable, SerializesModels;
 
     public $token;
@@ -22,6 +24,7 @@ class ForgotPasswordMail extends Mailable
     public function build()
     {
         return $this->subject('Reset Your Password')
-            ->view('emails.forgot-password');
+            ->view('emails.forgot-password')
+            ->withBrandMailHeaders();
     }
 }

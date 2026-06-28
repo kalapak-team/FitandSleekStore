@@ -31,10 +31,16 @@ final class BrandLogo
         return self::emailAssetUrl((string) config('app.logo_png_url', '/logo.png'));
     }
 
-    /** Circular raster mark for email headers (linked URL, not base64). */
+    /** Circular raster mark (legacy). Prefer {@see bimiLogoUrl()} for inbox avatar. */
     public static function emailCircleUrl(): ?string
     {
         return self::optionalAssetUrl((string) config('app.logo_circle_png_url', '/logo-circle.png'));
+    }
+
+    /** Circle SVG for BIMI / Gmail sender avatar — never embed in email HTML body. */
+    public static function bimiLogoUrl(): ?string
+    {
+        return self::optionalAssetUrl((string) config('app.logo_circle_url', '/logo-circle.svg'));
     }
 
     private static function resolveRasterUrl(string $logoUrl): string

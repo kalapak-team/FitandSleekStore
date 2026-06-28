@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\AddsBrandMailHeaders;
 use App\Models\Order;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -9,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 
 class PaymentSuccessMail extends Mailable
 {
+    use AddsBrandMailHeaders;
     use Queueable, SerializesModels;
 
     public function __construct(
@@ -24,6 +26,7 @@ class PaymentSuccessMail extends Mailable
             : 'Payment confirmed - Order ' . $this->order->order_number;
 
         return $this->subject($subject)
-            ->view('emails.payment-success');
+            ->view('emails.payment-success')
+            ->withBrandMailHeaders();
     }
 }

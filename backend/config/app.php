@@ -69,6 +69,9 @@ return [
 
     'logo_circle_png_url' => env('APP_LOGO_CIRCLE_PNG_URL', '/logo-circle.png'),
 
+    /** Sage header behind the wide logo in transactional emails. */
+    'email_header_bg' => env('APP_EMAIL_HEADER_BG', '#6e8b7e'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

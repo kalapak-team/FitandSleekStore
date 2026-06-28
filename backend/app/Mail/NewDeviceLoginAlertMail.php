@@ -2,12 +2,14 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\AddsBrandMailHeaders;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 class NewDeviceLoginAlertMail extends Mailable
 {
+    use AddsBrandMailHeaders;
     use Queueable, SerializesModels;
 
     public function __construct(public array $context)
@@ -24,6 +26,7 @@ class NewDeviceLoginAlertMail extends Mailable
                 'os' => $this->context['os'] ?? '-',
                 'ip' => $this->context['ip_address'] ?? '-',
                 'location' => $this->context['location'] ?? null,
-            ]);
+            ])
+            ->withBrandMailHeaders();
     }
 }

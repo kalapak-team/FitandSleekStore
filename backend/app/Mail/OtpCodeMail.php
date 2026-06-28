@@ -2,12 +2,14 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\AddsBrandMailHeaders;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 class OtpCodeMail extends Mailable
 {
+    use AddsBrandMailHeaders;
     use Queueable, SerializesModels;
 
     public string $code;
@@ -31,6 +33,7 @@ class OtpCodeMail extends Mailable
 
         return $this->subject('Your verification code')
             ->view('emails.otp-code', $viewData)
-            ->text('emails.otp-code-text', $viewData);
+            ->text('emails.otp-code-text', $viewData)
+            ->withBrandMailHeaders();
     }
 }
