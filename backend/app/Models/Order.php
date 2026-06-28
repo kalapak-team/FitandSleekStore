@@ -103,11 +103,12 @@ class Order extends Model
 
     public function scopePaymentSuccessful(Builder $query): Builder
     {
-        $placeholders = implode(',', array_fill(0, count(self::PAID_PAYMENT_STATUSES), '?'));
+        $column = $query->getModel()->getTable().'.payment_status';
 
-        return $query->whereRaw(
-            'LOWER(COALESCE(payment_status, "")) IN ('.$placeholders.')',
-            self::PAID_PAYMENT_STATUSES
-        );
+        return $query->where(function (Builder $q) use ($column) {
+            foreach (self::PAID_PAYMENT_STATUSES as $status) {
+                $q->orWhereRaw('LOWER('.$column.') = ?', [$status]);
+            }
+        });
     }
 }
