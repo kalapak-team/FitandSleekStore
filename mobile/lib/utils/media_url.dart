@@ -81,14 +81,35 @@ String resolveMediaUrl(String? raw) {
       } catch (_) {}
       return rewritten;
     }
+    final diskRelativeWeb = _diskRelativeStoragePath(value);
+    if (diskRelativeWeb != null) {
+      return '${AppConfig.apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}/media/${_encodePublicPath(diskRelativeWeb)}';
+    }
   }
 
   if (value.startsWith('http://') || value.startsWith('https://')) {
     return _rewriteLoopback(value);
   }
 
+  final diskRelative = _diskRelativeStoragePath(value);
+  if (diskRelative != null) {
+    return '$mediaServingOrigin/storage/${_encodePublicPath(diskRelative)}';
+  }
+
   final path = value.startsWith('/') ? value : '/$value';
   return '$mediaServingOrigin$path';
+}
+
+/// Disk-relative keys stored in the DB (e.g. `products/cover/abc.jpg`).
+String? _diskRelativeStoragePath(String value) {
+  var v = value.trim();
+  if (v.isEmpty || v.contains('..')) return null;
+  if (v.toLowerCase().startsWith('data:')) return null;
+  if (v.startsWith('http://') || v.startsWith('https://')) return null;
+  if (v.startsWith('/storage/') || v.startsWith('storage/')) return null;
+  if (v.startsWith('/')) v = v.substring(1);
+  if (!v.contains('/')) return null;
+  return v;
 }
 
 bool isDataUri(String url) => url.toLowerCase().startsWith('data:');

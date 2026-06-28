@@ -14,4 +14,11 @@ void main() {
       contains('/storage/products/x.jpg'),
     );
   });
+
+  test('disk-relative product path uses /storage prefix', () {
+    expect(
+      resolveMediaUrl('products/cover/x.jpg'),
+      contains('/storage/products/cover/x.jpg'),
+    );
+  });
 }

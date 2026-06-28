@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\Notification;
+use App\Support\Media;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -29,10 +30,11 @@ class NotificationController extends Controller
                 ->map(function ($notification) {
                     return [
                         'id' => 'notification-' . $notification->id,
-                        'type' => 'notification',
+                        'type' => $notification->type ?: 'notification',
                         'title' => $notification->title,
                         'message' => $notification->message,
                         'data' => $notification->data,
+                        'link_url' => $this->resolveNotificationLink($notification),
                         'is_read' => $notification->is_read,
                         'created_at' => $notification->created_at,
                     ];
@@ -63,7 +65,7 @@ class NotificationController extends Controller
                     'title' => $message->title,
                     'message' => $message->content,
                     'link_url' => $this->normalizeStorefrontLink($message->link_url),
-                    'media_url' => $message->media_url,
+                    'media_url' => Media::url($message->media_url),
                     'media_type' => $message->media_type,
                     'language' => $message->language,
                     'target_audience' => $message->target_audience,
@@ -204,6 +206,28 @@ class NotificationController extends Controller
         }
 
         return $normalized;
+    }
+
+    /**
+     * Derive an in-app link for account notifications (orders, promos, etc.).
+     */
+    private function resolveNotificationLink(Notification $notification): ?string
+    {
+        $data = is_array($notification->data) ? $notification->data : [];
+
+        if (! empty($data['link_url']) && is_string($data['link_url'])) {
+            return $this->normalizeStorefrontLink($data['link_url']);
+        }
+
+        if (! empty($data['order_id'])) {
+            return '/orders/' . $data['order_id'];
+        }
+
+        return match ($notification->type) {
+            'order' => '/orders',
+            'promotion' => '/search',
+            default => null,
+        };
     }
 }
 

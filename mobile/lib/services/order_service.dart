@@ -16,6 +16,16 @@ class OrderService {
     return OrderTrackModel.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
+  Future<OrderModel> fetchOrderById(int id) async {
+    final res = await _api.dio.get('/orders/$id');
+    final body = res.data;
+    if (body is! Map) throw StateError('Order not found');
+    final map = Map<String, dynamic>.from(body);
+    final order = map['data'] ?? map['order'] ?? map;
+    if (order is! Map) throw StateError('Order not found');
+    return OrderModel.fromJson(Map<String, dynamic>.from(order));
+  }
+
   Future<OrderModel> checkout({
     required String paymentMethod,
     required Map<String, dynamic> shippingAddress,

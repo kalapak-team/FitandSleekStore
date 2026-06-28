@@ -11,9 +11,9 @@ const BULK_ACTIONS = [
   { id: "set_on_hold", label: "Set on hold" },
   { id: "release_hold", label: "Release hold" },
   { id: "mark_clearance", label: "Mark as clearance", modal: "clearance" },
-  { id: "revert_clearance", label: "Revert to active", confirm: true },
+  { id: "revert_clearance", label: "Revert to active" },
   { id: "apply_lot_discount", label: "Lot discount", modal: "discount" },
-  { id: "remove_lot_discount", label: "Remove discount", confirm: true },
+  { id: "remove_lot_discount", label: "Remove discount" },
 ];
 
 function previewLine(preview, variantMode) {
@@ -26,6 +26,39 @@ function previewLine(preview, variantMode) {
   }
   const products = preview.linked_product_count ?? 0;
   return `${lots} lot${lots !== 1 ? "s" : ""} across ${products} product${products !== 1 ? "s" : ""}`;
+}
+
+function selectionSummary(variantMode, selectionCount, preview) {
+  const lots = preview?.lot_count ?? 0;
+  const lotPhraseEn = `${lots} inventory lot${lots !== 1 ? "s" : ""}`;
+  const lotPhraseKm = `${lots} lot ស្តុក`;
+  if (variantMode) {
+    const skuPhraseEn = `${selectionCount} selected SKU${selectionCount !== 1 ? "s" : ""}`;
+    const skuPhraseKm = `SKU ដែលជ្រើស ${selectionCount}`;
+    return { lotPhraseEn, lotPhraseKm, targetEn: skuPhraseEn, targetKm: skuPhraseKm };
+  }
+  const labelPhraseEn = `${selectionCount} selected stock label${selectionCount !== 1 ? "s" : ""}`;
+  const labelPhraseKm = `stock label ដែលជ្រើស ${selectionCount}`;
+  return { lotPhraseEn, lotPhraseKm, targetEn: labelPhraseEn, targetKm: labelPhraseKm };
+}
+
+async function confirmBulkChange(actionLabel, { variantMode, selectionCount, preview }) {
+  if ((preview?.lot_count ?? 0) === 0) return false;
+  const { lotPhraseEn, lotPhraseKm, targetEn, targetKm } = selectionSummary(
+    variantMode,
+    selectionCount,
+    preview,
+  );
+  const res = await warningConfirm({
+    enTitle: "Confirm bulk change",
+    khTitle: "បញ្ជាក់ការផ្លាស់ប្តូរជា grupe",
+    enText: `Apply "${actionLabel}" to ${lotPhraseEn} linked to ${targetEn}? Per-lot editing in SKU details still works as before.`,
+    khText: `អនុវត្ត "${actionLabel}" ទៅ ${lotPhraseKm} ដែលភ្ជាប់ជាមួយ ${targetKm}? កែ lot មួយម្តងនៅក្នុង SKU details នៅតែធ្វើបានដូចមុន។`,
+    enConfirm: "Yes, apply",
+    khConfirm: "បាទ អនុវត្ត",
+    khCancel: "បោះបង់",
+  });
+  return res.isConfirmed;
 }
 
 export default function StockInventoryBulkActions({
@@ -166,17 +199,12 @@ export default function StockInventoryBulkActions({
       setErr("");
       return;
     }
-    if (action.confirm) {
-      const target = variantMode
-        ? `${selectionCount} selected SKU${selectionCount !== 1 ? "s" : ""}`
-        : `${selectionCount} selected stock label${selectionCount !== 1 ? "s" : ""}`;
-      const res = await warningConfirm({
-        enTitle: action.label,
-        enText: `Apply "${action.label}" to all inventory lots for ${target}?`,
-        enConfirm: action.label,
-      });
-      if (!res.isConfirmed) return;
-    }
+    const confirmed = await confirmBulkChange(action.label, {
+      variantMode,
+      selectionCount,
+      preview,
+    });
+    if (!confirmed) return;
     await runBulk(action.id);
   };
 
@@ -187,6 +215,12 @@ export default function StockInventoryBulkActions({
       setErr("Enter a discount between 0.01 and 100.");
       return;
     }
+    const confirmed = await confirmBulkChange("Lot discount", {
+      variantMode,
+      selectionCount,
+      preview,
+    });
+    if (!confirmed) return;
     await runBulk("apply_lot_discount", { discount_percent: percent });
   };
 
@@ -209,6 +243,12 @@ export default function StockInventoryBulkActions({
       }
       payload.price_percent = pct;
     }
+    const confirmed = await confirmBulkChange("Mark as clearance", {
+      variantMode,
+      selectionCount,
+      preview,
+    });
+    if (!confirmed) return;
     await runBulk("mark_clearance", payload);
   };
 
