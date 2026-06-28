@@ -116,7 +116,7 @@ class PurchaseOrderReceiveService
             $qty,
             (float) $item->cost_per_unit,
             $stockReceivedId ? (int) $stockReceivedId : null,
-            InventoryLot::LISTING_ACTIVE,
+            InventoryLot::LISTING_ON_HOLD,
         );
 
         $this->detailAudit->record(

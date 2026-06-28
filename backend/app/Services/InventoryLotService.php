@@ -395,6 +395,11 @@ class InventoryLotService
             ? round((float) $item->sell_price, 2)
             : round((float) ($product->price ?? 0), 2);
 
+        $sellable = ! in_array($listingStatus, [
+            InventoryLot::LISTING_ON_HOLD,
+            InventoryLot::LISTING_DISCONTINUED,
+        ], true);
+
         return $this->createLot([
             'product_id' => $product->id,
             'size' => $item->size,
@@ -405,6 +410,7 @@ class InventoryLotService
             'unit_cost' => $unitCost,
             'unit_price' => $sellPrice,
             'price_rule' => InventoryLot::PRICE_FIXED,
+            'is_sellable' => $sellable && $qty > 0,
             'purchase_order_item_id' => $item->id,
             'stock_received_id' => $stockReceivedId,
             'received_at' => now(),
