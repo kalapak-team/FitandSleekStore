@@ -24,6 +24,20 @@ function cn(...xs) {
   return xs.filter(Boolean).join(" ");
 }
 
+const LEFT_MENU_SECTION = {
+  newProduct: "newProduct",
+  productTrending: "productTrending",
+  productDiscounts: "productDiscounts",
+  brands: "brands",
+};
+
+const LEFT_MENU_LABEL_KEYS = {
+  [LEFT_MENU_SECTION.newProduct]: "newProduct",
+  [LEFT_MENU_SECTION.productTrending]: "productTrending",
+  [LEFT_MENU_SECTION.productDiscounts]: "productDiscounts",
+  [LEFT_MENU_SECTION.brands]: "brandsCategories",
+};
+
 /** Match nav item only when path + query params align (avoids every /search?… link active at once). */
 function isNavItemActive(location, to) {
   const toStr = String(to || "");
@@ -423,6 +437,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
   const customNavItems = Array.isArray(headerSettings.custom_nav) ? headerSettings.custom_nav : [];
   const defaultLeftMenu = [
     {
+      sectionKey: LEFT_MENU_SECTION.newProduct,
       title: t('newProduct'),
       items: [
         { label: t('newArrivals'), to: '/search?tab=new', image: '/placeholder.svg' },
@@ -436,6 +451,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
       ],
     },
     {
+      sectionKey: LEFT_MENU_SECTION.productTrending,
       title: t('productTrending'),
       items: [
         { label: t('trendingNow'), to: '/search?tab=trending', image: '/placeholder.svg' },
@@ -449,6 +465,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
       ],
     },
     {
+      sectionKey: LEFT_MENU_SECTION.productDiscounts,
       title: t('productDiscounts'),
       items: [
         { label: t('allDiscounts'), to: '/discounts', image: '/placeholder.svg' },
@@ -462,6 +479,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
       ],
     },
     {
+      sectionKey: LEFT_MENU_SECTION.brands,
       title: t('brandsCategories'),
       items: [
         { label: 'Nike', to: '/search?q=Nike', image: '/placeholder.svg' },
@@ -556,98 +574,117 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
     return merged;
   };
 
-  const isBrandsSectionTitle = (title) => {
-    const key = String(title || "").toLowerCase();
-    return key === "brands" || key === "brands & categories" || key === "brands and categories";
+  const resolveLeftMenuSectionKey = (section) => {
+    if (section?.sectionKey) return section.sectionKey;
+    const title = String(section?.title || "").toLowerCase();
+    if (title === "new product" || title === String(t("newProduct") || "").toLowerCase()) {
+      return LEFT_MENU_SECTION.newProduct;
+    }
+    if (title === "product trending" || title === String(t("productTrending") || "").toLowerCase()) {
+      return LEFT_MENU_SECTION.productTrending;
+    }
+    if (title === "product discounts" || title === String(t("productDiscounts") || "").toLowerCase()) {
+      return LEFT_MENU_SECTION.productDiscounts;
+    }
+    if (
+      title === "brands" ||
+      title === "brands & categories" ||
+      title === "brands and categories" ||
+      title === String(t("brandsCategories") || "").toLowerCase()
+    ) {
+      return LEFT_MENU_SECTION.brands;
+    }
+    return null;
   };
 
   const leftMenuWithAuto = useMemo(() => {
     const normalized = (leftMenu || []).map((section) => {
-      const title = String(section?.title || "").toLowerCase();
-      if (title === "new product") {
-        return { ...section, items: autoLeftMenu.newProduct };
+      const sectionKey = resolveLeftMenuSectionKey(section);
+      if (sectionKey === LEFT_MENU_SECTION.newProduct) {
+        return { ...section, sectionKey, title: t("newProduct"), items: autoLeftMenu.newProduct };
       }
-      if (title === "product trending") {
-        return { ...section, items: autoLeftMenu.trending };
+      if (sectionKey === LEFT_MENU_SECTION.productTrending) {
+        return { ...section, sectionKey, title: t("productTrending"), items: autoLeftMenu.trending };
       }
-      if (title === "product discounts") {
-        return { ...section, items: autoLeftMenu.discounts };
+      if (sectionKey === LEFT_MENU_SECTION.productDiscounts) {
+        return { ...section, sectionKey, title: t("productDiscounts"), items: autoLeftMenu.discounts };
       }
-      if (isBrandsSectionTitle(title)) {
-        return { ...section, title: t("brandsCategories"), items: autoLeftMenu.brands };
+      if (sectionKey === LEFT_MENU_SECTION.brands) {
+        return { ...section, sectionKey, title: t("brandsCategories"), items: autoLeftMenu.brands };
       }
       return section;
     });
 
-    const findByTitle = (title) =>
-      normalized.find((s) => String(s?.title || "").toLowerCase() === title);
+    const findByKey = (sectionKey) =>
+      normalized.find((s) => resolveLeftMenuSectionKey(s) === sectionKey);
 
-    const findBrandsSection = () => normalized.find((s) => isBrandsSectionTitle(s?.title));
-
-    const ensureSection = (title, fallbackItems, autoItems) => {
-      const existing = findByTitle(title);
-      if (existing) {
-        return {
-          ...existing,
-          items: autoItems || fallbackItems,
-        };
-      }
-      return {
-        title: title.replace(/\b\w/g, (c) => c.toUpperCase()),
+    const ensureSection = (sectionKey, labelKey, fallbackItems, autoItems) => {
+      const existing = findByKey(sectionKey);
+      const next = {
+        sectionKey,
+        title: t(labelKey),
         items: autoItems || fallbackItems,
       };
+      return existing ? { ...existing, ...next } : next;
     };
 
-    const ensureBrandsSection = (fallbackItems, autoItems) => {
-      const existing = findBrandsSection();
-      if (existing) {
-        return {
-          ...existing,
-          title: t("brandsCategories"),
-          items: autoItems || fallbackItems,
-        };
-      }
-      return {
-        title: t("brandsCategories"),
-        items: autoItems || fallbackItems,
-      };
-    };
-
-    const defaultByTitle = (title) =>
-      (defaultLeftMenu || []).find((s) => String(s?.title || "").toLowerCase() === title)?.items || [];
-
-    const defaultBrandsItems =
-      (defaultLeftMenu || []).find((s) => isBrandsSectionTitle(s?.title))?.items || [];
+    const defaultByKey = (sectionKey) =>
+      (defaultLeftMenu || []).find((s) => resolveLeftMenuSectionKey(s) === sectionKey)?.items || [];
 
     const ensured = [
-      ensureSection("new product", defaultByTitle("new product"), autoLeftMenu.newProduct),
-      ensureSection("product trending", defaultByTitle("product trending"), autoLeftMenu.trending),
-      ensureSection("product discounts", defaultByTitle("product discounts"), autoLeftMenu.discounts),
-      ensureBrandsSection(defaultBrandsItems, autoLeftMenu.brands),
+      ensureSection(
+        LEFT_MENU_SECTION.newProduct,
+        "newProduct",
+        defaultByKey(LEFT_MENU_SECTION.newProduct),
+        autoLeftMenu.newProduct
+      ),
+      ensureSection(
+        LEFT_MENU_SECTION.productTrending,
+        "productTrending",
+        defaultByKey(LEFT_MENU_SECTION.productTrending),
+        autoLeftMenu.trending
+      ),
+      ensureSection(
+        LEFT_MENU_SECTION.productDiscounts,
+        "productDiscounts",
+        defaultByKey(LEFT_MENU_SECTION.productDiscounts),
+        autoLeftMenu.discounts
+      ),
+      ensureSection(
+        LEFT_MENU_SECTION.brands,
+        "brandsCategories",
+        defaultByKey(LEFT_MENU_SECTION.brands),
+        autoLeftMenu.brands
+      ),
     ];
 
-    const ensuredTitles = new Set(ensured.map((s) => String(s?.title || "").toLowerCase()));
-    const remaining = normalized.filter(
-      (s) =>
-        !ensuredTitles.has(String(s?.title || "").toLowerCase()) &&
-        !isBrandsSectionTitle(s?.title)
-    );
+    const ensuredKeys = new Set(ensured.map((s) => s.sectionKey));
+    const remaining = normalized.filter((s) => {
+      const key = resolveLeftMenuSectionKey(s);
+      return !key || !ensuredKeys.has(key);
+    });
 
     return [...remaining, ...ensured];
   }, [leftMenu, autoLeftMenu, t]);
 
-  const getLeftMenuTitle = (title) => {
-    const key = String(title || '').toLowerCase();
+  const getLeftMenuTitle = (sectionOrTitle) => {
+    if (sectionOrTitle && typeof sectionOrTitle === "object") {
+      const sectionKey = resolveLeftMenuSectionKey(sectionOrTitle);
+      const labelKey = LEFT_MENU_LABEL_KEYS[sectionKey];
+      return labelKey ? t(labelKey) : sectionOrTitle.title;
+    }
+
+    const key = String(sectionOrTitle || "").toLowerCase();
     const map = {
-      'new product': 'newProduct',
-      'product trending': 'productTrending',
-      'product discounts': 'productDiscounts',
-      'brands': 'brandsCategories',
-      'brands & categories': 'brandsCategories',
-      'brands and categories': 'brandsCategories',
+      "new product": "newProduct",
+      "product trending": "productTrending",
+      "product discounts": "productDiscounts",
+      brands: "brandsCategories",
+      "brands & categories": "brandsCategories",
+      "brands and categories": "brandsCategories",
     };
     const tKey = map[key];
-    return tKey ? t(tKey) : title;
+    return tKey ? t(tKey) : sectionOrTitle;
   };
 
   const closeMegaMenu = () => setShowLeftMenu(false);
@@ -656,7 +693,8 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
     setShowLeftMenu(false);
   }, [location.pathname, location.search]);
 
-  const isBrandsSection = (section) => isBrandsSectionTitle(section?.title);
+  const isBrandsSection = (section) =>
+    resolveLeftMenuSectionKey(section) === LEFT_MENU_SECTION.brands;
 
   const renderMegaMenuItems = (activeItems, { compact = false } = {}) => {
     const emptyLabel = t("megaMenuNothingYet") || "មិនទាន់មាន";
@@ -1013,7 +1051,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
                             <span className="absolute left-0 top-0 h-full w-1 bg-zinc-900 rounded-r" />
                           )}
                           <span className="block whitespace-normal leading-tight">
-                            {getLeftMenuTitle(section.title)}
+                            {getLeftMenuTitle(section)}
                           </span>
                         </button>
                       ))}
@@ -1021,7 +1059,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
 
                     <div className="min-w-0">
                       <div className="mb-3 fs-nav-link-typo text-zinc-500">
-                        {getLeftMenuTitle(leftMenuWithAuto[activeLeftSection]?.title)}
+                        {getLeftMenuTitle(leftMenuWithAuto[activeLeftSection])}
                       </div>
                       {renderMegaMenuItems(leftMenuWithAuto[activeLeftSection]?.items || [], {
                         compact: isBrandsSection(leftMenuWithAuto[activeLeftSection]),
