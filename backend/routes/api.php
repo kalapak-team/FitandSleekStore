@@ -346,6 +346,7 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     Route::get('stock-inventory/{product}/movements', [StockInventoryAdminController::class, 'movements']);
     Route::get('stock-inventory/{product}/movement-detail', [StockInventoryAdminController::class, 'movementDetail']);
     Route::get('inventory-lots/catalog', [InventoryLotAdminController::class, 'catalog']);
+    Route::post('inventory-lots/bulk', [InventoryLotAdminController::class, 'bulk']);
     Route::get('inventory-lots', [InventoryLotAdminController::class, 'index']);
     Route::post('inventory-lots', [InventoryLotAdminController::class, 'store']);
     Route::patch('inventory-lots/{inventoryLot}', [InventoryLotAdminController::class, 'update']);

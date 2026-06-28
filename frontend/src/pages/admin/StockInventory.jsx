@@ -43,6 +43,7 @@ import {
 import AdminReportExportMenu from "../../components/admin/AdminReportExportMenu.jsx";
 import ProductCatalogPanel from "../../components/admin/ProductCatalogPanel.jsx";
 import ProductVariantDetailModal from "../../components/admin/ProductVariantDetailModal.jsx";
+import StockInventoryBulkActions from "../../components/admin/StockInventoryBulkActions.jsx";
 import { barcodeEntriesForProducts } from "../../lib/productBarcodeHelpers.js";
 import { reactBarcodeFormat } from "../../lib/variantBarcode.js";
 import { exportAdminTable } from "../../lib/adminTableExport.js";
@@ -2930,6 +2931,14 @@ export default function AdminBarcodeQR() {
                                 />
                             </div>
                         </div>
+                        {!isReceivedLogPage && selectedIds.size > 0 ? (
+                            <StockInventoryBulkActions
+                                selectedIds={selectedIds}
+                                canEdit={canEditStock}
+                                onDone={() => load()}
+                                onClearSelection={() => setSelectedIds(new Set())}
+                            />
+                        ) : null}
                         <div className="overflow-x-auto">
                             <table className="w-full min-w-[1100px] border-collapse text-sm">
                                 <thead>

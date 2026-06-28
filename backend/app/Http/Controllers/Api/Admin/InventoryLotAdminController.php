@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Models\InventoryLot;
 use App\Models\InventoryLotDetailEvent;
 use App\Models\InventoryLotPriceEvent;
+use App\Services\InventoryLotBulkService;
 use App\Services\InventoryLotDetailAuditService;
 use App\Services\InventoryLotPriceAuditService;
 use App\Services\InventoryLotService;
@@ -15,9 +16,71 @@ class InventoryLotAdminController extends BaseAdminController
 {
     public function __construct(
         private readonly InventoryLotService $lots,
+        private readonly InventoryLotBulkService $bulk,
         private readonly InventoryLotPriceAuditService $priceAudit,
         private readonly InventoryLotDetailAuditService $detailAudit,
     ) {
+    }
+
+    public function bulk(Request $request)
+    {
+        $validated = $request->validate([
+            'stock_label_ids' => ['required', 'array', 'min:1'],
+            'stock_label_ids.*' => ['required', 'integer', 'exists:categories,id'],
+            'action' => ['nullable', Rule::in(InventoryLotBulkService::ACTIONS)],
+            'dry_run' => ['nullable', 'boolean'],
+            'unit_price' => ['nullable', 'numeric', 'min:0'],
+            'price_percent' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'skip_sold_out' => ['nullable', 'boolean'],
+        ]);
+
+        $labelIds = array_values(array_unique(array_map('intval', $validated['stock_label_ids'])));
+        $skipSoldOut = ($validated['skip_sold_out'] ?? true) !== false;
+        $dryRun = filter_var($validated['dry_run'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if ($dryRun || empty($validated['action'])) {
+            return response()->json([
+                'data' => $this->bulk->summarize($labelIds, $skipSoldOut),
+            ]);
+        }
+
+        $action = (string) $validated['action'];
+
+        if ($action === InventoryLotBulkService::ACTION_APPLY_LOT_DISCOUNT) {
+            $request->validate([
+                'discount_percent' => ['required', 'numeric', 'min:0.01', 'max:100'],
+            ]);
+        }
+
+        $result = $this->bulk->apply(
+            $action,
+            $labelIds,
+            $validated,
+            (int) $request->user()->id,
+        );
+
+        $message = match ($action) {
+            InventoryLotBulkService::ACTION_SET_ON_HOLD => 'Selected stock set on hold.',
+            InventoryLotBulkService::ACTION_RELEASE_HOLD => 'Selected stock released from hold.',
+            InventoryLotBulkService::ACTION_MARK_CLEARANCE => 'Selected stock marked as clearance.',
+            InventoryLotBulkService::ACTION_REVERT_CLEARANCE => 'Selected stock reverted from clearance.',
+            InventoryLotBulkService::ACTION_APPLY_LOT_DISCOUNT => 'Lot discount applied to selected stock.',
+            InventoryLotBulkService::ACTION_REMOVE_LOT_DISCOUNT => 'Lot discount removed from selected stock.',
+            default => 'Bulk update completed.',
+        };
+
+        if (($result['lot_count'] ?? 0) === 0) {
+            return response()->json([
+                'message' => 'No inventory lots found for the selected stock labels.',
+                'data' => $result,
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => $message,
+            'data' => $result,
+        ]);
     }
 
     public function catalog(Request $request)

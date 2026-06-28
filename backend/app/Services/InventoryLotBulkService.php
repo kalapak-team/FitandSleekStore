@@ -1,0 +1,341 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Category;
+use App\Models\InventoryLot;
+use App\Models\InventoryLotDetailEvent;
+use App\Models\InventoryLotPriceEvent;
+use App\Models\Product;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+class InventoryLotBulkService
+{
+    public const ACTION_SET_ON_HOLD = 'set_on_hold';
+
+    public const ACTION_RELEASE_HOLD = 'release_hold';
+
+    public const ACTION_MARK_CLEARANCE = 'mark_clearance';
+
+    public const ACTION_REVERT_CLEARANCE = 'revert_clearance';
+
+    public const ACTION_APPLY_LOT_DISCOUNT = 'apply_lot_discount';
+
+    public const ACTION_REMOVE_LOT_DISCOUNT = 'remove_lot_discount';
+
+    /** @var list<string> */
+    public const ACTIONS = [
+        self::ACTION_SET_ON_HOLD,
+        self::ACTION_RELEASE_HOLD,
+        self::ACTION_MARK_CLEARANCE,
+        self::ACTION_REVERT_CLEARANCE,
+        self::ACTION_APPLY_LOT_DISCOUNT,
+        self::ACTION_REMOVE_LOT_DISCOUNT,
+    ];
+
+    public function __construct(
+        private readonly InventoryLotService $lots,
+        private readonly InventoryLotPriceAuditService $priceAudit,
+        private readonly InventoryLotDetailAuditService $detailAudit,
+    ) {
+    }
+
+    /**
+     * @param  list<int>  $stockLabelIds
+     * @return list<int>
+     */
+    public function expandStockLabelIds(array $stockLabelIds): array
+    {
+        $ids = collect($stockLabelIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $categories = Category::query()
+            ->whereIn('id', $ids)
+            ->where('type', PaidOrderInventory::BARCODE_CATEGORY_TYPE)
+            ->get(['id', 'parent_id']);
+
+        $expanded = collect();
+        foreach ($categories as $category) {
+            $expanded->push((int) $category->id);
+            if ($category->parent_id === null) {
+                $childIds = Category::query()
+                    ->where('parent_id', $category->id)
+                    ->where('type', PaidOrderInventory::BARCODE_CATEGORY_TYPE)
+                    ->pluck('id');
+                $expanded = $expanded->merge($childIds);
+            }
+        }
+
+        return $expanded->unique()->values()->all();
+    }
+
+    /**
+     * @param  list<int>  $stockLabelIds
+     * @return Collection<int, InventoryLot>
+     */
+    public function lotsForStockLabels(array $stockLabelIds, bool $skipSoldOut = true): Collection
+    {
+        $labelIds = $this->expandStockLabelIds($stockLabelIds);
+        if ($labelIds === []) {
+            return collect();
+        }
+
+        $productIds = Product::query()
+            ->whereIn('stock_label_id', $labelIds)
+            ->pluck('id');
+
+        if ($productIds->isEmpty()) {
+            return collect();
+        }
+
+        $query = InventoryLot::query()->whereIn('product_id', $productIds);
+
+        if ($skipSoldOut) {
+            $query->where('quantity_on_hand', '>', 0);
+        }
+
+        return $query->orderBy('id')->get();
+    }
+
+    /**
+     * @param  list<int>  $stockLabelIds
+     * @return array<string, int>
+     */
+    public function summarize(array $stockLabelIds, bool $skipSoldOut = true): array
+    {
+        $uniqueLabels = array_values(array_unique(array_map('intval', $stockLabelIds)));
+        $expanded = $this->expandStockLabelIds($uniqueLabels);
+        $lots = $this->lotsForStockLabels($uniqueLabels, $skipSoldOut);
+
+        return [
+            'stock_label_count' => count($uniqueLabels),
+            'expanded_label_count' => count($expanded),
+            'linked_product_count' => $expanded === []
+                ? 0
+                : (int) Product::query()->whereIn('stock_label_id', $expanded)->count(),
+            'lot_count' => $lots->count(),
+        ];
+    }
+
+    /**
+     * @param  list<int>  $stockLabelIds
+     * @param  array<string, mixed>  $params
+     * @return array<string, mixed>
+     */
+    public function apply(string $action, array $stockLabelIds, array $params, int $userId): array
+    {
+        $skipSoldOut = ($params['skip_sold_out'] ?? true) !== false;
+        $lots = $this->lotsForStockLabels($stockLabelIds, $skipSoldOut);
+
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+
+        DB::transaction(function () use ($action, $lots, $params, $userId, &$updated, &$skipped, &$errors) {
+            foreach ($lots as $lot) {
+                try {
+                    if ($this->applyToLot($lot, $action, $params, $userId)) {
+                        $updated++;
+                    } else {
+                        $skipped++;
+                    }
+                } catch (\Throwable $e) {
+                    $errors[] = 'Lot #'.$lot->id.': '.$e->getMessage();
+                }
+            }
+        });
+
+        return array_merge(
+            $this->summarize($stockLabelIds, $skipSoldOut),
+            [
+                'updated' => $updated,
+                'skipped' => $skipped,
+                'errors' => $errors,
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function applyToLot(InventoryLot $lot, string $action, array $params, int $userId): bool
+    {
+        return match ($action) {
+            self::ACTION_SET_ON_HOLD => $this->applySetOnHold($lot, $userId),
+            self::ACTION_RELEASE_HOLD => $this->applyReleaseHold($lot, $userId),
+            self::ACTION_MARK_CLEARANCE => $this->applyMarkClearance($lot, $params, $userId),
+            self::ACTION_REVERT_CLEARANCE => $this->applyRevertClearance($lot, $userId),
+            self::ACTION_APPLY_LOT_DISCOUNT => $this->applyLotDiscount($lot, $params, $userId),
+            self::ACTION_REMOVE_LOT_DISCOUNT => $this->applyRemoveLotDiscount($lot, $userId),
+            default => false,
+        };
+    }
+
+    private function applySetOnHold(InventoryLot $lot, int $userId): bool
+    {
+        if ($lot->listing_status === InventoryLot::LISTING_ON_HOLD && ! $lot->is_sellable) {
+            return false;
+        }
+
+        $before = $this->detailAudit->snapshot($lot);
+        $updated = $this->lots->setOnHold($lot);
+        $this->detailAudit->record(
+            $updated,
+            $userId,
+            InventoryLotDetailEvent::ACTION_SET_ON_HOLD,
+            $before,
+            $this->detailAudit->snapshot($updated),
+        );
+
+        return true;
+    }
+
+    private function applyReleaseHold(InventoryLot $lot, int $userId): bool
+    {
+        if ($lot->listing_status !== InventoryLot::LISTING_ON_HOLD) {
+            return false;
+        }
+
+        $before = $this->detailAudit->snapshot($lot);
+        $updated = $this->lots->releaseFromHold($lot);
+        $this->detailAudit->record(
+            $updated,
+            $userId,
+            InventoryLotDetailEvent::ACTION_SET_SELLABLE,
+            $before,
+            $this->detailAudit->snapshot($updated),
+        );
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function applyMarkClearance(InventoryLot $lot, array $params, int $userId): bool
+    {
+        if ($lot->listing_status === InventoryLot::LISTING_CLEARANCE
+            && ! array_key_exists('unit_price', $params)
+            && ! array_key_exists('price_percent', $params)) {
+            return false;
+        }
+
+        $wasClearance = $lot->listing_status === InventoryLot::LISTING_CLEARANCE;
+        $priceBefore = $this->priceAudit->snapshot($lot);
+        $detailBefore = $this->detailAudit->snapshot($lot);
+
+        $unitPrice = array_key_exists('unit_price', $params) && $params['unit_price'] !== null
+            ? (float) $params['unit_price']
+            : null;
+        $pricePercent = array_key_exists('price_percent', $params) && $params['price_percent'] !== null
+            ? (float) $params['price_percent']
+            : null;
+
+        $updated = $this->lots->markClearance($lot, $unitPrice, $pricePercent);
+
+        $this->priceAudit->record(
+            $updated,
+            $userId,
+            $wasClearance
+                ? InventoryLotPriceEvent::ACTION_UPDATE_CLEARANCE
+                : InventoryLotPriceEvent::ACTION_MARK_CLEARANCE,
+            $priceBefore,
+            $this->priceAudit->snapshot($updated),
+        );
+
+        $this->detailAudit->record(
+            $updated,
+            $userId,
+            InventoryLotDetailEvent::ACTION_MARK_CLEARANCE,
+            $detailBefore,
+            $this->detailAudit->snapshot($updated),
+        );
+
+        return true;
+    }
+
+    private function applyRevertClearance(InventoryLot $lot, int $userId): bool
+    {
+        if ($lot->listing_status !== InventoryLot::LISTING_CLEARANCE) {
+            return false;
+        }
+
+        $priceBefore = $this->priceAudit->snapshot($lot);
+        $detailBefore = $this->detailAudit->snapshot($lot);
+        $updated = $this->lots->revertFromClearance($lot);
+
+        $this->priceAudit->record(
+            $updated,
+            $userId,
+            InventoryLotPriceEvent::ACTION_REVERT_CLEARANCE,
+            $priceBefore,
+            $this->priceAudit->snapshot($updated),
+        );
+
+        $this->detailAudit->record(
+            $updated,
+            $userId,
+            InventoryLotDetailEvent::ACTION_REVERT_CLEARANCE,
+            $detailBefore,
+            $this->detailAudit->snapshot($updated),
+        );
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function applyLotDiscount(InventoryLot $lot, array $params, int $userId): bool
+    {
+        $percent = (float) ($params['discount_percent'] ?? 0);
+        if ($percent <= 0) {
+            return false;
+        }
+
+        $before = $this->priceAudit->snapshot($lot);
+        $hadDiscount = ($before['discount_percent_off'] ?? 0) > 0;
+        $updated = $this->lots->applyLotDiscount($lot, $percent);
+
+        $this->priceAudit->record(
+            $updated,
+            $userId,
+            $hadDiscount
+                ? InventoryLotPriceEvent::ACTION_UPDATE_LOT_DISCOUNT
+                : InventoryLotPriceEvent::ACTION_APPLY_LOT_DISCOUNT,
+            $before,
+            $this->priceAudit->snapshot($updated),
+            ['discount_percent' => $percent],
+        );
+
+        return true;
+    }
+
+    private function applyRemoveLotDiscount(InventoryLot $lot, int $userId): bool
+    {
+        $before = $this->priceAudit->snapshot($lot);
+        if (($before['discount_percent_off'] ?? 0) <= 0) {
+            return false;
+        }
+
+        $updated = $this->lots->clearLotDiscount($lot);
+
+        $this->priceAudit->record(
+            $updated,
+            $userId,
+            InventoryLotPriceEvent::ACTION_REMOVE_LOT_DISCOUNT,
+            $before,
+            $this->priceAudit->snapshot($updated),
+        );
+
+        return true;
+    }
+}
