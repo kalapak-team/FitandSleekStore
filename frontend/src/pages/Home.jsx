@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Hero from "../components/home/Hero.jsx";
+import BrandRow from "../components/home/BrandRow.jsx";
 import CollectionTiles from "../components/home/CollectionTiles.jsx";
 import PromoBannerSlider from "../components/home/PromoBannerSlider.jsx";
 import Section from "../components/shop/Section.jsx";
@@ -263,6 +264,9 @@ export default function Home() {
   return (
     <div className="pb-14 w-full">
       <Hero />
+      <div className="animate-fade-in">
+        <BrandRow />
+      </div>
       <div className="animate-fade-in-up delay-100">
         <CollectionTiles />
       </div>
