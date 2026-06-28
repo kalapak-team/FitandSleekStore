@@ -1,41 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { resolveImageUrl } from "../lib/images";
+import {
+  isBundledSiteLogo,
+  normalizeSiteLogoForWeb,
+  siteStaticLogoPath,
+} from "../lib/siteLogo.js";
 
-/** Same-origin bundled logo — ships with the SPA in `public/logo.png`. */
-export function siteStaticLogoPath() {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}/logo.png`;
-  }
-  return "/logo.png";
-}
+export { siteStaticLogoPath };
 
-function pathnameOf(url) {
-  try {
-    const base = typeof window !== "undefined" ? window.location.origin : "https://localhost";
-    return new URL(url, base).pathname.replace(/\/+$/, "") || "/";
-  } catch {
-    return "";
-  }
-}
-
-function isBundledLogoSrc(src) {
-  if (!src) return true;
-  const trimmed = String(src).trim();
-  if (!trimmed || trimmed === "/logo.png") return true;
-  return pathnameOf(trimmed) === "/logo.png" || pathnameOf(resolveImageUrl(trimmed)) === "/logo.png";
-}
-
-export default function Logo({ className = "h-12 w-auto", src = "/logo.png", alt = "Fitandsleek" }) {
+export default function Logo({ className = "h-12 w-auto", src, alt = "Fitandsleek" }) {
+  const resolvedSrc = normalizeSiteLogoForWeb(src);
   const bundledSrc = siteStaticLogoPath();
   const [networkOk, setNetworkOk] = useState(false);
   const [networkFailed, setNetworkFailed] = useState(false);
 
   const networkSrc = useMemo(() => {
-    if (!src || isBundledLogoSrc(src)) return null;
-    const resolved = resolveImageUrl(src);
-    if (!resolved || isBundledLogoSrc(resolved)) return null;
+    if (!resolvedSrc || isBundledSiteLogo(resolvedSrc)) return null;
+    const resolved = resolveImageUrl(resolvedSrc);
+    if (!resolved || isBundledSiteLogo(resolved)) return null;
     return resolved;
-  }, [src]);
+  }, [resolvedSrc]);
 
   useEffect(() => {
     setNetworkOk(false);

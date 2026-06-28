@@ -45,7 +45,12 @@ String? _publicDiskPath(String value) {
 
 bool _isSiteLogoPath(String value) {
   final v = value.trim().toLowerCase();
-  return v == '/logo.png' || v == 'logo.png' || v.endsWith('/logo.png');
+  return v == '/logo.png' ||
+      v == 'logo.png' ||
+      v.endsWith('/logo.png') ||
+      v == '/logo.svg' ||
+      v == 'logo.svg' ||
+      v.endsWith('/logo.svg');
 }
 
 String _encodePublicPath(String path) {

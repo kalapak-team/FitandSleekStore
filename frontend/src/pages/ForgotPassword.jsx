@@ -252,7 +252,7 @@ export default function ForgotPassword() {
                     <Link to="/" className="mx-auto flex w-fit items-center justify-center transition-opacity hover:opacity-85">
                         <Logo
                             className="h-16 w-auto max-w-[220px] drop-shadow-md"
-                            src={settings?.header?.logo_url || settings?.app_logo_url || "/logo.png"}
+                            src={settings?.header?.logo_url || settings?.app_logo_url || "/logo.svg"}
                             alt="Fit & Sleek"
                         />
                     </Link>

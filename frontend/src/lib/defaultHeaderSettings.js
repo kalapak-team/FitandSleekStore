@@ -1,7 +1,7 @@
 /** Storefront header defaults — shown instantly before /homepage-settings API responds. */
 export const DEFAULT_HEADER_SETTINGS = {
   logo_text: "FIT&SLEEK",
-  logo_url: "/logo.png",
+  logo_url: "/logo.svg",
   background_color: "#6e8b7e",
   background_image: "",
   text_color: "#ffffff",

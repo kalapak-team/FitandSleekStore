@@ -22,9 +22,9 @@ class HomepageSettingsController extends Controller
 
     private function resolveAppLogoUrl(): string
     {
-        $configured = (string) config('app.logo_url', '/logo.png');
+        $configured = (string) config('app.logo_url', '/logo.svg');
         if ($configured === '') {
-            return '/logo.png';
+            return '/logo.svg';
         }
 
         if (str_starts_with($configured, 'http://') || str_starts_with($configured, 'https://')) {
@@ -32,12 +32,29 @@ class HomepageSettingsController extends Controller
             $host = strtolower((string) ($parts['host'] ?? ''));
             if (in_array($host, ['localhost', '127.0.0.1', 'host.docker.internal', 'backend'], true)) {
                 $path = '/' . ltrim((string) ($parts['path'] ?? ''), '/');
-                return $path !== '/' ? $path : '/logo.png';
+                return $path !== '/' ? $path : '/logo.svg';
             }
             return $configured;
         }
 
         return '/' . ltrim($configured, '/');
+    }
+
+    private function isBundledSiteLogo(string $url): bool
+    {
+        $path = strtolower(basename(parse_url($url, PHP_URL_PATH) ?: $url));
+
+        return in_array($path, ['logo.png', 'logo.svg'], true);
+    }
+
+    private function resolveHeaderLogoUrl(array $header, string $appLogoUrl): string
+    {
+        $stored = trim((string) ($header['logo_url'] ?? ''));
+        if ($stored === '' || $this->isBundledSiteLogo($stored)) {
+            return $appLogoUrl;
+        }
+
+        return $stored;
     }
 
     /**
@@ -416,7 +433,7 @@ class HomepageSettingsController extends Controller
             }
             $header['nav_dropdowns'] = $mergedNavDropdowns;
 
-            $header['logo_url'] = $appLogoUrl;
+            $header['logo_url'] = $this->resolveHeaderLogoUrl($header, $appLogoUrl);
             $parsedSettings['header'] = $header;
 
             // Persist header defaults if missing (hard-save)
@@ -479,7 +496,7 @@ class HomepageSettingsController extends Controller
                 is_array($parsedSettings['cookies_page'] ?? null) ? $parsedSettings['cookies_page'] : CookiesPageContent::defaults()
             );
 
-            $parsedSettings['app_logo_url'] = $appLogoUrl;
+            $parsedSettings['app_logo_url'] = $this->resolveHeaderLogoUrl($header, $appLogoUrl);
 
             return response()->json($parsedSettings, 200);
         } catch (\Exception $e) {

@@ -520,7 +520,7 @@ export default function DriverScanPage() {
         setSessionScanCount(0);
     };
 
-    const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.png";
+    const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.svg";
 
     return (
         <div className="min-h-screen bg-slate-50 px-4 py-10">

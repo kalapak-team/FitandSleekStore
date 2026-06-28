@@ -75,7 +75,7 @@ export default function ExtendedHomepageManager() {
   // Header & Footer (from previous manager)
   const [headerSettings, setHeaderSettings] = useState({
     logo_text: 'Fitandsleek',
-    logo_url: '/logo.png',
+    logo_url: '/logo.svg',
     background_color: '#6e8b7e',
     background_image: '',
     text_color: '#ffffff',

@@ -100,7 +100,7 @@ export function AuthDialogShell({
           >
             <Logo
               className="h-[4.5rem] w-auto max-w-[260px] drop-shadow-md"
-              src={logoUrl || "/logo.png"}
+              src={logoUrl || "/logo.svg"}
               alt="Fit & Sleek"
             />
           </Link>

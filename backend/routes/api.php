@@ -113,7 +113,7 @@ Route::middleware(['throttle:api'])->group(function () {
 Route::get('/media/{path}', [PublicMediaController::class, 'show'])
     ->where('path', '.*');
 
-// Site logo at public/logo.png (same as web <img src="/logo.png">) with CORS for Flutter web.
+// Site logo raster (PNG) for Flutter web / CORS clients. Web storefront uses /logo.svg.
 Route::get('/site-logo', function () {
     $path = public_path('logo.png');
     if (! is_file($path)) {

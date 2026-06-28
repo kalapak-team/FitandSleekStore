@@ -7,10 +7,38 @@ use Illuminate\Support\Str;
 /** Resolves the storefront logo for emails, PDFs, and Blade views. */
 final class BrandLogo
 {
+    /** Raster logo for PDFs and data-uri embeds (DomPDF-safe). */
     public static function url(): string
     {
-        $logoUrl = (string) config('app.logo_url', '/logo.png');
+        return self::resolveRasterUrl((string) config('app.logo_png_url', '/logo.png'));
+    }
 
+    /** SVG logo for web and admin UI. */
+    public static function svgUrl(): string
+    {
+        return self::emailAssetUrl((string) config('app.logo_url', '/logo.svg'));
+    }
+
+    /** SVG circular mark for web. */
+    public static function svgCircleUrl(): ?string
+    {
+        return self::optionalAssetUrl((string) config('app.logo_circle_url', '/logo-circle.svg'));
+    }
+
+    /** Absolute raster banner URL for email HTML — never inline base64 (Gmail clips >102KB). */
+    public static function emailUrl(): string
+    {
+        return self::emailAssetUrl((string) config('app.logo_png_url', '/logo.png'));
+    }
+
+    /** Circular raster mark for email headers (linked URL, not base64). */
+    public static function emailCircleUrl(): ?string
+    {
+        return self::optionalAssetUrl((string) config('app.logo_circle_png_url', '/logo-circle.png'));
+    }
+
+    private static function resolveRasterUrl(string $logoUrl): string
+    {
         if (! Str::startsWith($logoUrl, ['http://', 'https://'])) {
             return self::dataUriFromPath($logoUrl) ?? asset($logoUrl);
         }
@@ -26,17 +54,8 @@ final class BrandLogo
         return $logoUrl;
     }
 
-    /** Absolute logo URL for email HTML — never inline base64 (Gmail clips >102KB). */
-    public static function emailUrl(): string
+    private static function optionalAssetUrl(string $logoUrl): ?string
     {
-        return self::emailAssetUrl((string) config('app.logo_url', '/logo.png'));
-    }
-
-    /** Circular brand mark for email headers (linked URL, not base64). */
-    public static function emailCircleUrl(): ?string
-    {
-        $logoUrl = (string) config('app.logo_circle_url', '/logo-circle.png');
-
         if ($logoUrl === '') {
             return null;
         }

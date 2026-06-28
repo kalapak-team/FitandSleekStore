@@ -39,10 +39,10 @@ class AppConfig {
     return raw.isEmpty ? defaultBackendOrigin : raw.replaceAll(RegExp(r'/+$'), '');
   }
 
-  /// `public/logo.png` on Laravel (web header uses `/logo.png`).
+  /// Bundled site logo on Laravel `public/logo.png` (raster). Web uses `/logo.svg`.
   static String get siteLogoPath => '/logo.png';
 
-  /// Flutter web: `/api/site-logo` includes CORS; native uses storefront then Laravel `/logo.png`.
+  /// Flutter web: `/api/site-logo` (PNG + CORS). Native uses bundled asset, then storefront PNG.
   static String get siteLogoUrl {
     if (kIsWeb) {
       return '${apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}/site-logo';
