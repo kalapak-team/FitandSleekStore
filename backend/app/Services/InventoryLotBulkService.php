@@ -106,16 +106,83 @@ class InventoryLotBulkService
     }
 
     /**
+     * @param  list<array{product_id: int, size?: string|null, color?: string|null}>  $variants
+     * @return Collection<int, InventoryLot>
+     */
+    public function lotsForVariants(array $variants, bool $skipSoldOut = true): Collection
+    {
+        $lots = collect();
+
+        foreach ($variants as $variant) {
+            if (! is_array($variant)) {
+                continue;
+            }
+
+            $productId = (int) ($variant['product_id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $size = isset($variant['size']) && $variant['size'] !== '' ? (string) $variant['size'] : null;
+            $color = isset($variant['color']) && $variant['color'] !== '' ? (string) $variant['color'] : null;
+
+            $variantLots = $this->lots->listForVariant($productId, $size, $color);
+            if ($skipSoldOut) {
+                $variantLots = $variantLots->filter(
+                    fn (InventoryLot $lot) => (int) $lot->quantity_on_hand > 0
+                );
+            }
+
+            $lots = $lots->merge($variantLots);
+        }
+
+        return $lots->unique('id')->sortBy('id')->values();
+    }
+
+    /**
      * @param  list<int>  $stockLabelIds
+     * @param  list<array{product_id: int, size?: string|null, color?: string|null}>  $variants
+     * @return Collection<int, InventoryLot>
+     */
+    public function resolveLots(array $stockLabelIds, array $variants, bool $skipSoldOut = true): Collection
+    {
+        if ($variants !== []) {
+            return $this->lotsForVariants($variants, $skipSoldOut);
+        }
+
+        return $this->lotsForStockLabels($stockLabelIds, $skipSoldOut);
+    }
+
+    /**
+     * @param  list<int>  $stockLabelIds
+     * @param  list<array{product_id: int, size?: string|null, color?: string|null}>  $variants
      * @return array<string, int>
      */
-    public function summarize(array $stockLabelIds, bool $skipSoldOut = true): array
+    public function summarize(array $stockLabelIds, bool $skipSoldOut = true, array $variants = []): array
     {
+        $variants = $this->normalizeVariants($variants);
+        $lots = $this->resolveLots($stockLabelIds, $variants, $skipSoldOut);
+
+        if ($variants !== []) {
+            return [
+                'variant_count' => count($variants),
+                'stock_label_count' => 0,
+                'expanded_label_count' => 0,
+                'linked_product_count' => collect($variants)
+                    ->pluck('product_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->filter(fn ($id) => $id > 0)
+                    ->unique()
+                    ->count(),
+                'lot_count' => $lots->count(),
+            ];
+        }
+
         $uniqueLabels = array_values(array_unique(array_map('intval', $stockLabelIds)));
         $expanded = $this->expandStockLabelIds($uniqueLabels);
-        $lots = $this->lotsForStockLabels($uniqueLabels, $skipSoldOut);
 
         return [
+            'variant_count' => 0,
             'stock_label_count' => count($uniqueLabels),
             'expanded_label_count' => count($expanded),
             'linked_product_count' => $expanded === []
@@ -127,13 +194,15 @@ class InventoryLotBulkService
 
     /**
      * @param  list<int>  $stockLabelIds
+     * @param  list<array{product_id: int, size?: string|null, color?: string|null}>  $variants
      * @param  array<string, mixed>  $params
      * @return array<string, mixed>
      */
-    public function apply(string $action, array $stockLabelIds, array $params, int $userId): array
+    public function apply(string $action, array $stockLabelIds, array $params, int $userId, array $variants = []): array
     {
         $skipSoldOut = ($params['skip_sold_out'] ?? true) !== false;
-        $lots = $this->lotsForStockLabels($stockLabelIds, $skipSoldOut);
+        $variants = $this->normalizeVariants($variants);
+        $lots = $this->resolveLots($stockLabelIds, $variants, $skipSoldOut);
 
         $updated = 0;
         $skipped = 0;
@@ -154,13 +223,44 @@ class InventoryLotBulkService
         });
 
         return array_merge(
-            $this->summarize($stockLabelIds, $skipSoldOut),
+            $this->summarize($stockLabelIds, $skipSoldOut, $variants),
             [
                 'updated' => $updated,
                 'skipped' => $skipped,
                 'errors' => $errors,
             ],
         );
+    }
+
+    /**
+     * @param  list<array{product_id?: mixed, size?: mixed, color?: mixed}>  $variants
+     * @return list<array{product_id: int, size: ?string, color: ?string}>
+     */
+    private function normalizeVariants(array $variants): array
+    {
+        $out = [];
+        foreach ($variants as $variant) {
+            if (! is_array($variant)) {
+                continue;
+            }
+            $productId = (int) ($variant['product_id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+            $size = isset($variant['size']) && $variant['size'] !== '' && $variant['size'] !== null
+                ? (string) $variant['size']
+                : null;
+            $color = isset($variant['color']) && $variant['color'] !== '' && $variant['color'] !== null
+                ? (string) $variant['color']
+                : null;
+            $out[] = [
+                'product_id' => $productId,
+                'size' => $size,
+                'color' => $color,
+            ];
+        }
+
+        return $out;
     }
 
     /**

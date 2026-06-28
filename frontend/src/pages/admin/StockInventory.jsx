@@ -2933,7 +2933,7 @@ export default function AdminBarcodeQR() {
                         </div>
                         {!isReceivedLogPage && selectedIds.size > 0 ? (
                             <StockInventoryBulkActions
-                                selectedIds={selectedIds}
+                                stockLabelIds={selectedIds}
                                 canEdit={canEditStock}
                                 onDone={() => load()}
                                 onClearSelection={() => setSelectedIds(new Set())}

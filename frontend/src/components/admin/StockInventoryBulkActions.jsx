@@ -16,21 +16,51 @@ const BULK_ACTIONS = [
   { id: "remove_lot_discount", label: "Remove discount", confirm: true },
 ];
 
-function previewLine(preview) {
+function previewLine(preview, variantMode) {
   if (!preview) return "Loading lots…";
   const lots = preview.lot_count ?? 0;
+  if (lots === 0) return "No inventory lots for selection";
+  if (variantMode) {
+    const skus = preview.variant_count ?? 0;
+    return `${lots} lot${lots !== 1 ? "s" : ""} for ${skus} SKU${skus !== 1 ? "s" : ""}`;
+  }
   const products = preview.linked_product_count ?? 0;
-  if (lots === 0) return "No inventory lots linked yet";
   return `${lots} lot${lots !== 1 ? "s" : ""} across ${products} product${products !== 1 ? "s" : ""}`;
 }
 
 export default function StockInventoryBulkActions({
-  selectedIds,
+  stockLabelIds = null,
+  variants = null,
+  selectionLabel = null,
   canEdit = false,
   onDone,
   onClearSelection,
 }) {
-  const labelIds = useMemo(() => [...selectedIds].map((id) => Number(id)).filter((id) => id > 0), [selectedIds]);
+  const variantRows = useMemo(
+    () =>
+      (variants || [])
+        .map((row) => ({
+          product_id: Number(row?.product_id),
+          size: row?.size || null,
+          color: row?.color || null,
+        }))
+        .filter((row) => row.product_id > 0),
+    [variants],
+  );
+
+  const labelIds = useMemo(() => {
+    if (stockLabelIds instanceof Set) return [...stockLabelIds].map((id) => Number(id)).filter((id) => id > 0);
+    return (stockLabelIds || []).map((id) => Number(id)).filter((id) => id > 0);
+  }, [stockLabelIds]);
+
+  const variantMode = variantRows.length > 0;
+  const selectionCount = variantMode ? variantRows.length : labelIds.length;
+  const hasSelection = selectionCount > 0;
+
+  const requestBody = useMemo(() => {
+    if (variantMode) return { variants: variantRows };
+    return { stock_label_ids: labelIds };
+  }, [variantMode, variantRows, labelIds]);
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,14 +76,14 @@ export default function StockInventoryBulkActions({
   const menuRef = useRef(null);
 
   const loadPreview = useCallback(async () => {
-    if (labelIds.length === 0) {
+    if (!hasSelection) {
       setPreview(null);
       return;
     }
     setPreviewLoading(true);
     try {
       const { data } = await api.post("/admin/inventory-lots/bulk", {
-        stock_label_ids: labelIds,
+        ...requestBody,
         dry_run: true,
       });
       setPreview(data?.data ?? null);
@@ -62,7 +92,7 @@ export default function StockInventoryBulkActions({
     } finally {
       setPreviewLoading(false);
     }
-  }, [labelIds]);
+  }, [hasSelection, requestBody]);
 
   useEffect(() => {
     void loadPreview();
@@ -91,12 +121,12 @@ export default function StockInventoryBulkActions({
   }, [menuOpen]);
 
   const runBulk = async (action, extra = {}) => {
-    if (!canEdit || labelIds.length === 0) return;
+    if (!canEdit || !hasSelection) return;
     setBusy(true);
     setErr("");
     try {
       const { data } = await api.post("/admin/inventory-lots/bulk", {
-        stock_label_ids: labelIds,
+        ...requestBody,
         action,
         ...extra,
       });
@@ -137,9 +167,12 @@ export default function StockInventoryBulkActions({
       return;
     }
     if (action.confirm) {
+      const target = variantMode
+        ? `${selectionCount} selected SKU${selectionCount !== 1 ? "s" : ""}`
+        : `${selectionCount} selected stock label${selectionCount !== 1 ? "s" : ""}`;
       const res = await warningConfirm({
         enTitle: action.label,
-        enText: `Apply "${action.label}" to all inventory lots linked to the ${labelIds.length} selected stock label${labelIds.length !== 1 ? "s" : ""}?`,
+        enText: `Apply "${action.label}" to all inventory lots for ${target}?`,
         enConfirm: action.label,
       });
       if (!res.isConfirmed) return;
@@ -179,7 +212,9 @@ export default function StockInventoryBulkActions({
     await runBulk("mark_clearance", payload);
   };
 
-  if (labelIds.length === 0) return null;
+  if (!hasSelection) return null;
+
+  const badgeLabel = selectionLabel || `${selectionCount} selected`;
 
   const quickActions = BULK_ACTIONS.filter((a) => ["set_on_hold", "release_hold", "mark_clearance"].includes(a.id));
   const moreActions = BULK_ACTIONS.filter((a) => !quickActions.includes(a));
@@ -192,14 +227,14 @@ export default function StockInventoryBulkActions({
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:ring-emerald-800">
                 <Layers className="h-3.5 w-3.5" aria-hidden />
-                {labelIds.length} selected
+                {badgeLabel}
               </span>
               <span className="text-xs text-emerald-900/80 dark:text-emerald-200/80">
-                {previewLoading ? "Checking linked lots…" : previewLine(preview)}
+                {previewLoading ? "Checking linked lots…" : previewLine(preview, variantMode)}
               </span>
             </div>
             <p className="mt-1 text-[11px] text-emerald-900/70 dark:text-emerald-200/70">
-              Bulk actions update all inventory lots for linked products. Per-lot editing still works as before.
+              Bulk actions update inventory lots for your selection. Per-lot editing in SKU details still works as before.
             </p>
           </div>
 

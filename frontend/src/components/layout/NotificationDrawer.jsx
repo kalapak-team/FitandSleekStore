@@ -35,13 +35,15 @@ function resolveMediaUrl(url) {
   return url.startsWith("http") ? url : resolveImageUrl(url);
 }
 
+const THUMB_SIZE_CLASS = "h-[5.25rem] w-[5.25rem] sm:h-24 sm:w-24";
+
 function NotificationThumbnail({ item }) {
   const mediaUrl = item.media_url ? resolveMediaUrl(item.media_url) : "";
   const mediaType = inferMediaType(item.media_url, item.media_type);
 
   if (mediaUrl && mediaType === "image") {
     return (
-      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50">
+      <div className={`${THUMB_SIZE_CLASS} shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 shadow-sm`}>
         <img
           src={mediaUrl}
           alt=""
@@ -56,14 +58,14 @@ function NotificationThumbnail({ item }) {
 
   if (mediaUrl && mediaType === "video") {
     return (
-      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-900">
+      <div className={`relative ${THUMB_SIZE_CLASS} shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-900 shadow-sm`}>
         <video
           src={mediaUrl}
           className="h-full w-full object-cover opacity-80"
           muted
           playsInline
         />
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-white">
+        <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white">
           ▶
         </span>
       </div>
@@ -71,7 +73,7 @@ function NotificationThumbnail({ item }) {
   }
 
   return (
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-lg">
+    <div className={`flex ${THUMB_SIZE_CLASS} shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-2xl shadow-sm`}>
       {getNotificationIcon(item.type)}
     </div>
   );
@@ -97,7 +99,7 @@ export default function NotificationDrawer({
         onClick={onClose}
       />
       <div
-        className="absolute right-0 top-0 flex h-full w-full max-w-[340px] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-sm"
+        className="absolute right-0 top-0 flex h-full w-full max-w-[min(100vw,22rem)] flex-col bg-white shadow-2xl animate-in slide-in-from-right duration-300 sm:max-w-md"
         role="dialog"
         aria-label="Notifications"
       >
@@ -158,7 +160,7 @@ export default function NotificationDrawer({
             <ul className="divide-y divide-zinc-100">
               {notifications.map((item) => {
                 const storefrontPath = resolveStorefrontPath(item.link_url);
-                const rowClassName = `flex w-full gap-3 px-4 py-3.5 text-left transition-colors hover:bg-zinc-50 ${
+                const rowClassName = `flex w-full gap-4 px-4 py-4 text-left transition-colors hover:bg-zinc-50 ${
                   item.is_read ? "bg-white" : "bg-emerald-50/40"
                 } ${storefrontPath ? "cursor-pointer" : ""}`;
 

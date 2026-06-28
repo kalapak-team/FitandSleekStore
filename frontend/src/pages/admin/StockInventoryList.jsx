@@ -11,6 +11,7 @@ import AdminListQueryToolbar from "../../components/admin/AdminListQueryToolbar.
 import StockSkuDetailModal from "../../components/admin/StockSkuDetailModal.jsx";
 import MovementDetailsButton from "../../components/admin/MovementDetailsButton.jsx";
 import MovementRowDetailModal from "../../components/admin/MovementRowDetailModal.jsx";
+import StockInventoryBulkActions from "../../components/admin/StockInventoryBulkActions.jsx";
 import { alignMovementRows } from "../../lib/movementRows.js";
 import { formatPoMoney } from "../../lib/purchaseOrderHelpers.js";
 import {
@@ -688,6 +689,19 @@ export default function StockInventoryList() {
                 Clear selection
               </button>
             </div>
+          ) : null}
+          {selectedIds.size > 0 ? (
+            <StockInventoryBulkActions
+              variants={selectedRows.map((row) => ({
+                product_id: row.product_id,
+                size: row.size || null,
+                color: row.color || null,
+              }))}
+              selectionLabel={`${selectedIds.size} SKU${selectedIds.size !== 1 ? "s" : ""} selected`}
+              canEdit={canEditStock}
+              onDone={load}
+              onClearSelection={() => setSelectedIds(new Set())}
+            />
           ) : null}
         </div>
 

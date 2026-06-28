@@ -25,8 +25,12 @@ class InventoryLotAdminController extends BaseAdminController
     public function bulk(Request $request)
     {
         $validated = $request->validate([
-            'stock_label_ids' => ['required', 'array', 'min:1'],
+            'stock_label_ids' => ['nullable', 'array'],
             'stock_label_ids.*' => ['required', 'integer', 'exists:categories,id'],
+            'variants' => ['nullable', 'array', 'min:1'],
+            'variants.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'variants.*.size' => ['nullable', 'string', 'max:40'],
+            'variants.*.color' => ['nullable', 'string', 'max:80'],
             'action' => ['nullable', Rule::in(InventoryLotBulkService::ACTIONS)],
             'dry_run' => ['nullable', 'boolean'],
             'unit_price' => ['nullable', 'numeric', 'min:0'],
@@ -35,13 +39,20 @@ class InventoryLotAdminController extends BaseAdminController
             'skip_sold_out' => ['nullable', 'boolean'],
         ]);
 
-        $labelIds = array_values(array_unique(array_map('intval', $validated['stock_label_ids'])));
+        $labelIds = array_values(array_unique(array_map('intval', $validated['stock_label_ids'] ?? [])));
+        $variants = array_values($validated['variants'] ?? []);
+        if ($labelIds === [] && $variants === []) {
+            return response()->json([
+                'message' => 'Select stock labels or SKU variants for bulk update.',
+            ], 422);
+        }
+
         $skipSoldOut = ($validated['skip_sold_out'] ?? true) !== false;
         $dryRun = filter_var($validated['dry_run'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         if ($dryRun || empty($validated['action'])) {
             return response()->json([
-                'data' => $this->bulk->summarize($labelIds, $skipSoldOut),
+                'data' => $this->bulk->summarize($labelIds, $skipSoldOut, $variants),
             ]);
         }
 
@@ -58,6 +69,7 @@ class InventoryLotAdminController extends BaseAdminController
             $labelIds,
             $validated,
             (int) $request->user()->id,
+            $variants,
         );
 
         $message = match ($action) {
@@ -72,7 +84,9 @@ class InventoryLotAdminController extends BaseAdminController
 
         if (($result['lot_count'] ?? 0) === 0) {
             return response()->json([
-                'message' => 'No inventory lots found for the selected stock labels.',
+                'message' => $variants !== []
+                    ? 'No inventory lots found for the selected SKUs.'
+                    : 'No inventory lots found for the selected stock labels.',
                 'data' => $result,
             ], 422);
         }
