@@ -62,6 +62,8 @@ return [
 
     'logo_url' => env('APP_LOGO_URL', '/logo.png'),
 
+    'logo_circle_url' => env('APP_LOGO_CIRCLE_URL', '/logo-circle.png'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

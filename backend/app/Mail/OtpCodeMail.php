@@ -23,11 +23,14 @@ class OtpCodeMail extends Mailable
 
     public function build()
     {
+        $viewData = [
+            'code' => $this->code,
+            'purpose' => $this->purpose,
+            'expiresMinutes' => $this->expiresMinutes,
+        ];
+
         return $this->subject('Your verification code')
-            ->view('emails.otp-code', [
-                'code' => $this->code,
-                'purpose' => $this->purpose,
-                'expiresMinutes' => $this->expiresMinutes,
-            ]);
+            ->view('emails.otp-code', $viewData)
+            ->text('emails.otp-code-text', $viewData);
     }
 }

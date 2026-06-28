@@ -26,6 +26,40 @@ final class BrandLogo
         return $logoUrl;
     }
 
+    /** Absolute logo URL for email HTML — never inline base64 (Gmail clips >102KB). */
+    public static function emailUrl(): string
+    {
+        return self::emailAssetUrl((string) config('app.logo_url', '/logo.png'));
+    }
+
+    /** Circular brand mark for email headers (linked URL, not base64). */
+    public static function emailCircleUrl(): ?string
+    {
+        $logoUrl = (string) config('app.logo_circle_url', '/logo-circle.png');
+
+        if ($logoUrl === '') {
+            return null;
+        }
+
+        if (! Str::startsWith($logoUrl, ['http://', 'https://'])) {
+            $fullPath = public_path(ltrim($logoUrl, '/'));
+            if (! is_file($fullPath)) {
+                return null;
+            }
+        }
+
+        return self::emailAssetUrl($logoUrl);
+    }
+
+    private static function emailAssetUrl(string $logoUrl): string
+    {
+        if (Str::startsWith($logoUrl, ['http://', 'https://'])) {
+            return $logoUrl;
+        }
+
+        return asset(ltrim($logoUrl, '/'));
+    }
+
     public static function dataUriFromPath(string $path): ?string
     {
         $relativePath = ltrim($path, '/');
