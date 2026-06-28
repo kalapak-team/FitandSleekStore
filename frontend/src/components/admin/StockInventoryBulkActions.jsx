@@ -9,13 +9,19 @@ import InventorySellStrategyCard from "./InventorySellStrategyCard.jsx";
 
 const BULK_MENU_GROUPS = [
   {
-    id: "status",
-    label: "Hold & clearance",
+    id: "hold",
+    label: "On hold",
     items: [
       { id: "set_on_hold", label: "Set on hold" },
       { id: "release_hold", label: "Release hold" },
+    ],
+  },
+  {
+    id: "clearance",
+    label: "Clearance",
+    items: [
       { id: "mark_clearance", label: "Mark as clearance", modal: "clearance" },
-      { id: "revert_clearance", label: "Revert to active" },
+      { id: "revert_clearance", label: "End clearance" },
     ],
   },
   {
@@ -38,16 +44,59 @@ const BULK_ACTION_BY_ID = Object.fromEntries(
   BULK_MENU_GROUPS.flatMap((group) => group.items.map((item) => [item.id, item])),
 );
 
+const STATUS_LABELS = {
+  on_hold: "on hold",
+  active: "active",
+  clearance: "clearance",
+  discontinued: "discontinued",
+};
+
+function statusSummary(preview) {
+  const counts = preview?.listing_status;
+  if (!counts || typeof counts !== "object") return "";
+  const parts = Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([status, count]) => `${count} ${STATUS_LABELS[status] || status}`);
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
+}
+
 function previewLine(preview, variantMode) {
   if (!preview) return "Loading lots…";
   const lots = preview.lot_count ?? 0;
   if (lots === 0) return "No inventory lots for selection";
+  const statusPart = statusSummary(preview);
   if (variantMode) {
     const skus = preview.variant_count ?? 0;
-    return `${lots} lot${lots !== 1 ? "s" : ""} for ${skus} SKU${skus !== 1 ? "s" : ""}`;
+    return `${lots} lot${lots !== 1 ? "s" : ""} for ${skus} SKU${skus !== 1 ? "s" : ""}${statusPart}`;
   }
   const products = preview.linked_product_count ?? 0;
-  return `${lots} lot${lots !== 1 ? "s" : ""} across ${products} product${products !== 1 ? "s" : ""}`;
+  return `${lots} lot${lots !== 1 ? "s" : ""} across ${products} product${products !== 1 ? "s" : ""}${statusPart}`;
+}
+
+function actionEligibleCount(preview, actionId) {
+  return preview?.action_eligible?.[actionId] ?? preview?.lot_count ?? 0;
+}
+
+function isBulkActionEnabled(preview, action) {
+  if (!preview || (preview.lot_count ?? 0) === 0) return false;
+  if (action.strategy) return true;
+  if (action.modal === "clearance" || action.modal === "discount" || action.modal === "unit_price") {
+    return (preview.lot_count ?? 0) > 0;
+  }
+  return actionEligibleCount(preview, action.id) > 0;
+}
+
+function actionDisabledHint(preview, action) {
+  if (isBulkActionEnabled(preview, action)) return "";
+  const eligible = actionEligibleCount(preview, action.id);
+  if ((preview?.lot_count ?? 0) === 0) return "No linked lots";
+  if (eligible === 0) {
+    if (action.id === "set_on_hold") return "All selected lots are already on hold";
+    if (action.id === "release_hold") return "No on-hold lots in selection";
+    if (action.id === "revert_clearance") return "No clearance lots in selection";
+    if (action.id === "remove_lot_discount") return "No lot discount on selection";
+  }
+  return "Not available for current selection";
 }
 
 function selectionSummary(variantMode, selectionCount, preview) {
@@ -308,7 +357,9 @@ export default function StockInventoryBulkActions({
   if (!hasSelection) return null;
 
   const badgeLabel = selectionLabel || `${selectionCount} selected`;
-  const lotsDisabled = busy || previewLoading || (preview?.lot_count ?? 0) === 0;
+  const hasEnabledBulkAction = BULK_MENU_GROUPS.some((group) =>
+    group.items.some((action) => isBulkActionEnabled(preview, action)),
+  );
 
   return (
     <>
@@ -334,7 +385,7 @@ export default function StockInventoryBulkActions({
               <div className="relative" ref={menuRef}>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !hasEnabledBulkAction}
                   onClick={() => setMenuOpen((v) => !v)}
                   className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300/80 bg-white px-3.5 text-xs font-semibold text-emerald-900 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900"
                 >
@@ -351,17 +402,33 @@ export default function StockInventoryBulkActions({
                         <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                           {group.label}
                         </p>
-                        {group.items.map((action) => (
+                        {group.items.map((action) => {
+                          const enabled = isBulkActionEnabled(preview, action);
+                          const hint = actionDisabledHint(preview, action);
+                          const eligible = actionEligibleCount(preview, action.id);
+                          const countLabel =
+                            enabled && !action.strategy && action.modal !== "clearance" && eligible > 0
+                              ? ` (${eligible})`
+                              : "";
+                          return (
                           <button
                             key={action.id}
                             type="button"
-                            disabled={action.strategy ? busy : lotsDisabled}
+                            disabled={action.strategy ? busy : busy || !enabled}
+                            title={hint || undefined}
                             onClick={() => void handleAction(action.id)}
-                            className="flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-800"
                           >
-                            {action.label}
+                            <span className={`text-sm ${enabled ? "text-slate-700 dark:text-slate-200" : "text-slate-400 dark:text-slate-500"}`}>
+                              {action.label}
+                              {countLabel}
+                            </span>
+                            {hint && !enabled ? (
+                              <span className="text-[10px] leading-tight text-slate-400 dark:text-slate-500">{hint}</span>
+                            ) : null}
                           </button>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))}
                     {onClearSelection ? (

@@ -166,8 +166,8 @@ class InventoryLotBulkService
         $variants = $this->normalizeVariants($variants);
         $lots = $this->resolveLots($stockLabelIds, $variants, $skipSoldOut);
 
-        if ($variants !== []) {
-            return [
+        $base = $variants !== []
+            ? [
                 'variant_count' => count($variants),
                 'stock_label_count' => 0,
                 'expanded_label_count' => 0,
@@ -178,21 +178,64 @@ class InventoryLotBulkService
                     ->unique()
                     ->count(),
                 'lot_count' => $lots->count(),
-            ];
+            ]
+            : (function () use ($stockLabelIds, $lots) {
+                $uniqueLabels = array_values(array_unique(array_map('intval', $stockLabelIds)));
+                $expanded = $this->expandStockLabelIds($uniqueLabels);
+
+                return [
+                    'variant_count' => 0,
+                    'stock_label_count' => count($uniqueLabels),
+                    'expanded_label_count' => count($expanded),
+                    'linked_product_count' => $expanded === []
+                        ? 0
+                        : (int) Product::query()->whereIn('stock_label_id', $expanded)->count(),
+                    'lot_count' => $lots->count(),
+                ];
+            })();
+
+        return array_merge($base, $this->selectionInsights($lots));
+    }
+
+    /**
+     * @param  Collection<int, InventoryLot>  $lots
+     * @return array{listing_status: array<string, int>, action_eligible: array<string, int>}
+     */
+    public function selectionInsights(Collection $lots): array
+    {
+        $listingStatus = [];
+        $actionEligible = array_fill_keys(self::ACTIONS, 0);
+
+        foreach ($lots as $lot) {
+            $status = (string) ($lot->listing_status ?? InventoryLot::LISTING_ACTIVE);
+            $listingStatus[$status] = ($listingStatus[$status] ?? 0) + 1;
+
+            foreach (self::ACTIONS as $action) {
+                if ($this->isLotEligibleForAction($lot, $action)) {
+                    $actionEligible[$action]++;
+                }
+            }
         }
 
-        $uniqueLabels = array_values(array_unique(array_map('intval', $stockLabelIds)));
-        $expanded = $this->expandStockLabelIds($uniqueLabels);
-
         return [
-            'variant_count' => 0,
-            'stock_label_count' => count($uniqueLabels),
-            'expanded_label_count' => count($expanded),
-            'linked_product_count' => $expanded === []
-                ? 0
-                : (int) Product::query()->whereIn('stock_label_id', $expanded)->count(),
-            'lot_count' => $lots->count(),
+            'listing_status' => $listingStatus,
+            'action_eligible' => $actionEligible,
         ];
+    }
+
+    public function isLotEligibleForAction(InventoryLot $lot, string $action): bool
+    {
+        return match ($action) {
+            self::ACTION_SET_ON_HOLD => ! (
+                $lot->listing_status === InventoryLot::LISTING_ON_HOLD && ! $lot->is_sellable
+            ),
+            self::ACTION_RELEASE_HOLD => $lot->listing_status === InventoryLot::LISTING_ON_HOLD,
+            self::ACTION_MARK_CLEARANCE => true,
+            self::ACTION_REVERT_CLEARANCE => $lot->listing_status === InventoryLot::LISTING_CLEARANCE,
+            self::ACTION_APPLY_LOT_DISCOUNT, self::ACTION_SET_UNIT_PRICE => true,
+            self::ACTION_REMOVE_LOT_DISCOUNT => ($this->priceAudit->snapshot($lot)['discount_percent_off'] ?? 0) > 0,
+            default => false,
+        };
     }
 
     /**
