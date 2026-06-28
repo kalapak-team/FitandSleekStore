@@ -108,6 +108,7 @@ export const DEFAULT_TOP_NAV_DROPDOWNS = {
     { label: "Women's Sale", to: storefrontSearchUrl({ tab: "sale", saleGender: "women" }) },
     { label: "Men's Sale", to: storefrontSearchUrl({ tab: "sale", saleGender: "men" }) },
   ],
+  brands: [],
 };
 
 /** Count leaf links in a flat or sectioned dropdown. */

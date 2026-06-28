@@ -36,6 +36,9 @@ function isNavItemActive(location, to) {
     if (toPath === "/discounts") {
       return pathname === "/discounts" || pathname.startsWith("/discounts/");
     }
+    if (toPath === "/brands") {
+      return pathname === "/brands" || pathname.startsWith("/brands/");
+    }
     return pathname === toPath && !search;
   }
 
@@ -778,6 +781,13 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
         items: navDropdowns.men,
       },
       {
+        key: 'brands',
+        label: label('brands', t('brandsLabel')).toUpperCase(),
+        to: '/brands',
+        items:
+          (navDropdowns.brands?.length ? navDropdowns.brands : autoLeftMenu.brands) || [],
+      },
+      {
         key: 'sale',
         label: label('sale', t('sale')),
         to: navSearch({ tab: 'sale' }),
@@ -790,7 +800,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
           .filter((item) => item && item.label && item.to)
           .map((item) => ({ label: item.label, to: item.to, items: item.items || [] }))
       ),
-    [t, label, navDropdowns, headerSettings.nav_labels, headerSettings.nav_visibility, headerSettings.custom_nav]
+    [t, label, navDropdowns, autoLeftMenu.brands, headerSettings.nav_labels, headerSettings.nav_visibility, headerSettings.custom_nav]
   );
 
   useEffect(() => {

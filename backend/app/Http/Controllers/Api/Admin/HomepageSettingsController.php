@@ -114,6 +114,7 @@ class HomepageSettingsController extends Controller
                         'discounts' => true,
                         'women' => true,
                         'men' => true,
+                        'brands' => true,
                         'sale' => true,
                     ],
                     'custom_nav' => [],
