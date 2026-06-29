@@ -4,11 +4,13 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../l10n/l10n_extension.dart';
+import '../../providers/app_settings_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/notification_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/media_url.dart';
 import '../../utils/notification_navigation.dart';
+import '../../widgets/common/fs_empty_state.dart';
 import '../product_image.dart';
 
 Future<void> showNotificationsSheet(BuildContext context) {
@@ -34,6 +36,7 @@ class _NotificationsSheetBodyState extends State<_NotificationsSheetBody> {
   List<StoreNotification> _items = [];
   int _unread = 0;
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -42,13 +45,22 @@ class _NotificationsSheetBodyState extends State<_NotificationsSheetBody> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final auth = context.read<AuthProvider>();
+    final language = context.read<AppSettingsProvider>().language;
     final service = NotificationService(context.read<ApiClient>());
-    final result = await service.fetchNotifications(isLoggedIn: auth.isLoggedIn);
+    final result = await service.fetchNotifications(
+      isLoggedIn: auth.isLoggedIn,
+      language: language,
+    );
     if (!mounted) return;
     setState(() {
       _items = result.items;
       _unread = result.unreadCount;
+      _error = result.error;
       _loading = false;
     });
   }
@@ -181,7 +193,15 @@ class _NotificationsSheetBodyState extends State<_NotificationsSheetBody> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : _items.isEmpty
+                  : _error != null
+                      ? FsEmptyState(
+                          icon: Icons.notifications_outlined,
+                          title: 'Could not load notifications',
+                          subtitle: _error,
+                          actionLabel: 'Retry',
+                          onAction: _load,
+                        )
+                      : _items.isEmpty
                       ? Center(
                           child: Padding(
                             padding: const EdgeInsets.all(24),

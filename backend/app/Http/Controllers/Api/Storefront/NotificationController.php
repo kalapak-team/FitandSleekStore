@@ -23,16 +23,45 @@ class NotificationController extends Controller
         // Get user notifications (only for authenticated users)
         $notifications = collect();
         $totalUnreadNotifications = 0;
+        $rawNotifications = collect();
 
         if ($user) {
-            $notifications = Notification::forUser($user->id)
+            $totalUnreadNotifications = Notification::forUser($user->id)->unread()->count();
+            $rawNotifications = Notification::forUser($user->id)
                 ->orderBy('created_at', 'desc')
-                ->get()
-                ->map(function ($notification) {
+                ->get();
+        }
+
+        // Get active messages for this user/guest
+        $userLanguage = $this->resolveRequestLanguage($request);
+
+        // Determine audience: guests for unauthenticated, or based on user role
+        $audience = $isGuest ? 'guests' : ($user->role === 'customer' ? 'customers' : 'guests');
+
+        $rawMessages = Message::active()
+            ->byLanguage($userLanguage)
+            ->where(function ($query) use ($audience) {
+                $query->where('target_audience', 'all')
+                      ->orWhere('target_audience', $audience);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $linkUrls = $rawMessages->pluck('link_url');
+        foreach ($rawNotifications as $notification) {
+            $resolved = $this->resolveNotificationLink($notification);
+            if ($resolved) {
+                $linkUrls->push($resolved);
+            }
+        }
+        $productImagesBySlug = $this->productImagesForLinks($linkUrls);
+
+        if ($user) {
+            $notifications = $rawNotifications->map(function ($notification) use ($productImagesBySlug) {
                     $linkUrl = $this->resolveNotificationLink($notification);
                     $data = is_array($notification->data) ? $notification->data : [];
                     $storedMedia = is_string($data['image_url'] ?? null) ? $data['image_url'] : null;
-                    $mediaUrl = $this->resolveItemMediaUrl($storedMedia, $linkUrl);
+                    $mediaUrl = $this->resolveItemMediaUrl($storedMedia, $linkUrl, $productImagesBySlug);
 
                     return [
                         'id' => 'notification-' . $notification->id,
@@ -44,31 +73,14 @@ class NotificationController extends Controller
                         'media_url' => $mediaUrl,
                         'media_type' => $mediaUrl ? 'image' : null,
                         'is_read' => $notification->is_read,
-                        'created_at' => $notification->created_at,
+                        'created_at' => $notification->created_at?->toIso8601String(),
                     ];
                 });
-
-            $totalUnreadNotifications = Notification::forUser($user->id)->unread()->count();
         }
 
-        // Get active messages for this user/guest
-        $userLanguage = $request->header('Accept-Language', 'en');
-        $userLanguage = in_array($userLanguage, ['en', 'km']) ? $userLanguage : 'en';
-
-        // Determine audience: guests for unauthenticated, or based on user role
-        $audience = $isGuest ? 'guests' : ($user->role === 'customer' ? 'customers' : 'guests');
-
-        $messages = Message::active()
-            ->byLanguage($userLanguage)
-            ->where(function ($query) use ($audience) {
-                $query->where('target_audience', 'all')
-                      ->orWhere('target_audience', $audience);
-            })
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($message) {
+        $messages = $rawMessages->map(function ($message) use ($productImagesBySlug) {
                 $linkUrl = $this->normalizeStorefrontLink($message->link_url);
-                $mediaUrl = $this->resolveItemMediaUrl($message->media_url, $linkUrl);
+                $mediaUrl = $this->resolveItemMediaUrl($message->media_url, $linkUrl, $productImagesBySlug);
 
                 return [
                     'id' => 'message-' . $message->id,
@@ -81,7 +93,7 @@ class NotificationController extends Controller
                     'language' => $message->language,
                     'target_audience' => $message->target_audience,
                     'is_read' => false, // Messages don't have read status
-                    'created_at' => $message->created_at,
+                    'created_at' => $message->created_at?->toIso8601String(),
                 ];
             });
 
@@ -112,7 +124,7 @@ class NotificationController extends Controller
     /**
      * Get unread notification count.
      */
-    public function unreadCount()
+    public function unreadCount(Request $request)
     {
         $user = Auth::user();
         
@@ -122,7 +134,17 @@ class NotificationController extends Controller
 
         $count = Notification::forUser($user->id)->unread()->count();
 
-        return response()->json(['unread_count' => $count]);
+        $userLanguage = $this->resolveRequestLanguage($request);
+        $audience = $user->role === 'customer' ? 'customers' : 'guests';
+        $messageCount = Message::active()
+            ->byLanguage($userLanguage)
+            ->where(function ($query) use ($audience) {
+                $query->where('target_audience', 'all')
+                      ->orWhere('target_audience', $audience);
+            })
+            ->count();
+
+        return response()->json(['unread_count' => $count + $messageCount]);
     }
 
     /**
@@ -244,8 +266,10 @@ class NotificationController extends Controller
     /**
      * Resolve a displayable image for storefront notifications (mobile + web).
      * Falls back to the linked product's current cover when stored media is missing or stale.
+     *
+     * @param  array<string, string|null>  $productImagesBySlug
      */
-    private function resolveItemMediaUrl(?string $storedMedia, ?string $linkUrl): ?string
+    private function resolveItemMediaUrl(?string $storedMedia, ?string $linkUrl, array $productImagesBySlug = []): ?string
     {
         $candidates = [];
 
@@ -254,21 +278,57 @@ class NotificationController extends Controller
         }
 
         $slug = $this->productSlugFromStorefrontLink($linkUrl);
-        if ($slug !== null) {
-            $product = Product::query()->where('slug', $slug)->first(['image_url']);
-            if ($product?->image_url) {
-                $candidates[] = Media::url($product->image_url);
-            }
+        if ($slug !== null && ! empty($productImagesBySlug[$slug])) {
+            $candidates[] = Media::url($productImagesBySlug[$slug]);
         }
 
         foreach ($candidates as $candidate) {
-            $absolute = $this->absoluteMediaUrl($candidate);
-            if ($this->isUsableNotificationMedia($absolute)) {
-                return $absolute;
+            try {
+                $absolute = $this->absoluteMediaUrl($candidate);
+                if ($this->isUsableNotificationMedia($absolute)) {
+                    return $absolute;
+                }
+            } catch (\Throwable) {
+                continue;
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param  iterable<string|null>  $links
+     * @return array<string, string>
+     */
+    private function productImagesForLinks(iterable $links): array
+    {
+        $slugs = [];
+        foreach ($links as $link) {
+            $slug = $this->productSlugFromStorefrontLink(is_string($link) ? $link : null);
+            if ($slug !== null) {
+                $slugs[$slug] = true;
+            }
+        }
+
+        if ($slugs === []) {
+            return [];
+        }
+
+        return Product::query()
+            ->whereIn('slug', array_keys($slugs))
+            ->pluck('image_url', 'slug')
+            ->filter(fn ($url) => is_string($url) && trim($url) !== '')
+            ->all();
+    }
+
+    private function resolveRequestLanguage(Request $request): string
+    {
+        $header = strtolower(trim((string) $request->header('Accept-Language', 'en')));
+        if (str_starts_with($header, 'km')) {
+            return 'km';
+        }
+
+        return 'en';
     }
 
     private function productSlugFromStorefrontLink(?string $link): ?string

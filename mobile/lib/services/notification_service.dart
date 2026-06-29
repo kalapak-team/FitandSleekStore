@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 import '../utils/notification_link.dart';
 
@@ -113,10 +114,17 @@ class NotificationService {
 
   final ApiClient _api;
 
-  Future<int> fetchUnreadCount({required bool isLoggedIn}) async {
+  Future<int> fetchUnreadCount({
+    required bool isLoggedIn,
+    String language = 'en',
+  }) async {
     try {
       final path = isLoggedIn ? '/notifications/unread-count' : '/notifications/public';
-      final res = await _api.dio.get(path);
+      final res = await _api.dio.get(
+        path,
+        options: Options(headers: {'Accept-Language': language}),
+        queryParameters: path.endsWith('/public') ? {'per_page': 1} : null,
+      );
       final data = res.data;
       if (data is Map) {
         return _parseCount(data['unread_count']);
@@ -125,28 +133,59 @@ class NotificationService {
     return 0;
   }
 
-  Future<({List<StoreNotification> items, int unreadCount})> fetchNotifications({
+  Future<({List<StoreNotification> items, int unreadCount, String? error})> fetchNotifications({
     required bool isLoggedIn,
+    String language = 'en',
   }) async {
-    try {
-      final path = isLoggedIn ? '/notifications' : '/notifications/public';
-      final res = await _api.dio.get(path);
-      final data = res.data;
-      if (data is! Map) return (items: <StoreNotification>[], unreadCount: 0);
+    final headers = {'Accept-Language': language};
+    final paths = isLoggedIn
+        ? ['/notifications', '/notifications/public']
+        : ['/notifications/public'];
 
-      final unread = _parseCount(data['unread_count']);
-      final block = data['notifications'];
-      final list = block is Map ? block['data'] : null;
-      if (list is! List) return (items: <StoreNotification>[], unreadCount: unread);
-
-      final items = list
-          .whereType<Map>()
-          .map((e) => StoreNotification.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      return (items: items, unreadCount: unread);
-    } catch (_) {
-      return (items: <StoreNotification>[], unreadCount: 0);
+    for (final path in paths) {
+      try {
+        final res = await _api.dio.get(
+          path,
+          options: Options(headers: headers),
+        );
+        final parsed = _parseNotificationsResponse(res.data);
+        if (parsed != null) {
+          return (items: parsed.items, unreadCount: parsed.unreadCount, error: null);
+        }
+      } on DioException catch (e) {
+        if (path != paths.last) continue;
+        return (
+          items: <StoreNotification>[],
+          unreadCount: 0,
+          error: _api.apiMessage(e),
+        );
+      } catch (_) {
+        if (path != paths.last) continue;
+        return (
+          items: <StoreNotification>[],
+          unreadCount: 0,
+          error: 'Could not load notifications',
+        );
+      }
     }
+
+    return (items: <StoreNotification>[], unreadCount: 0, error: 'Could not load notifications');
+  }
+
+  ({List<StoreNotification> items, int unreadCount})? _parseNotificationsResponse(dynamic data) {
+    if (data is! Map) return null;
+
+    final unread = _parseCount(data['unread_count']);
+    final block = data['notifications'];
+    final list = block is Map ? block['data'] : null;
+    if (list is! List) return null;
+
+    final items = list
+        .whereType<Map>()
+        .map((e) => StoreNotification.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+
+    return (items: items, unreadCount: unread);
   }
 
   Future<void> markAllRead() async {

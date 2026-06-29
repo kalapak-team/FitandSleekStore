@@ -86,7 +86,10 @@ class _HomeShellState extends State<HomeShell> {
 
     var notifCount = 0;
 
-    notifCount = await notificationService.fetchUnreadCount(isLoggedIn: auth.isLoggedIn);
+    notifCount = await notificationService.fetchUnreadCount(
+      isLoggedIn: auth.isLoggedIn,
+      language: context.read<AppSettingsProvider>().language,
+    );
 
     await Future.wait([
       wishlist.load(isLoggedIn: auth.isLoggedIn),
