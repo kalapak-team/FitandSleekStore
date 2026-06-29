@@ -29,7 +29,7 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen> {
   String? _error;
   int _page = 1;
   bool _hasMore = true;
-  String? _statusFilter = 'pending';
+  String? _statusFilter; // null = all (matches web admin default)
 
   @override
   void initState() {
