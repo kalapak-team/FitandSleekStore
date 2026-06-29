@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useSearchParams } from "react-router-dom";
 import { resolveImageUrl } from "../../lib/images";
 import Logo from "../../components/Logo.jsx";
+import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { getDeviceHeaders, getDeviceMeta } from "../../lib/device";
 import { useHomepageSettings } from "../../state/homepageSettings";
 
@@ -520,7 +521,7 @@ export default function DriverScanPage() {
         setSessionScanCount(0);
     };
 
-    const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.png";
+    const logoUrl = resolveBundledLogoUrl(settings?.app_logo_url || settings?.header?.logo_url);
 
     return (
         <div className="min-h-screen bg-slate-50 px-4 py-10">

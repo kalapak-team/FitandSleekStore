@@ -1,7 +1,18 @@
 {
+  "headers": [
+    {
+      "source": "/(favicon\\.svg|favicon\\.png|apple-touch-icon\\.png|logo\\.png|logo\\.svg|logo-circle\\.svg|placeholder\\.svg)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|favicon\\.svg|favicon\\.png|apple-touch-icon\\.png|logo\\.png|logo\\.svg|logo-circle\\.svg|placeholder\\.svg).*)",
       "destination": "/index.html"
     }
   ]

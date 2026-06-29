@@ -6,6 +6,7 @@ import AdminPermissionOutlet from "../../routes/AdminPermissionOutlet.jsx";
 import { useHomepageSettings } from "../../state/homepageSettings.jsx";
 import AdminTopbar from "../../components/admin/AdminTopbar";
 import Logo from "../../components/Logo.jsx";
+import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import api from "../../lib/api";
 import { fetchAdminNavBadges } from "../../lib/adminNavBadges.js";
 import { resolveImageUrl } from "../../lib/images";
@@ -281,7 +282,7 @@ export default function AdminLayout() {
   const [navBadges, setNavBadges] = useState({ orders: 0, messages: 0 });
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileInputRef = useRef(null);
-  const logoSrc = settings?.header?.logo_url || "/logo.png";
+  const logoSrc = resolveBundledLogoUrl(settings?.header?.logo_url);
 
   useEffect(() => {
     if (!user || isSuperAdminUser(user)) return;

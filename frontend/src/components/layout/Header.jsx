@@ -18,6 +18,7 @@ import MegaMenuScrollArea from "./MegaMenuScrollArea.jsx";
 import { storefrontSearchUrl as navSearch } from "../../lib/storefrontNavLinks.js";
 import { mergeTopNavDropdowns } from "../../lib/defaultTopNavDropdowns.js";
 import { mergeHeaderSettings } from "../../lib/defaultHeaderSettings.js";
+import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { resolveHeaderChromeStyle } from "../../lib/storefrontChrome.js";
 
 function cn(...xs) {
@@ -849,7 +850,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
         <Link to="/" className="shrink-0">
           <Logo
             className="fs-header-bar__logo-mobile"
-            src={headerSettings.logo_url || "/logo.png"}
+            src={resolveBundledLogoUrl(headerSettings.logo_url)}
           />
         </Link>
 
@@ -927,7 +928,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
           </div>
 
           <Link to="/" className="flex shrink-0 justify-self-center px-1">
-            <Logo className="fs-header-bar__logo" src={headerSettings.logo_url || "/logo.png"} />
+            <Logo className="fs-header-bar__logo" src={resolveBundledLogoUrl(headerSettings.logo_url)} />
           </Link>
 
           <div className="fs-header-actions flex min-w-0 items-center justify-end gap-1 lg:gap-1.5 overflow-visible">

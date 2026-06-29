@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Facebook, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import Logo from "../Logo.jsx";
+import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { DialogPopup, DialogTitle, DialogDescription } from "../ui/Dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContents, TabsContent } from "../ui/Tabs";
 
@@ -100,7 +101,7 @@ export function AuthDialogShell({
           >
             <Logo
               className="h-[4.5rem] w-auto max-w-[260px] drop-shadow-md"
-              src={logoUrl || "/logo.png"}
+              src={resolveBundledLogoUrl(logoUrl)}
               alt="Fit & Sleek"
             />
           </Link>

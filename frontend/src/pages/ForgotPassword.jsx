@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Mail, Lock, ShieldCheck, ArrowLeft, CheckCircle2 } from "lucide-react";
 import VerificationMethodPicker from "../components/security/VerificationMethodPicker";
 import Logo from "../components/Logo.jsx";
+import { resolveBundledLogoUrl } from "../lib/siteLogo.js";
 import { useHomepageSettings } from "../state/homepageSettings.jsx";
 import {
     getApiErrorDetails,
@@ -252,7 +253,7 @@ export default function ForgotPassword() {
                     <Link to="/" className="mx-auto flex w-fit items-center justify-center transition-opacity hover:opacity-85">
                         <Logo
                             className="h-16 w-auto max-w-[220px] drop-shadow-md"
-                            src={settings?.header?.logo_url || settings?.app_logo_url || "/logo.png"}
+                            src={resolveBundledLogoUrl(settings?.header?.logo_url || settings?.app_logo_url)}
                             alt="Fit & Sleek"
                         />
                     </Link>

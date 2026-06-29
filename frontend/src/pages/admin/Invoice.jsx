@@ -5,6 +5,7 @@ import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 import { useHomepageSettings } from "../../state/homepageSettings";
 import Logo from "../../components/Logo.jsx";
+import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { AdminPageLoader } from "@/components/admin/AdminLoading";
 import AdminReportExportMenu from "../../components/admin/AdminReportExportMenu.jsx";
 import { downloadBlobResponse } from "../../lib/adminReportDownload.js";
@@ -95,7 +96,7 @@ export default function AdminInvoicePage() {
  }, [orderId, permissionsReady, canViewOrders]);
 
  const isPaid = useMemo(() => invoice?.payment_status === "PAID", [invoice]);
- const logoUrl = settings?.app_logo_url || settings?.header?.logo_url || "/logo.png";
+ const logoUrl = resolveBundledLogoUrl(settings?.app_logo_url || settings?.header?.logo_url);
 
  if (!permissionsReady || loading) return <AdminPageLoader />;
 
