@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\Notification;
+use App\Models\Product;
 use App\Support\Media;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -28,13 +29,20 @@ class NotificationController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($notification) {
+                    $linkUrl = $this->resolveNotificationLink($notification);
+                    $data = is_array($notification->data) ? $notification->data : [];
+                    $storedMedia = is_string($data['image_url'] ?? null) ? $data['image_url'] : null;
+                    $mediaUrl = $this->resolveItemMediaUrl($storedMedia, $linkUrl);
+
                     return [
                         'id' => 'notification-' . $notification->id,
                         'type' => $notification->type ?: 'notification',
                         'title' => $notification->title,
                         'message' => $notification->message,
                         'data' => $notification->data,
-                        'link_url' => $this->resolveNotificationLink($notification),
+                        'link_url' => $linkUrl,
+                        'media_url' => $mediaUrl,
+                        'media_type' => $mediaUrl ? 'image' : null,
                         'is_read' => $notification->is_read,
                         'created_at' => $notification->created_at,
                     ];
@@ -59,14 +67,17 @@ class NotificationController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($message) {
+                $linkUrl = $this->normalizeStorefrontLink($message->link_url);
+                $mediaUrl = $this->resolveItemMediaUrl($message->media_url, $linkUrl);
+
                 return [
                     'id' => 'message-' . $message->id,
                     'type' => 'message',
                     'title' => $message->title,
                     'message' => $message->content,
-                    'link_url' => $this->normalizeStorefrontLink($message->link_url),
-                    'media_url' => Media::url($message->media_url),
-                    'media_type' => $message->media_type,
+                    'link_url' => $linkUrl,
+                    'media_url' => $mediaUrl,
+                    'media_type' => $mediaUrl ? ($message->media_type ?: 'image') : null,
                     'language' => $message->language,
                     'target_audience' => $message->target_audience,
                     'is_read' => false, // Messages don't have read status
@@ -228,6 +239,76 @@ class NotificationController extends Controller
             'promotion' => '/search',
             default => null,
         };
+    }
+
+    /**
+     * Resolve a displayable image for storefront notifications (mobile + web).
+     * Falls back to the linked product's current cover when stored media is missing or stale.
+     */
+    private function resolveItemMediaUrl(?string $storedMedia, ?string $linkUrl): ?string
+    {
+        $candidates = [];
+
+        if ($storedMedia !== null && trim($storedMedia) !== '') {
+            $candidates[] = Media::url($storedMedia);
+        }
+
+        $slug = $this->productSlugFromStorefrontLink($linkUrl);
+        if ($slug !== null) {
+            $product = Product::query()->where('slug', $slug)->first(['image_url']);
+            if ($product?->image_url) {
+                $candidates[] = Media::url($product->image_url);
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $absolute = $this->absoluteMediaUrl($candidate);
+            if ($this->isUsableNotificationMedia($absolute)) {
+                return $absolute;
+            }
+        }
+
+        return null;
+    }
+
+    private function productSlugFromStorefrontLink(?string $link): ?string
+    {
+        $normalized = $this->normalizeStorefrontLink($link);
+        if ($normalized === null) {
+            return null;
+        }
+
+        if (preg_match('#^/p/([^/?#]+)#', $normalized, $matches) === 1) {
+            return urldecode($matches[1]);
+        }
+
+        return null;
+    }
+
+    private function absoluteMediaUrl(?string $url): ?string
+    {
+        if ($url === null || trim($url) === '') {
+            return null;
+        }
+
+        $url = trim($url);
+
+        if (Media::isExternalUrl($url)) {
+            return $url;
+        }
+
+        $base = rtrim((string) config('app.url'), '/');
+
+        return str_starts_with($url, '/') ? $base.$url : $base.'/'.ltrim($url, '/');
+    }
+
+    private function isUsableNotificationMedia(?string $url): bool
+    {
+        if ($url === null || trim($url) === '') {
+            return false;
+        }
+
+        return ! str_contains(strtolower($url), 'placeholder.svg');
     }
 }
 
