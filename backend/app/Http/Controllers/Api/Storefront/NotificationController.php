@@ -338,7 +338,7 @@ class NotificationController extends Controller
             return null;
         }
 
-        if (preg_match('#^/p/([^/?#]+)#', $normalized, $matches) === 1) {
+        if (preg_match('~^/p/([^/?#]+)~', $normalized, $matches) === 1) {
             return urldecode($matches[1]);
         }
 
