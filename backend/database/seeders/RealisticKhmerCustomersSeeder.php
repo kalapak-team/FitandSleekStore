@@ -3,12 +3,15 @@
 namespace Database\Seeders;
 
 use App\Models\Address;
+use App\Models\LoyaltyEvent;
+use App\Models\LoyaltyProfile;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * 15 realistic Cambodia storefront customers (users + saved addresses).
+ * 15 realistic Cambodia storefront customers (users, addresses, Top Fans loyalty).
  *
  * Run: php artisan db:seed --class=RealisticKhmerCustomersSeeder
  *
@@ -18,12 +21,15 @@ class RealisticKhmerCustomersSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->seedLoyaltyRules();
+
         $customers = [
             [
                 'name' => 'Norng Phuem',
                 'email' => 'phuemnorng@gmail.com',
                 'phone' => '0887525243',
                 'days_ago' => 12,
+                'loyalty' => ['points' => 1320, 'tier' => 'vip', 'orders_count' => 21, 'lifetime_spend' => 1984.50],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '42B',
@@ -41,6 +47,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'sophea.chan.kh@gmail.com',
                 'phone' => '0968123456',
                 'days_ago' => 28,
+                'loyalty' => ['points' => 680, 'tier' => 'gold', 'orders_count' => 12, 'lifetime_spend' => 892.00],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '18',
@@ -58,6 +65,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'vanna.mao88@yahoo.com',
                 'phone' => '0977011223',
                 'days_ago' => 45,
+                'loyalty' => ['points' => 540, 'tier' => 'gold', 'orders_count' => 9, 'lifetime_spend' => 645.75],
                 'address' => [
                     'label' => 'Office',
                     'house_no' => '5',
@@ -75,6 +83,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'kimhour.lim@gmail.com',
                 'phone' => '0719338844',
                 'days_ago' => 60,
+                'loyalty' => ['points' => 310, 'tier' => 'silver', 'orders_count' => 7, 'lifetime_spend' => 412.30],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '120',
@@ -92,6 +101,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'bopha.ros@outlook.com',
                 'phone' => '0157788990',
                 'days_ago' => 74,
+                'loyalty' => ['points' => 245, 'tier' => 'silver', 'orders_count' => 5, 'lifetime_spend' => 318.90],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '7A',
@@ -109,6 +119,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'dara.sok.kh@gmail.com',
                 'phone' => '0892233445',
                 'days_ago' => 90,
+                'loyalty' => ['points' => 220, 'tier' => 'silver', 'orders_count' => 4, 'lifetime_spend' => 276.40],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '33',
@@ -126,6 +137,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'sreypich.shop@gmail.com',
                 'phone' => '0925566778',
                 'days_ago' => 105,
+                'loyalty' => ['points' => 590, 'tier' => 'gold', 'orders_count' => 10, 'lifetime_spend' => 701.25],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '9',
@@ -143,6 +155,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'rithy.keo@gmail.com',
                 'phone' => '0701122334',
                 'days_ago' => 130,
+                'loyalty' => ['points' => 95, 'tier' => 'bronze', 'orders_count' => 2, 'lifetime_spend' => 118.00],
                 'address' => [
                     'label' => 'Office',
                     'house_no' => '2F',
@@ -160,6 +173,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'nary.phan.kh@gmail.com',
                 'phone' => '0984455667',
                 'days_ago' => 150,
+                'loyalty' => ['points' => 140, 'tier' => 'bronze', 'orders_count' => 3, 'lifetime_spend' => 165.50],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '56',
@@ -177,6 +191,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'sokha.heng@icloud.com',
                 'phone' => '0863344556',
                 'days_ago' => 168,
+                'loyalty' => ['points' => 355, 'tier' => 'silver', 'orders_count' => 6, 'lifetime_spend' => 438.80],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '24',
@@ -194,6 +209,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'chanthou.meas@gmail.com',
                 'phone' => '0936677889',
                 'days_ago' => 190,
+                'loyalty' => ['points' => 60, 'tier' => 'bronze', 'orders_count' => 1, 'lifetime_spend' => 72.00],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '11',
@@ -211,6 +227,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'pisach.ouk@gmail.com',
                 'phone' => '0958899001',
                 'days_ago' => 210,
+                'loyalty' => ['points' => 45, 'tier' => 'bronze', 'orders_count' => 1, 'lifetime_spend' => 54.25],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '3',
@@ -228,6 +245,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'malis.chea.kh@gmail.com',
                 'phone' => '0991011122',
                 'days_ago' => 240,
+                'loyalty' => ['points' => 1180, 'tier' => 'vip', 'orders_count' => 18, 'lifetime_spend' => 1726.90],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '67',
@@ -245,6 +263,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'visal.nhem@gmail.com',
                 'phone' => '0812233445',
                 'days_ago' => 265,
+                'loyalty' => ['points' => 720, 'tier' => 'gold', 'orders_count' => 13, 'lifetime_spend' => 954.60],
                 'address' => [
                     'label' => 'Office',
                     'house_no' => '14',
@@ -262,6 +281,7 @@ class RealisticKhmerCustomersSeeder extends Seeder
                 'email' => 'leakhena.thy@gmail.com',
                 'phone' => '0785566778',
                 'days_ago' => 300,
+                'loyalty' => ['points' => 268, 'tier' => 'silver', 'orders_count' => 5, 'lifetime_spend' => 329.15],
                 'address' => [
                     'label' => 'Home',
                     'house_no' => '21',
@@ -326,8 +346,66 @@ class RealisticKhmerCustomersSeeder extends Seeder
                     'is_default' => true,
                 ]
             );
+
+            $this->seedLoyaltyForUser($user, $row['loyalty'], $createdAt);
         }
 
-        $this->command?->info('Seeded '.count($customers).' realistic Khmer customers (password: Customer@123).');
+        $this->command?->info('Seeded '.count($customers).' realistic Khmer customers with Top Fans loyalty (password: Customer@123).');
+    }
+
+    private function seedLoyaltyRules(): void
+    {
+        Setting::query()->updateOrCreate(
+            ['group' => 'loyalty', 'key' => 'tier_rules'],
+            [
+                'type' => 'json',
+                'value' => [
+                    'bronze' => ['min_points' => 0, 'discount_percent' => 0],
+                    'silver' => ['min_points' => 200, 'discount_percent' => 5],
+                    'gold' => ['min_points' => 500, 'discount_percent' => 10],
+                    'vip' => ['min_points' => 1000, 'discount_percent' => 15],
+                ],
+            ]
+        );
+    }
+
+    /**
+     * @param  array{points:int,tier:string,orders_count:int,lifetime_spend:float}  $loyalty
+     */
+    private function seedLoyaltyForUser(User $user, array $loyalty, \Illuminate\Support\Carbon $createdAt): void
+    {
+        $lastEarned = $createdAt->copy()->addDays(min(7, max(1, (int) ($loyalty['orders_count'] ?? 1))));
+
+        LoyaltyProfile::query()->updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'points' => (int) $loyalty['points'],
+                'tier' => (string) $loyalty['tier'],
+                'orders_count' => (int) $loyalty['orders_count'],
+                'lifetime_spend' => (float) $loyalty['lifetime_spend'],
+                'last_earned_at' => $lastEarned,
+            ]
+        );
+
+        LoyaltyEvent::query()
+            ->where('user_id', $user->id)
+            ->where('event_type', 'seed_adjustment')
+            ->where('order_id', null)
+            ->where('meta->source', 'RealisticKhmerCustomersSeeder')
+            ->delete();
+
+        LoyaltyEvent::query()->create([
+            'user_id' => $user->id,
+            'order_id' => null,
+            'event_type' => 'seed_adjustment',
+            'points_delta' => (int) $loyalty['points'],
+            'meta' => [
+                'source' => 'RealisticKhmerCustomersSeeder',
+                'tier' => $loyalty['tier'],
+                'lifetime_spend' => $loyalty['lifetime_spend'],
+            ],
+            'created_at' => $lastEarned,
+            'updated_at' => $lastEarned,
+        ]);
     }
 }
