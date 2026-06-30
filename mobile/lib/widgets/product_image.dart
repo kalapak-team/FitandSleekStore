@@ -54,19 +54,7 @@ class ProductImage extends StatelessWidget {
       return Image.memory(bytes, fit: fit, alignment: alignment, gaplessPlayback: true);
     }
 
-    // Web `<img>` renders SVG; Flutter needs flutter_svg (Nike, ZARA, UNIQLO, etc.).
-    if (isSvgUrl(imageUrl)) {
-      return SvgPicture.network(
-        imageUrl,
-        fit: fit,
-        alignment: alignment,
-        placeholderBuilder: (_) => placeholder ?? _defaultPlaceholder(),
-        errorBuilder: (_, __, ___) => error ?? _defaultError(),
-      );
-    }
-
-    // Flutter web decodes images via canvas; cross-origin /storage needs CORS.
-    // resolveMediaUrl() routes web storage paths through /api/media (see media_url.dart).
+    // Flutter web decodes images via canvas; cross-origin CDN needs /api/media/proxy (media_url.dart).
     if (kIsWeb) {
       return Image.network(
         imageUrl,
@@ -76,6 +64,16 @@ class ProductImage extends StatelessWidget {
           if (progress == null) return child;
           return placeholder ?? _defaultPlaceholder();
         },
+        errorBuilder: (_, __, ___) => error ?? _defaultError(),
+      );
+    }
+
+    if (isSvgUrl(imageUrl)) {
+      return SvgPicture.network(
+        imageUrl,
+        fit: fit,
+        alignment: alignment,
+        placeholderBuilder: (_) => placeholder ?? _defaultPlaceholder(),
         errorBuilder: (_, __, ___) => error ?? _defaultError(),
       );
     }

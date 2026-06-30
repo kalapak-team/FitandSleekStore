@@ -110,6 +110,7 @@ Route::get('/rielpay/probe', function () {
 Route::middleware(['throttle:api'])->group(function () {
 
 // Public files with CORS (for Flutter web / cross-origin clients; path = storage/app/public/...)
+Route::get('/media/proxy', [PublicMediaController::class, 'proxy']);
 Route::get('/media/{path}', [PublicMediaController::class, 'show'])
     ->where('path', '.*');
 

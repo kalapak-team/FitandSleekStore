@@ -87,6 +87,56 @@ class Media
     }
 
     /**
+     * Whether an absolute URL may be fetched by /api/media/proxy (Flutter web CORS).
+     */
+    public static function isAllowedProxyUrl(?string $url): bool
+    {
+        if (! self::isExternalUrl($url)) {
+            return false;
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($host === '') {
+            return false;
+        }
+
+        if (preg_match('/\.r2\.dev$/i', $host) === 1) {
+            return true;
+        }
+
+        if (preg_match('/\.r2\.cloudflarestorage\.com$/i', $host) === 1) {
+            return true;
+        }
+
+        if (str_ends_with($host, 'cloudinary.com') || str_ends_with($host, 'res.cloudinary.com')) {
+            return true;
+        }
+
+        foreach ([env('R2_PUBLIC_URL'), env('AWS_URL')] as $configured) {
+            $configured = trim((string) $configured);
+            if ($configured === '') {
+                continue;
+            }
+            $configuredHost = strtolower((string) parse_url($configured, PHP_URL_HOST));
+            if ($configuredHost !== '' && $host === $configuredHost) {
+                return true;
+            }
+        }
+
+        $appHost = strtolower((string) parse_url((string) config('app.url'), PHP_URL_HOST));
+        if ($appHost !== '' && $host === $appHost) {
+            return true;
+        }
+
+        $storefrontHost = strtolower((string) parse_url((string) env('FRONTEND_URL', ''), PHP_URL_HOST));
+        if ($storefrontHost !== '' && $host === $storefrontHost) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Strip /storage/ prefix and return a disk-relative key when possible.
      */
     public static function storageKey(?string $reference): ?string

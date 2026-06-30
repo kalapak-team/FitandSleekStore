@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Support\Media;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -13,6 +15,32 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PublicMediaController extends Controller
 {
+    /**
+     * Proxy allowlisted CDN URLs with API CORS headers (Flutter web cannot read R2/Cloudinary directly).
+     */
+    public function proxy(Request $request): Response
+    {
+        $url = trim((string) $request->query('url', ''));
+        if ($url === '' || ! Media::isAllowedProxyUrl($url)) {
+            abort(403);
+        }
+
+        $upstream = Http::timeout(20)
+            ->withHeaders(['User-Agent' => 'FitandSleek-MediaProxy/1.0'])
+            ->get($url);
+
+        if (! $upstream->successful()) {
+            abort($upstream->status() === 404 ? 404 : 502);
+        }
+
+        $contentType = $upstream->header('Content-Type') ?: 'application/octet-stream';
+
+        return response($upstream->body(), 200, [
+            'Content-Type' => $contentType,
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
     public function show(string $path): Response
     {
         $path = ltrim(str_replace(['..', '\\'], '', $path), '/');

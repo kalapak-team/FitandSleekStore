@@ -57,6 +57,30 @@ String _encodePublicPath(String path) {
   return path.split('/').map(Uri.encodeComponent).join('/');
 }
 
+String _apiMediaBase() => AppConfig.apiBaseUrl.replaceAll(RegExp(r'/+$'), '');
+
+bool _isApiHost(String host) {
+  try {
+    return host.toLowerCase() == Uri.parse(AppConfig.apiBaseUrl).host.toLowerCase();
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Flutter web: route external CDN URLs through Laravel so CORS headers are present.
+String _webProxiedExternalUrl(String url) {
+  if (!kIsWeb) return url;
+  try {
+    final uri = Uri.parse(url);
+    if (uri.scheme != 'http' && uri.scheme != 'https') return url;
+    if (_isApiHost(uri.host)) return url;
+    if (uri.path.contains('/media/proxy')) return url;
+    return '${_apiMediaBase()}/media/proxy?url=${Uri.encodeComponent(url)}';
+  } catch (_) {
+    return url;
+  }
+}
+
 /// Resolve product/image paths from the Laravel API (same idea as `frontend/src/lib/images.js`).
 String resolveMediaUrl(String? raw) {
   if (raw == null || raw.trim().isEmpty) return '';
@@ -70,7 +94,7 @@ String resolveMediaUrl(String? raw) {
     }
     final diskPath = _publicDiskPath(value);
     if (diskPath != null) {
-      return '${AppConfig.apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}/media/${_encodePublicPath(diskPath)}';
+      return '${_apiMediaBase()}/media/${_encodePublicPath(diskPath)}';
     }
     if (value.startsWith('http://') || value.startsWith('https://')) {
       final rewritten = _rewriteLoopback(value);
@@ -81,14 +105,14 @@ String resolveMediaUrl(String? raw) {
         }
         final diskFromUrl = _publicDiskPath(uri.path);
         if (diskFromUrl != null) {
-          return '${AppConfig.apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}/media/${_encodePublicPath(diskFromUrl)}';
+          return '${_apiMediaBase()}/media/${_encodePublicPath(diskFromUrl)}';
         }
       } catch (_) {}
-      return rewritten;
+      return _webProxiedExternalUrl(rewritten);
     }
     final diskRelativeWeb = _diskRelativeStoragePath(value);
     if (diskRelativeWeb != null) {
-      return '${AppConfig.apiBaseUrl.replaceAll(RegExp(r'/+$'), '')}/media/${_encodePublicPath(diskRelativeWeb)}';
+      return '${_apiMediaBase()}/media/${_encodePublicPath(diskRelativeWeb)}';
     }
   }
 
