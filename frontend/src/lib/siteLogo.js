@@ -1,10 +1,13 @@
-import bundledLogoCircle from "@/assets/logo-circle.png?inline";
+import bundledLogoSvg from "@/assets/logo-circle.svg?raw";
 
-/** Inlined in the JS bundle — no network request; shows instantly on slow loads. */
-export const BUNDLED_SITE_LOGO_SRC = bundledLogoCircle;
+/** Inlined SVG — vector, stays sharp at any header/footer size. */
+export const BUNDLED_SITE_LOGO_SVG = bundledLogoSvg;
 
-/** Same-origin fallback when inline import is unavailable (e.g. tests). */
-export const SITE_LOGO_WEB_PATH = "/logo-circle.png";
+/** Data URI for <img> tags (invoices, auth dialogs, etc.). */
+export const BUNDLED_SITE_LOGO_SRC = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(bundledLogoSvg)}`;
+
+/** Same-origin fallback path. */
+export const SITE_LOGO_WEB_PATH = "/logo-circle.svg";
 
 const SITE_LOGO_BASENAMES = new Set([
   "logo.png",
@@ -26,29 +29,26 @@ export function isBundledSiteLogo(src) {
   if (!src) return true;
   const trimmed = String(src).trim();
   if (!trimmed || trimmed === SITE_LOGO_WEB_PATH) return true;
+  if (trimmed.startsWith("data:image/svg+xml")) return true;
   const base = pathnameOf(trimmed).split("/").pop()?.toLowerCase() || "";
   return SITE_LOGO_BASENAMES.has(base);
 }
 
-/** Map legacy bundled logo paths to the circular PNG; keep custom uploads unchanged. */
 export function normalizeSiteLogoForWeb(src) {
   if (!src || isBundledSiteLogo(src)) return SITE_LOGO_WEB_PATH;
   return String(src).trim();
 }
 
-/** Instant logo from the JS bundle; no backend / slow static host round-trip. */
 export function siteStaticLogoPath() {
   return BUNDLED_SITE_LOGO_SRC;
 }
 
-/** Default bundled logo — inlined when bundled, same-origin path otherwise. */
 export function resolveBundledLogoUrl(src) {
   const trimmed = src ? String(src).trim() : "";
   if (trimmed && !isBundledSiteLogo(trimmed)) return trimmed;
   return BUNDLED_SITE_LOGO_SRC;
 }
 
-/** Favicons are served from the SPA host — do not repoint to Laravel (slow cold start). */
 export function ensureDocumentBrandAssets() {
   /* no-op: index.html + public/ favicons on the storefront CDN */
 }

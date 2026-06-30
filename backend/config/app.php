@@ -60,7 +60,7 @@ return [
         ? $local
         : env('FRONTEND_URL', 'http://localhost:5173'),
 
-    'logo_url' => env('APP_LOGO_URL', '/logo-circle.png'),
+    'logo_url' => env('APP_LOGO_URL', '/logo-circle.svg'),
 
     'logo_circle_url' => env('APP_LOGO_CIRCLE_URL', '/logo-circle.svg'),
 

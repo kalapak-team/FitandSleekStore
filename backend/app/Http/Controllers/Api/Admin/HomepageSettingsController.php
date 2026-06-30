@@ -22,9 +22,9 @@ class HomepageSettingsController extends Controller
 
     private function resolveAppLogoUrl(): string
     {
-        $configured = (string) config('app.logo_circle_png_url', '/logo-circle.png');
+        $configured = (string) config('app.logo_circle_url', '/logo-circle.svg');
         if ($configured === '') {
-            return '/logo-circle.png';
+            return '/logo-circle.svg';
         }
 
         if (str_starts_with($configured, 'http://') || str_starts_with($configured, 'https://')) {
@@ -33,7 +33,7 @@ class HomepageSettingsController extends Controller
             if (in_array($host, ['localhost', '127.0.0.1', 'host.docker.internal', 'backend'], true)) {
                 $path = '/'.ltrim((string) ($parts['path'] ?? ''), '/');
 
-                return $path !== '/' ? $path : '/logo-circle.png';
+                return $path !== '/' ? $path : '/logo-circle.svg';
             }
 
             return $configured;
