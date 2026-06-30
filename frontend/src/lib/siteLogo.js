@@ -1,13 +1,13 @@
-import bundledLogoSvg from "@/assets/logo-circle.svg?raw";
+import bundledLogoSvg from "@/assets/logo.svg?raw";
 
-/** Inlined SVG — vector, stays sharp at any header/footer size. */
+/** Inlined wide banner logo (vector) — matches /logo.png, sharp at any size. */
 export const BUNDLED_SITE_LOGO_SVG = bundledLogoSvg;
 
 /** Data URI for <img> tags (invoices, auth dialogs, etc.). */
 export const BUNDLED_SITE_LOGO_SRC = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(bundledLogoSvg)}`;
 
-/** Same-origin fallback path. */
-export const SITE_LOGO_WEB_PATH = "/logo-circle.svg";
+/** Public path for the default storefront logo. */
+export const SITE_LOGO_WEB_PATH = "/logo.png";
 
 const SITE_LOGO_BASENAMES = new Set([
   "logo.png",
