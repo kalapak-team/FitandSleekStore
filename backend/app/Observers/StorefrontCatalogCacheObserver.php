@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Banner;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Collection;
 use App\Models\Setting;
@@ -25,6 +26,13 @@ class StorefrontCatalogCacheObserver
     {
         if ($model instanceof Banner) {
             StorefrontCacheService::bump('banners');
+            StorefrontCacheService::bumpHomepageBootstrap();
+
+            return;
+        }
+
+        if ($model instanceof Brand) {
+            StorefrontCacheService::bumpHomepageBootstrap();
 
             return;
         }
@@ -38,6 +46,7 @@ class StorefrontCatalogCacheObserver
 
         if ($model instanceof Collection) {
             StorefrontCacheService::bump('collections');
+            StorefrontCacheService::bumpHomepageBootstrap();
 
             return;
         }
@@ -45,6 +54,7 @@ class StorefrontCatalogCacheObserver
         if ($model instanceof Setting) {
             if ($model->group === 'homepage' || in_array($model->key, ['font_en', 'font_km'], true)) {
                 StorefrontCacheService::bump('homepage-settings');
+                StorefrontCacheService::bumpHomepageBootstrap();
             }
         }
     }

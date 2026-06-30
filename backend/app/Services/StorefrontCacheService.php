@@ -20,6 +20,8 @@ class StorefrontCacheService
 
     public const TTL_RECOMMENDATIONS = 180;
 
+    public const TTL_BOOTSTRAP = 180;
+
     private const VERSION_PREFIX = 'storefront:v1:ver:';
 
     public static function remember(string $domain, int $ttlSeconds, string $suffix, callable $callback): mixed
@@ -53,6 +55,12 @@ class StorefrontCacheService
         self::bump('products');
         self::bump('discounts');
         self::bump('recommendations');
+        self::bump('homepage-bootstrap');
+    }
+
+    public static function bumpHomepageBootstrap(): void
+    {
+        self::bump('homepage-bootstrap');
     }
 
     public static function requestHash(array $params): string

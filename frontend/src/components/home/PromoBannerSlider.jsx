@@ -7,12 +7,19 @@ import { useCatalogAvailability } from "../../state/catalogAvailability.jsx";
 
 const isVideo = (url) => /\.(mp4|webm|ogg)$/i.test(url || "");
 
-export default function PromoBannerSlider() {
+export default function PromoBannerSlider({ initialBanners, skipFetch = false }) {
   const { infrastructureDegraded } = useCatalogAvailability();
   const [index, setIndex] = useState(0);
-  const [banners, setBanners] = useState([]);
+  const [banners, setBanners] = useState(() =>
+    skipFetch && Array.isArray(initialBanners) ? filterStorefrontMedia(initialBanners) : []
+  );
 
   useEffect(() => {
+    if (skipFetch && Array.isArray(initialBanners)) {
+      setBanners(filterStorefrontMedia(initialBanners));
+      return;
+    }
+
     const load = async () => {
       try {
         const { data } = await api.get("/banners/promo");
@@ -23,7 +30,7 @@ export default function PromoBannerSlider() {
       }
     };
     load();
-  }, []);
+  }, [skipFetch, initialBanners]);
 
   const slides = useMemo(() => {
     return (banners || []).map((b) => {

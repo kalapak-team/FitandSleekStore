@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Storefront\CartController;
 use App\Http\Controllers\Api\Storefront\OrderController;
 use App\Http\Controllers\Api\Storefront\PaymentController;
 use App\Http\Controllers\Api\Storefront\BannerController;
+use App\Http\Controllers\Api\Storefront\HomepageBootstrapController;
 use App\Http\Controllers\Api\Storefront\CollectionController as StorefrontCollectionController;
 use App\Http\Controllers\Api\Admin\DeliveryFeeAdminController;
 use App\Http\Controllers\Api\Admin\ShipmentQrController;
@@ -160,6 +161,7 @@ Route::post('/auth/two-factor/challenge', [TwoFactorController::class, 'challeng
 // -------------------------
 Route::get('/menus', [StorefrontMenuController::class, 'index']); // header WOMEN/MEN mega menu
 Route::get('/homepage', [HomepageAdminController::class, 'show']); // public homepage data (optional)
+Route::get('/homepage/bootstrap', HomepageBootstrapController::class);
 
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/products', [ProductController::class, 'index']);

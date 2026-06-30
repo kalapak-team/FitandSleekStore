@@ -190,11 +190,13 @@ const buttonVariants = {
   },
 };
 
-export default function Hero() {
+export default function Hero({ initialBanners, skipFetch = false }) {
   const { infrastructureDegraded } = useCatalogAvailability();
   const [i, setI] = useState(0);
-  const [banners, setBanners] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [banners, setBanners] = useState(() =>
+    skipFetch && Array.isArray(initialBanners) ? filterStorefrontMedia(initialBanners) : []
+  );
+  const [loading, setLoading] = useState(() => !(skipFetch && Array.isArray(initialBanners)));
   const [fetchFailed, setFetchFailed] = useState(false);
   const [heroImageFailed, setHeroImageFailed] = useState(false);
   const [animationStyle, setAnimationStyle] = useState("fadeIn");
@@ -211,6 +213,12 @@ export default function Hero() {
   };
 
   useEffect(() => {
+    if (skipFetch && Array.isArray(initialBanners)) {
+      setBanners(filterStorefrontMedia(initialBanners));
+      setLoading(false);
+      return;
+    }
+
     const fetchBanners = async () => {
       setFetchFailed(false);
       try {
@@ -226,7 +234,7 @@ export default function Hero() {
     };
 
     fetchBanners();
-  }, []);
+  }, [skipFetch, initialBanners]);
 
   const slides = useMemo(() => {
     return banners.map((b) => ({

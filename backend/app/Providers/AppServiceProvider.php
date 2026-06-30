@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Banner;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Collection;
 use App\Models\Setting;
@@ -48,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
 
         $catalogCacheObserver = StorefrontCatalogCacheObserver::class;
         Banner::observe($catalogCacheObserver);
+        Brand::observe($catalogCacheObserver);
         Category::observe($catalogCacheObserver);
         Collection::observe($catalogCacheObserver);
         Setting::observe($catalogCacheObserver);

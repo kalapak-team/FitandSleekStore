@@ -26,8 +26,8 @@ function BrandLogo({ name, logo_url }) {
   );
 }
 
-export default function BrandRow() {
-  const [items, setItems] = useState([]);
+export default function BrandRow({ initialItems, skipFetch = false }) {
+  const [items, setItems] = useState(() => (skipFetch && Array.isArray(initialItems) ? initialItems : []));
   const scrollerRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -43,8 +43,12 @@ export default function BrandRow() {
   };
 
   useEffect(() => {
+    if (skipFetch && Array.isArray(initialItems)) {
+      setItems(initialItems);
+      return;
+    }
     load();
-  }, []);
+  }, [skipFetch, initialItems]);
 
   const canScroll = items.length > 0;
 

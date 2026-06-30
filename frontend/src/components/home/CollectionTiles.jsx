@@ -51,24 +51,33 @@ function Tile({ title, to, image }) {
   );
 }
 
-export default function CollectionTiles() {
+export default function CollectionTiles({ initialCollections, skipFetch = false }) {
   const { infrastructureDegraded } = useCatalogAvailability();
   const [collections, setCollections] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(skipFetch && Array.isArray(initialCollections)));
   const [fetchFailed, setFetchFailed] = useState(false);
 
+  const mapCollections = (items) =>
+    (items || []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      link: c.link || toParentCategoryLink(c.gender),
+      image: c.image_url,
+    }));
+
   useEffect(() => {
+    if (skipFetch && Array.isArray(initialCollections)) {
+      setCollections(mapCollections(initialCollections));
+      setLoading(false);
+      return;
+    }
+
     const fetchCollections = async () => {
       setFetchFailed(false);
       try {
         const { data } = await api.get("/collections");
         const items = data?.data || [];
-        const tiles = items.map((c) => ({
-          id: c.id,
-          name: c.name,
-          link: c.link || toParentCategoryLink(c.gender),
-          image: c.image_url,
-        }));
+        const tiles = mapCollections(items);
         setCollections(tiles);
       } catch (error) {
         console.warn("Failed to fetch collections:", error);
@@ -80,7 +89,7 @@ export default function CollectionTiles() {
     };
 
     fetchCollections();
-  }, []);
+  }, [skipFetch, initialCollections]);
 
   if (loading) {
     return (

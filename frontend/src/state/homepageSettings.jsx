@@ -25,6 +25,8 @@ function writeCachedSettings(data) {
   }
 }
 
+export { writeCachedSettings };
+
 export function HomepageSettingsProvider({ children }) {
   const [settings, setSettings] = useState(() => readCachedSettings());
   const [loading, setLoading] = useState(true);

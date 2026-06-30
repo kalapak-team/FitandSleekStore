@@ -27,7 +27,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'superadmin' => \App\Http\Middleware\EnsureSuperAdmin::class,
             'driver' => \App\Http\Middleware\EnsureDriver::class,
             'device.bound' => \App\Http\Middleware\EnsureDeviceBoundToken::class,
+            'storefront.edge-cache' => \App\Http\Middleware\StorefrontEdgeCacheHeaders::class,
         ]);
+        $middleware->append(\App\Http\Middleware\StorefrontEdgeCacheHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->shouldRenderJsonWhen(function (Request $request, \Throwable $e) {
