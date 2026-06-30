@@ -1,3 +1,5 @@
+import { isBundledSiteLogo } from "./siteLogo.js";
+
 /** Storefront header defaults — shown instantly before /homepage-settings API responds. */
 export const DEFAULT_HEADER_SETTINGS = {
   logo_text: "FIT&SLEEK",
@@ -25,7 +27,7 @@ export const DEFAULT_HEADER_SETTINGS = {
 };
 
 export function mergeHeaderSettings(apiHeader) {
-  return {
+  const merged = {
     ...DEFAULT_HEADER_SETTINGS,
     ...(apiHeader && typeof apiHeader === "object" ? apiHeader : {}),
     nav_visibility: {
@@ -37,4 +39,10 @@ export function mergeHeaderSettings(apiHeader) {
       ...(apiHeader?.nav_labels || {}),
     },
   };
+
+  if (isBundledSiteLogo(merged.logo_url)) {
+    merged.logo_url = DEFAULT_HEADER_SETTINGS.logo_url;
+  }
+
+  return merged;
 }

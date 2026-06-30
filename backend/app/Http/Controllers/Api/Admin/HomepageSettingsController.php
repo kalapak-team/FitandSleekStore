@@ -22,29 +22,31 @@ class HomepageSettingsController extends Controller
 
     private function resolveAppLogoUrl(): string
     {
-        $configured = (string) config('app.logo_url', '/logo.png');
+        $configured = (string) config('app.logo_circle_png_url', '/logo-circle.png');
         if ($configured === '') {
-            return '/logo.png';
+            return '/logo-circle.png';
         }
 
         if (str_starts_with($configured, 'http://') || str_starts_with($configured, 'https://')) {
             $parts = parse_url($configured);
             $host = strtolower((string) ($parts['host'] ?? ''));
             if (in_array($host, ['localhost', '127.0.0.1', 'host.docker.internal', 'backend'], true)) {
-                $path = '/' . ltrim((string) ($parts['path'] ?? ''), '/');
-                return $path !== '/' ? $path : '/logo.png';
+                $path = '/'.ltrim((string) ($parts['path'] ?? ''), '/');
+
+                return $path !== '/' ? $path : '/logo-circle.png';
             }
+
             return $configured;
         }
 
-        return '/' . ltrim($configured, '/');
+        return '/'.ltrim($configured, '/');
     }
 
     private function isBundledSiteLogo(string $url): bool
     {
         $path = strtolower(basename(parse_url($url, PHP_URL_PATH) ?: $url));
 
-        return in_array($path, ['logo.png', 'logo.svg'], true);
+        return in_array($path, ['logo.png', 'logo.svg', 'logo-circle.png', 'logo-circle.svg'], true);
     }
 
     private function resolveHeaderLogoUrl(array $header, string $appLogoUrl): string

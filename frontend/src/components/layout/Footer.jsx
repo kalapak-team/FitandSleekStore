@@ -107,7 +107,7 @@ export default function Footer() {
         {/* Brand Section */}
         <div className="space-y-4">
           <Link to="/" className="inline-block transition-transform duration-300 hover:scale-105">
-            <Logo className="h-10 w-auto" />
+            <Logo className="h-10 w-auto" src={headerSettings.logo_url} />
           </Link>
           <p className="text-sm fs-chrome-muted leading-relaxed">
             {footerSettings.company_description}

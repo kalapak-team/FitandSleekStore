@@ -60,12 +60,12 @@ return [
         ? $local
         : env('FRONTEND_URL', 'http://localhost:5173'),
 
-    'logo_url' => env('APP_LOGO_URL', '/logo.png'),
+    'logo_url' => env('APP_LOGO_URL', '/logo-circle.png'),
 
     'logo_circle_url' => env('APP_LOGO_CIRCLE_URL', '/logo-circle.svg'),
 
     /** Raster fallbacks for email clients and PDF rendering. */
-    'logo_png_url' => env('APP_LOGO_PNG_URL', '/logo.png'),
+    'logo_png_url' => env('APP_LOGO_PNG_URL', '/logo-circle.png'),
 
     'logo_circle_png_url' => env('APP_LOGO_CIRCLE_PNG_URL', '/logo-circle.png'),
 
