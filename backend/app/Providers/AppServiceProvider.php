@@ -7,10 +7,15 @@ use Illuminate\Support\Facades\Route;
 use App\Models\User;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Banner;
+use App\Models\Category;
+use App\Models\Collection;
+use App\Models\Setting;
 use App\Models\Shipment;
 use App\Observers\OrderObserver;
 use App\Observers\ProductObserver;
 use App\Observers\ShipmentObserver;
+use App\Observers\StorefrontCatalogCacheObserver;
 use Illuminate\Auth\Notifications\ResetPassword;
 
 class AppServiceProvider extends ServiceProvider
@@ -40,6 +45,12 @@ class AppServiceProvider extends ServiceProvider
         Order::observe(OrderObserver::class);
         Product::observe(ProductObserver::class);
         Shipment::observe(ShipmentObserver::class);
+
+        $catalogCacheObserver = StorefrontCatalogCacheObserver::class;
+        Banner::observe($catalogCacheObserver);
+        Category::observe($catalogCacheObserver);
+        Collection::observe($catalogCacheObserver);
+        Setting::observe($catalogCacheObserver);
     }
 }
 

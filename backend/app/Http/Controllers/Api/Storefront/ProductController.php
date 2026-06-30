@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Services\InventoryLotService;
 use App\Services\ProductRecommendationService;
+use App\Services\StorefrontCacheService;
 use App\Services\StorefrontEventService;
 use App\Services\ProductVariantInventory;
 use Illuminate\Http\Request;
@@ -23,26 +24,38 @@ class ProductController extends Controller
 
     public function index(Request $request)
     {
-        $q = Product::query()
-            ->with(['category', 'brand', 'activeDiscount'])
-            ->where('products.is_active', true);
+        $params = $request->query();
+        $cacheKey = StorefrontCacheService::requestHash($params);
 
-        $this->applyStorefrontListingFilters($q, $request);
+        $payload = StorefrontCacheService::remember(
+            'products',
+            StorefrontCacheService::TTL_PRODUCTS,
+            $cacheKey,
+            function () use ($request) {
+                $q = Product::query()
+                    ->with(['category', 'brand', 'activeDiscount'])
+                    ->where('products.is_active', true);
 
-        $perPage = min((int) $request->get('per_page', 12), 200);
-        $sort = strtolower(trim((string) $request->input('sort', 'recommend')));
+                $this->applyStorefrontListingFilters($q, $request);
 
-        if ($sort !== 'recommend') {
-            $this->applySortFilter($q, $request);
-        } elseif (!$this->applyTabFilter($q, $request)) {
-            $q->orderByDesc('products.id');
-        }
-        $products = $q->paginate($perPage);
-        $products->getCollection()->transform(function (Product $product) {
-            return $this->enrichStorefrontPricing($product->toArray(), $product);
-        });
+                $perPage = min((int) $request->get('per_page', 12), 200);
+                $sort = strtolower(trim((string) $request->input('sort', 'recommend')));
 
-        return response()->json($products);
+                if ($sort !== 'recommend') {
+                    $this->applySortFilter($q, $request);
+                } elseif (! $this->applyTabFilter($q, $request)) {
+                    $q->orderByDesc('products.id');
+                }
+                $products = $q->paginate($perPage);
+                $products->getCollection()->transform(function (Product $product) {
+                    return $this->enrichStorefrontPricing($product->toArray(), $product);
+                });
+
+                return $products->toArray();
+            }
+        );
+
+        return response()->json($payload);
     }
 
     /**
@@ -581,6 +594,18 @@ class ProductController extends Controller
         $user = Auth::guard('sanctum')->user();
         $sessionId = $request->header('X-Session-Id') ?: $request->query('session_id');
         $perPage = (int) $request->input('per_page', 8);
+
+        if (! $user && ! $sessionId) {
+            $payload = StorefrontCacheService::remember(
+                'recommendations',
+                StorefrontCacheService::TTL_RECOMMENDATIONS,
+                'guest:'.$perPage,
+                fn () => $this->recommendationService->recommendations(null, null, $perPage)->toArray()
+            );
+
+            return response()->json($payload);
+        }
+
         $result = $this->recommendationService->recommendations(
             $user?->id ? (int) $user->id : null,
             $sessionId ? (string) $sessionId : null,
@@ -595,72 +620,74 @@ class ProductController extends Controller
      */
     public function discounts(Request $request)
     {
-        $query = Product::query()
-            ->with(['category', 'activeDiscount'])
-            ->whereHas('activeDiscount')
-            ->where('is_active', true);
+        $params = $request->query();
+        $cacheKey = StorefrontCacheService::requestHash($params);
 
-        // Filter by category
-        if ($request->filled('category_id')) {
-            $query->where('category_id', (int) $request->input('category_id'));
-        }
+        $payload = StorefrontCacheService::remember(
+                'discounts',
+                StorefrontCacheService::TTL_DISCOUNTS,
+                $cacheKey,
+                function () use ($request) {
+                    $query = Product::query()
+                        ->with(['category', 'activeDiscount'])
+                        ->whereHas('activeDiscount')
+                        ->where('is_active', true);
 
-        // Filter by category slug
-        if ($request->filled('category_slug')) {
-            $query->whereHas('category', function ($q) use ($request) {
-                $q->where('slug', $request->string('category_slug'));
-            });
-        }
-
-        // Search
-        if ($request->filled('q')) {
-            $term = $request->string('q')->toString();
-            $query->where(function ($w) use ($term) {
-                $w->where('products.name', 'LIKE', "%{$term}%")
-                    ->orWhere('products.description', 'LIKE', "%{$term}%");
-
-                if (strlen($term) >= 4) {
-                    $chars = str_split(strtolower($term));
-                    foreach ($chars as $i => $char) {
-                        if ($i < strlen($term) - 1) {
-                            $pattern = substr($term, 0, $i) . substr($term, $i + 1);
-                            $w->orWhere('products.name', 'LIKE', "%{$pattern}%");
-                        }
+                    if ($request->filled('category_id')) {
+                        $query->where('category_id', (int) $request->input('category_id'));
                     }
-                }
-            });
-        }
 
-        // Filter by price range
-        if ($request->filled('min_price')) {
-            $query->whereHas('activeDiscount', function ($q) use ($request) {
-                $q->where('sale_price', '>=', (float) $request->input('min_price'));
-            });
-        }
-        if ($request->filled('max_price')) {
-            $query->whereHas('activeDiscount', function ($q) use ($request) {
-                $q->where('sale_price', '<=', (float) $request->input('max_price'));
-            });
-        }
+                    if ($request->filled('category_slug')) {
+                        $query->whereHas('category', function ($q) use ($request) {
+                            $q->where('slug', $request->string('category_slug'));
+                        });
+                    }
 
-        // Sort options
-        $sort = $request->get('sort', 'newest');
-        switch ($sort) {
-            case 'price_low':
-                $query->join('discounts', 'products.id', '=', 'discounts.product_id')
-                    ->where('discounts.is_active', 1)
-                    ->orderBy('discounts.sale_price', 'asc')
-                    ->select('products.*');
-                break;
-            case 'price_high':
-                $query->join('discounts', 'products.id', '=', 'discounts.product_id')
-                    ->where('discounts.is_active', 1)
-                    ->orderBy('discounts.sale_price', 'desc')
-                    ->select('products.*');
-                break;
-            case 'discount':
-                // Sort by highest discount
-                $query->orderByRaw('(
+                    if ($request->filled('q')) {
+                        $term = $request->string('q')->toString();
+                        $query->where(function ($w) use ($term) {
+                            $w->where('products.name', 'LIKE', "%{$term}%")
+                                ->orWhere('products.description', 'LIKE', "%{$term}%");
+
+                            if (strlen($term) >= 4) {
+                                $chars = str_split(strtolower($term));
+                                foreach ($chars as $i => $char) {
+                                    if ($i < strlen($term) - 1) {
+                                        $pattern = substr($term, 0, $i).substr($term, $i + 1);
+                                        $w->orWhere('products.name', 'LIKE', "%{$pattern}%");
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    if ($request->filled('min_price')) {
+                        $query->whereHas('activeDiscount', function ($q) use ($request) {
+                            $q->where('sale_price', '>=', (float) $request->input('min_price'));
+                        });
+                    }
+                    if ($request->filled('max_price')) {
+                        $query->whereHas('activeDiscount', function ($q) use ($request) {
+                            $q->where('sale_price', '<=', (float) $request->input('max_price'));
+                        });
+                    }
+
+                    $sort = $request->get('sort', 'newest');
+                    switch ($sort) {
+                        case 'price_low':
+                            $query->join('discounts', 'products.id', '=', 'discounts.product_id')
+                                ->where('discounts.is_active', 1)
+                                ->orderBy('discounts.sale_price', 'asc')
+                                ->select('products.*');
+                            break;
+                        case 'price_high':
+                            $query->join('discounts', 'products.id', '=', 'discounts.product_id')
+                                ->where('discounts.is_active', 1)
+                                ->orderBy('discounts.sale_price', 'desc')
+                                ->select('products.*');
+                            break;
+                        case 'discount':
+                            $query->orderByRaw('(
                     SELECT 
                         CASE 
                             WHEN discounts.discount_type = "percentage" THEN discounts.discount_value
@@ -672,24 +699,26 @@ class ProductController extends Controller
                     AND discounts.start_date <= NOW()
                     AND discounts.end_date >= NOW()
                 ) DESC');
-                break;
-            case 'newest':
-            default:
-                $query->orderByDesc('products.id');
-        }
+                            break;
+                        case 'newest':
+                        default:
+                            $query->orderByDesc('products.id');
+                    }
 
-        $products = $query->paginate($request->get('per_page', 12));
+                    $products = $query->paginate($request->get('per_page', 12));
+                    $products->getCollection()->transform(function ($product) {
+                        if ($product->activeDiscount) {
+                            $product->discount = $this->formatStorefrontDiscount($product);
+                        }
 
-        // Format response with discount info
-        $products->getCollection()->transform(function ($product) {
-            if ($product->activeDiscount) {
-                $product->discount = $this->formatStorefrontDiscount($product);
-            }
+                        return $product;
+                    });
 
-            return $product;
-        });
+                    return $products->toArray();
+                }
+            );
 
-        return response()->json($products);
+        return response()->json($payload);
     }
 
     /**

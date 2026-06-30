@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\Banner;
 use App\Models\LoyaltyProfile;
+use App\Services\StorefrontCacheService;
 use App\Support\Media;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -202,20 +203,30 @@ class BannerController extends Controller
     public function index(string $position)
     {
         $positionKey = strtolower(trim($position));
+        $segment = $this->viewerSegment();
 
-        $q = $this->scopeStorefrontVisible(Banner::query());
-        $this->scopeMatchingPosition($q, $positionKey);
-        $items = $this->orderStorefront($q)->get();
-        $items = $this->filterForViewerSegment($items);
+        $data = StorefrontCacheService::remember(
+            'banners',
+            StorefrontCacheService::TTL_BANNERS,
+            $positionKey.':'.$segment,
+            function () use ($positionKey) {
+                $q = $this->scopeStorefrontVisible(Banner::query());
+                $this->scopeMatchingPosition($q, $positionKey);
+                $items = $this->orderStorefront($q)->get();
+                $items = $this->filterForViewerSegment($items);
 
-        if ($items->isEmpty() && $positionKey === 'hero') {
-            $items = $this->orderStorefront(
-                $this->scopeStorefrontVisible(Banner::query())
-            )->limit(12)->get();
-            $items = $this->filterForViewerSegment($items);
-        }
+                if ($items->isEmpty() && $positionKey === 'hero') {
+                    $items = $this->orderStorefront(
+                        $this->scopeStorefrontVisible(Banner::query())
+                    )->limit(12)->get();
+                    $items = $this->filterForViewerSegment($items);
+                }
 
-        return response()->json(['data' => $items->map(fn ($b) => $this->formatBanner($b))]);
+                return $items->map(fn ($b) => $this->formatBanner($b))->values()->all();
+            }
+        );
+
+        return response()->json(['data' => $data]);
     }
 
     /**

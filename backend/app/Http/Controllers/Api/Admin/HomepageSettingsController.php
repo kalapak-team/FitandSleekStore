@@ -10,7 +10,9 @@ use App\Support\PrivacyPageContent;
 use App\Support\TermsPageContent;
 use App\Support\CookiesPageContent;
 use App\Support\Media;
+use App\Services\StorefrontCacheService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class HomepageSettingsController extends Controller
@@ -65,6 +67,11 @@ class HomepageSettingsController extends Controller
     public function getSettings()
     {
         try {
+            $cached = Cache::get(StorefrontCacheService::key('homepage-settings'));
+            if (is_array($cached)) {
+                return response()->json($cached, 200);
+            }
+
             $appLogoUrl = $this->resolveAppLogoUrl();
 
             // Get all homepage-related settings
@@ -396,7 +403,7 @@ class HomepageSettingsController extends Controller
                 ];
                 $defaults['app_logo_url'] = $appLogoUrl;
                 $defaults['header']['logo_url'] = $appLogoUrl;
-                return response()->json($defaults, 200);
+                return $this->respondCachedHomepageSettings($defaults);
             }
             // Parse JSON settings - the Setting model's mutator already decodes JSON
             $parsedSettings = [];
@@ -500,10 +507,21 @@ class HomepageSettingsController extends Controller
 
             $parsedSettings['app_logo_url'] = $this->resolveHeaderLogoUrl($header, $appLogoUrl);
 
-            return response()->json($parsedSettings, 200);
+            return $this->respondCachedHomepageSettings($parsedSettings);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    private function respondCachedHomepageSettings(array $payload)
+    {
+        Cache::put(
+            StorefrontCacheService::key('homepage-settings'),
+            $payload,
+            StorefrontCacheService::TTL_HOMEPAGE
+        );
+
+        return response()->json($payload, 200);
     }
 
     /**

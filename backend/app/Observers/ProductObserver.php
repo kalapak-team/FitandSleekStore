@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Product;
 use App\Services\ProductQdrantIndexer;
+use App\Services\StorefrontCacheService;
 use Illuminate\Support\Facades\Log;
 
 class ProductObserver
@@ -31,6 +32,7 @@ class ProductObserver
 
     public function created(Product $product): void
     {
+        StorefrontCacheService::bumpProducts();
         $this->syncToQdrant($product);
     }
 
@@ -40,15 +42,21 @@ class ProductObserver
             return;
         }
 
-        if (! $this->hasRelevantQdrantChanges($product)) {
+        if ($this->hasRelevantQdrantChanges($product)) {
+            StorefrontCacheService::bumpProducts();
+            $this->syncToQdrant($product);
+
             return;
         }
 
-        $this->syncToQdrant($product);
+        if ($product->wasChanged()) {
+            StorefrontCacheService::bumpProducts();
+        }
     }
 
     public function deleted(Product $product): void
     {
+        StorefrontCacheService::bumpProducts();
         try {
             $this->indexer->removeById($product->id);
         } catch (\Throwable $e) {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\Collection;
+use App\Services\StorefrontCacheService;
 use App\Support\Media;
 
 class CollectionController extends Controller
@@ -13,22 +14,29 @@ class CollectionController extends Controller
      */
     public function index()
     {
-        $items = Collection::where('is_active', true)
-            ->orderBy('gender')
-            ->orderBy('sort_order')
-            ->get()
-            ->map(fn($c) => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'slug' => $c->slug,
-                'gender' => $c->gender ?? null,
-                'image_url' => Media::url($c->image_url),
-                'image_path' => $c->image_url,
-                'text_position' => $c->text_position ?? 'overlay',
-                'link' => $c->link ?? null,
-                'sort_order' => (int)($c->sort_order ?? 0),
-                'is_active' => (bool)$c->is_active,
-            ]);
+        $items = StorefrontCacheService::remember(
+            'collections',
+            StorefrontCacheService::TTL_COLLECTIONS,
+            'all',
+            fn () => Collection::where('is_active', true)
+                ->orderBy('gender')
+                ->orderBy('sort_order')
+                ->get()
+                ->map(fn ($c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'slug' => $c->slug,
+                    'gender' => $c->gender ?? null,
+                    'image_url' => Media::url($c->image_url),
+                    'image_path' => $c->image_url,
+                    'text_position' => $c->text_position ?? 'overlay',
+                    'link' => $c->link ?? null,
+                    'sort_order' => (int) ($c->sort_order ?? 0),
+                    'is_active' => (bool) $c->is_active,
+                ])
+                ->values()
+                ->all()
+        );
 
         return response()->json(['data' => $items]);
     }
