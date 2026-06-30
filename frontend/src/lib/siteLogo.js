@@ -1,10 +1,17 @@
-import { resolveBackendOrigin } from "@/lib/backendOrigin";
+import bundledLogoCircle from "@/assets/logo-circle.png?inline";
 
-/** Default bundled site logo for the React storefront (raster banner — visible on sage chrome). */
-export const SITE_LOGO_WEB_PATH = "/logo.png";
+/** Inlined in the JS bundle — no network request; shows instantly on slow loads. */
+export const BUNDLED_SITE_LOGO_SRC = bundledLogoCircle;
 
-const SITE_LOGO_BASENAMES = new Set(["logo.png", "logo.svg"]);
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
+/** Same-origin fallback when inline import is unavailable (e.g. tests). */
+export const SITE_LOGO_WEB_PATH = "/logo-circle.png";
+
+const SITE_LOGO_BASENAMES = new Set([
+  "logo.png",
+  "logo.svg",
+  "logo-circle.png",
+  "logo-circle.svg",
+]);
 
 function pathnameOf(url) {
   try {
@@ -23,59 +30,25 @@ export function isBundledSiteLogo(src) {
   return SITE_LOGO_BASENAMES.has(base);
 }
 
-/** Map legacy bundled logo paths to PNG; keep custom uploaded logos unchanged. */
+/** Map legacy bundled logo paths to the circular PNG; keep custom uploads unchanged. */
 export function normalizeSiteLogoForWeb(src) {
   if (!src || isBundledSiteLogo(src)) return SITE_LOGO_WEB_PATH;
   return String(src).trim();
 }
 
+/** Instant logo from the JS bundle; no backend / slow static host round-trip. */
 export function siteStaticLogoPath() {
-  const resolved = resolveBundledLogoUrl();
-  if (resolved.startsWith("http")) return resolved;
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}${resolved}`;
-  }
-  return resolved;
+  return BUNDLED_SITE_LOGO_SRC;
 }
 
-/** When the SPA host is split from Laravel (Vercel/tunnel), serve brand files from the API origin. */
-export function externalBrandAssetOrigin() {
-  if (!import.meta.env.PROD || typeof window === "undefined") return null;
-
-  const backend = resolveBackendOrigin();
-  const page = window.location.origin;
-  if (!backend || backend === page) return null;
-
-  try {
-    const host = new URL(backend).hostname.toLowerCase();
-    if (LOOPBACK_HOSTS.has(host)) return null;
-    return new URL(backend).origin;
-  } catch {
-    return null;
-  }
-}
-
+/** Default bundled logo — inlined when bundled, same-origin path otherwise. */
 export function resolveBundledLogoUrl(src) {
   const trimmed = src ? String(src).trim() : "";
   if (trimmed && !isBundledSiteLogo(trimmed)) return trimmed;
-
-  const external = externalBrandAssetOrigin();
-  return external ? `${external}/logo.png` : SITE_LOGO_WEB_PATH;
+  return BUNDLED_SITE_LOGO_SRC;
 }
 
-/** Repoint favicon / touch icon to Laravel when the static host cannot serve them (QUIC/tunnel flakes). */
+/** Favicons are served from the SPA host — do not repoint to Laravel (slow cold start). */
 export function ensureDocumentBrandAssets() {
-  const external = externalBrandAssetOrigin();
-  if (!external) return;
-
-  const assets = [
-    ['link[rel="icon"][type="image/svg+xml"]', "/favicon.svg"],
-    ['link[rel="icon"][type="image/png"]', "/favicon.png"],
-    ['link[rel="apple-touch-icon"]', "/apple-touch-icon.png"],
-  ];
-
-  for (const [selector, path] of assets) {
-    const el = document.querySelector(selector);
-    if (el) el.setAttribute("href", `${external}${path}`);
-  }
+  /* no-op: index.html + public/ favicons on the storefront CDN */
 }
