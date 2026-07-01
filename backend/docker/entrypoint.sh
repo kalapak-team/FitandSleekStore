@@ -55,6 +55,15 @@ case "$1" in
       ) >> storage/logs/scheduler.log 2>&1 &
     fi
 
+    if [ "${QDRANT_SETUP_ON_BOOT:-false}" = "true" ]; then
+      php artisan qdrant:setup >> storage/logs/qdrant-index.log 2>&1 || true
+    fi
+
+    if [ "${QDRANT_INDEX_MISSING_ON_BOOT:-false}" = "true" ]; then
+      php artisan qdrant:index-products --only-missing --limit="${QDRANT_INDEX_BATCH_SIZE:-10}" \
+        >> storage/logs/qdrant-index.log 2>&1 &
+    fi
+
     php-fpm -D
     exec nginx -g 'daemon off;'
     ;;

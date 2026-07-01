@@ -9,6 +9,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // PostgreSQL → Qdrant: index active products that have image_url but no vector yet (no manual artisan needed).
-Schedule::command('qdrant:index-products --only-missing')
+Schedule::command('qdrant:index-products --only-missing --limit=10')
     ->everyTenMinutes()
     ->withoutOverlapping(25);

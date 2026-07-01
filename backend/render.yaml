@@ -64,6 +64,12 @@ services:
         value: "true"
       - key: RUN_SCHEDULER
         value: "true"
+      - key: QDRANT_SETUP_ON_BOOT
+        value: "true"
+      - key: QDRANT_INDEX_MISSING_ON_BOOT
+        value: "true"
+      - key: QDRANT_INDEX_BATCH_SIZE
+        value: "10"
       # Image search (set in dashboard): FITANDSLEEK_CLIP_ENDPOINT, QDRANT_URL, QDRANT_API_KEY,
       # QDRANT_COLLECTION, IMAGE_SEARCH_TIMEOUT=90. One-time: php artisan qdrant:setup &&
       # php artisan qdrant:index-products
