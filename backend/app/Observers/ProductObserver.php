@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Jobs\SyncProductToQdrant;
 use App\Models\Product;
 use App\Services\ProductQdrantIndexer;
 use App\Services\StorefrontCacheService;
@@ -71,7 +72,7 @@ class ProductObserver
     {
         try {
             if ($this->shouldIndexInQdrant($product)) {
-                $this->indexer->index($product);
+                SyncProductToQdrant::dispatch($product->id)->afterCommit();
 
                 return;
             }

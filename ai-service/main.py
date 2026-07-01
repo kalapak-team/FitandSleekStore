@@ -18,6 +18,11 @@ def on_startup() -> None:
     model = SentenceTransformer(MODEL_NAME)
 
 
+@app.get("/")
+def root() -> dict:
+    return {"ok": True, "service": "fitandsleek-clip", "model": MODEL_NAME}
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True, "model": MODEL_NAME}

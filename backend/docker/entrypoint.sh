@@ -41,6 +41,20 @@ case "$1" in
       php artisan migrate --force
     fi
 
+    if [ "${RUN_QUEUE_WORKER:-false}" = "true" ]; then
+      php artisan queue:work database --sleep=3 --tries=3 --max-time=3600 --timeout=180 \
+        >> storage/logs/queue-worker.log 2>&1 &
+    fi
+
+    if [ "${RUN_SCHEDULER:-false}" = "true" ]; then
+      (
+        while true; do
+          php artisan schedule:run --no-interaction
+          sleep 60
+        done
+      ) >> storage/logs/scheduler.log 2>&1 &
+    fi
+
     php-fpm -D
     exec nginx -g 'daemon off;'
     ;;
