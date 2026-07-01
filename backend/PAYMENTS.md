@@ -12,7 +12,7 @@ RIELPAY_EXPIRES_IN=300
 
 # Optional — mobile tap-to-pay metadata (sent to Rielpay → NBC generate_deeplink_by_qr)
 RIELPAY_DEEPLINK_APP_NAME=FitandSleek
-RIELPAY_DEEPLINK_ICON_URL=https://www.fitandsleek.online/logo.png
+RIELPAY_DEEPLINK_ICON_URL=https://www.fitandsleek.online/logo-circle.png
 RIELPAY_DEEPLINK_CALLBACK=fitandsleek://payment/callback
 ```
 

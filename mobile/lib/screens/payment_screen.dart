@@ -55,6 +55,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _creating = false;
   bool _showQr = false;
   bool _openingBankApp = false;
+  bool _autoOpenAttempted = false;
 
   KhqrBankOption get _bank => KhqrBankOption.byId(widget.bank);
 
@@ -145,6 +146,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     _startPolling();
+
+    if (!_autoOpenAttempted &&
+        widget.bank == KhqrBankId.aba &&
+        payment.hasQr) {
+      _autoOpenAttempted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openBankingApp());
+    }
   }
 
   String _formatAmount() {

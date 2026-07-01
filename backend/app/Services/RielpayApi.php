@@ -50,7 +50,7 @@ class RielpayApi
 
         $iconUrl = (string) config('services.rielpay.deeplink_icon_url');
         if ($iconUrl === '') {
-            $iconUrl = rtrim((string) config('app.url'), '/') . '/logo.png';
+            $iconUrl = rtrim((string) config('app.frontend_url', config('app.url')), '/') . '/logo-circle.png';
         }
 
         $sourceInfo ??= [

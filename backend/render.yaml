@@ -70,6 +70,19 @@ services:
         value: "true"
       - key: QDRANT_INDEX_BATCH_SIZE
         value: "10"
+      # Payments — Rielpay KHQR + bank deeplink (set RIELPAY_API_KEY in dashboard)
+      - key: RIELPAY_API_URL
+        value: https://api-norng-rielpay.fitandsleek.online
+      - key: RIELPAY_CURRENCY
+        value: KHR
+      - key: RIELPAY_EXPIRES_IN
+        value: "300"
+      - key: RIELPAY_DEEPLINK_APP_NAME
+        value: FitandSleek
+      - key: RIELPAY_DEEPLINK_ICON_URL
+        value: https://www.fitandsleek.online/logo-circle.png
+      - key: RIELPAY_DEEPLINK_CALLBACK
+        value: fitandsleek://payment/callback
       # Image search (set in dashboard): FITANDSLEEK_CLIP_ENDPOINT, QDRANT_URL, QDRANT_API_KEY,
       # QDRANT_COLLECTION, IMAGE_SEARCH_TIMEOUT=90. One-time: php artisan qdrant:setup &&
       # php artisan qdrant:index-products
