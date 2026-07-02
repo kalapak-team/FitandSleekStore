@@ -86,6 +86,12 @@ export default function PurchaseOrderDetailDrawer({
   const stockReceived = order.stock_received;
   const status = order.status || "draft";
   const statusLabel = PO_STATUS_LABELS[status] || status;
+  const receiveListingLabel =
+    order.receive_listing_status === "active"
+      ? "Active — sell immediately"
+      : order.receive_listing_status === "on_hold"
+        ? "On Hold — not for sale yet"
+        : "Default (On Hold when received)";
 
   const updateStatus = async (nextStatus) => {
     if (busy || !order.id) return;
@@ -171,6 +177,7 @@ export default function PurchaseOrderDetailDrawer({
               <DetailRow label="Expected date" value={formatDate(order.expected_delivery)} />
               <DetailRow label="Created" value={formatDateTime(order.created_at)} />
               <DetailRow label="Received" value={formatDateTime(order.received_at)} />
+              <DetailRow label="Sell status on receive" value={receiveListingLabel} className="col-span-2" />
               <DetailRow label="Notes" value={order.notes} className="col-span-2" />
             </div>
           </section>

@@ -21,6 +21,7 @@ class PurchaseOrder extends Model
         'order_date',
         'expected_delivery',
         'notes',
+        'receive_listing_status',
         'purchaser',
         'received_at',
     ];

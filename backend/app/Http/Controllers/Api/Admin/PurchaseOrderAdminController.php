@@ -66,9 +66,7 @@ class PurchaseOrderAdminController extends BaseAdminController
 
         foreach ($totalsByProduct as $productId => $totalQty) {
             if (! isset($limitsByProduct[$productId])) {
-                throw ValidationException::withMessages([
-                    'product_limits' => ["Set a total quantity limit for product #{$productId}."],
-                ]);
+                continue;
             }
             if ($totalQty > $limitsByProduct[$productId]) {
                 throw ValidationException::withMessages([
@@ -139,6 +137,7 @@ class PurchaseOrderAdminController extends BaseAdminController
             'order_date' => $order->order_date?->format('Y-m-d'),
             'expected_delivery' => $order->expected_delivery?->format('Y-m-d'),
             'notes' => $order->notes,
+            'receive_listing_status' => $order->receive_listing_status,
             'purchaser' => $order->purchaser,
             'received_at' => $order->received_at,
             'created_at' => $order->created_at,
@@ -165,6 +164,22 @@ class PurchaseOrderAdminController extends BaseAdminController
             'can_mark_pending' => ($order->status ?? PurchaseOrder::STATUS_DRAFT) === PurchaseOrder::STATUS_DRAFT,
             'can_mark_received' => ($order->status ?? PurchaseOrder::STATUS_DRAFT) === PurchaseOrder::STATUS_PENDING,
         ];
+    }
+
+    /**
+     * @return 'active'|'on_hold'|null
+     */
+    private function normalizeReceiveListingStatus(mixed $value): ?string
+    {
+        $status = strtolower(trim((string) ($value ?? '')));
+        if ($status === 'active') {
+            return 'active';
+        }
+        if ($status === 'on_hold') {
+            return 'on_hold';
+        }
+
+        return null;
     }
 
     public function index(Request $request)
@@ -196,6 +211,7 @@ class PurchaseOrderAdminController extends BaseAdminController
             'order_date' => ['required', 'date'],
             'expected_delivery' => ['nullable', 'date', 'after_or_equal:order_date'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'receive_listing_status' => ['nullable', 'string', Rule::in(['active', 'on_hold'])],
             'purchaser' => ['nullable', 'string', 'max:120'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
@@ -204,12 +220,14 @@ class PurchaseOrderAdminController extends BaseAdminController
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.cost_per_unit' => ['nullable', 'numeric', 'min:0'],
             'items.*.sell_price' => ['nullable', 'numeric', 'min:0'],
-            'product_limits' => ['required', 'array'],
+            'product_limits' => ['nullable', 'array'],
             'product_limits.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'product_limits.*.max_qty' => ['required', 'integer', 'min:1'],
         ]);
 
-        $this->validateProductQtyLimits($validated['items'], $validated['product_limits']);
+        $productLimits = $validated['product_limits'] ?? [];
+        $this->validateProductQtyLimits($validated['items'], $productLimits);
+        $receiveListingStatus = $this->normalizeReceiveListingStatus($validated['receive_listing_status'] ?? null);
 
         $poNumber = trim((string) ($validated['po_number'] ?? ''));
         if ($poNumber === '') {
@@ -221,7 +239,7 @@ class PurchaseOrderAdminController extends BaseAdminController
             $purchaser = trim((string) ($request->user()?->name ?? '')) ?: null;
         }
 
-        $order = DB::transaction(function () use ($validated, $poNumber, $purchaser) {
+        $order = DB::transaction(function () use ($validated, $poNumber, $purchaser, $productLimits, $receiveListingStatus) {
             $order = PurchaseOrder::create([
                 'supplier_id' => (int) $validated['supplier_id'],
                 'po_number' => $poNumber,
@@ -229,6 +247,7 @@ class PurchaseOrderAdminController extends BaseAdminController
                 'order_date' => $validated['order_date'],
                 'expected_delivery' => $validated['expected_delivery'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'receive_listing_status' => $receiveListingStatus,
                 'purchaser' => $purchaser,
             ]);
 
@@ -250,7 +269,7 @@ class PurchaseOrderAdminController extends BaseAdminController
                 ]);
             }
 
-            $this->syncProductLimits($order, $validated['product_limits']);
+            $this->syncProductLimits($order, $productLimits);
 
             return $order->fresh(['supplier', 'items.product', 'productLimits']);
         });
@@ -282,6 +301,7 @@ class PurchaseOrderAdminController extends BaseAdminController
             'order_date' => ['required', 'date'],
             'expected_delivery' => ['nullable', 'date', 'after_or_equal:order_date'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'receive_listing_status' => ['nullable', 'string', Rule::in(['active', 'on_hold'])],
             'purchaser' => ['nullable', 'string', 'max:120'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
@@ -290,12 +310,14 @@ class PurchaseOrderAdminController extends BaseAdminController
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.cost_per_unit' => ['nullable', 'numeric', 'min:0'],
             'items.*.sell_price' => ['nullable', 'numeric', 'min:0'],
-            'product_limits' => ['required', 'array'],
+            'product_limits' => ['nullable', 'array'],
             'product_limits.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'product_limits.*.max_qty' => ['required', 'integer', 'min:1'],
         ]);
 
-        $this->validateProductQtyLimits($validated['items'], $validated['product_limits']);
+        $productLimits = $validated['product_limits'] ?? [];
+        $this->validateProductQtyLimits($validated['items'], $productLimits);
+        $receiveListingStatus = $this->normalizeReceiveListingStatus($validated['receive_listing_status'] ?? null);
 
         $poNumber = trim((string) ($validated['po_number'] ?? ''));
         if ($poNumber === '') {
@@ -307,13 +329,14 @@ class PurchaseOrderAdminController extends BaseAdminController
             $purchaser = $purchaseOrder->purchaser;
         }
 
-        $order = DB::transaction(function () use ($validated, $purchaseOrder, $poNumber, $purchaser) {
+        $order = DB::transaction(function () use ($validated, $purchaseOrder, $poNumber, $purchaser, $productLimits, $receiveListingStatus) {
             $purchaseOrder->update([
                 'supplier_id' => (int) $validated['supplier_id'],
                 'po_number' => $poNumber,
                 'order_date' => $validated['order_date'],
                 'expected_delivery' => $validated['expected_delivery'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'receive_listing_status' => $receiveListingStatus,
                 'purchaser' => $purchaser,
             ]);
 
@@ -337,7 +360,7 @@ class PurchaseOrderAdminController extends BaseAdminController
                 ]);
             }
 
-            $this->syncProductLimits($purchaseOrder, $validated['product_limits']);
+            $this->syncProductLimits($purchaseOrder, $productLimits);
 
             return $purchaseOrder->fresh(['supplier', 'items.product', 'productLimits']);
         });

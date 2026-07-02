@@ -182,6 +182,8 @@ export default function PurchaseOrderCreateForm({
   const [partsFilter, setPartsFilter] = useState("all");
   const [items, setItems] = useState([createEmptyPoItem()]);
   const [productQtyLimits, setProductQtyLimits] = useState({});
+  const [configureReceiveListing, setConfigureReceiveListing] = useState(false);
+  const [receiveListingStatus, setReceiveListingStatus] = useState("on_hold");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccessMessage, setSaveSuccessMessage] = useState("");
@@ -244,6 +246,13 @@ export default function PurchaseOrderCreateForm({
       setNotes(orderToEdit.notes ?? "");
       setItems(poFormItemsFromOrder(orderToEdit));
       setProductQtyLimits(poProductQtyLimitsFromOrder(orderToEdit));
+      if (orderToEdit.receive_listing_status === "active" || orderToEdit.receive_listing_status === "on_hold") {
+        setConfigureReceiveListing(true);
+        setReceiveListingStatus(orderToEdit.receive_listing_status);
+      } else {
+        setConfigureReceiveListing(false);
+        setReceiveListingStatus("on_hold");
+      }
       setLocalProducts((prev) => {
         const byId = new Map(prev.map((p) => [String(p.id), p]));
         for (const line of orderToEdit.items || []) {
@@ -275,6 +284,12 @@ export default function PurchaseOrderCreateForm({
       }
       if (draft.productQtyLimits && typeof draft.productQtyLimits === "object") {
         setProductQtyLimits(draft.productQtyLimits);
+      }
+      if (draft.configureReceiveListing != null) {
+        setConfigureReceiveListing(Boolean(draft.configureReceiveListing));
+      }
+      if (draft.receiveListingStatus === "active" || draft.receiveListingStatus === "on_hold") {
+        setReceiveListingStatus(draft.receiveListingStatus);
       }
     }
     const apply = loadPoApplyProduct();
@@ -488,11 +503,7 @@ export default function PurchaseOrderCreateForm({
             if (digitsOnly === "") {
               updated.qty = "";
             } else {
-              let n = parseInt(digitsOnly, 10);
-              if (updated.product_id) {
-                const maxForLine = poMaxQtyForLineInput(prev, key, productQtyLimits);
-                if (maxForLine != null && n > maxForLine) n = maxForLine;
-              }
+              const n = parseInt(digitsOnly, 10);
               updated.qty = String(n);
             }
           }
@@ -519,8 +530,6 @@ export default function PurchaseOrderCreateForm({
         const raw = String(row.qty ?? "").trim();
         let n = parseInt(raw, 10);
         if (!Number.isFinite(n) || n < 1) n = 1;
-        const maxForLine = poMaxQtyForLineInput(prev, key, productQtyLimits);
-        if (maxForLine != null && n > maxForLine) n = Math.max(1, maxForLine);
         return { ...row, qty: n };
       }),
     );
@@ -530,17 +539,12 @@ export default function PurchaseOrderCreateForm({
     const pid = String(productId ?? "").trim();
     if (!pid) return;
     setProductQtyLimits((prev) => {
-      const nextLimits = { ...prev, [pid]: value };
-      setItems((rows) =>
-        rows.map((row) => {
-          if (String(row.product_id ?? "") !== pid) return row;
-          const maxForLine = poMaxQtyForLineInput(rows, row.key, nextLimits);
-          if (maxForLine == null) return row;
-          const requested = Math.max(1, Number(row.qty) || 1);
-          if (requested <= maxForLine) return row;
-          return { ...row, qty: maxForLine };
-        }),
-      );
+      const nextLimits = { ...prev };
+      if (value === "" || value == null) {
+        delete nextLimits[pid];
+      } else {
+        nextLimits[pid] = value;
+      }
       return nextLimits;
     });
   };
@@ -608,10 +612,6 @@ export default function PurchaseOrderCreateForm({
     }
 
     const productLimitsPayload = poProductQtyLimitPayload(productQtyLimits, rows);
-    if (!productLimitsPayload.length) {
-      setSaveError("Set total qty limit for each product on this order.");
-      return;
-    }
 
     setIsSaving(true);
     setSaveError("");
@@ -626,6 +626,7 @@ export default function PurchaseOrderCreateForm({
           ? (orderToEdit?.purchaser?.trim() || null)
           : String(user?.name ?? "").trim() || null,
         notes: notes.trim() || null,
+        receive_listing_status: configureReceiveListing ? receiveListingStatus : null,
         items: rows.map((row) => ({
           product_id: Number(row.product_id),
           size: row.size?.trim() || null,
@@ -758,6 +759,52 @@ export default function PurchaseOrderCreateForm({
                 placeholder="Optional notes"
               />
             </div>
+            <div className="sm:col-span-2 rounded-xl border border-slate-200/90 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                  checked={configureReceiveListing}
+                  onChange={(e) => setConfigureReceiveListing(e.target.checked)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    Set sell status when stock is received
+                  </span>
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                    Choose whether inventory lots are sellable immediately after this PO is marked received.
+                  </span>
+                </span>
+              </label>
+              {configureReceiveListing ? (
+                <div className="mt-3 flex flex-wrap gap-4 pl-6">
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input
+                      type="radio"
+                      name="po-receive-listing-status"
+                      className="h-4 w-4 border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                      checked={receiveListingStatus === "active"}
+                      onChange={() => setReceiveListingStatus("active")}
+                    />
+                    Active — sell immediately
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input
+                      type="radio"
+                      name="po-receive-listing-status"
+                      className="h-4 w-4 border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                      checked={receiveListingStatus === "on_hold"}
+                      onChange={() => setReceiveListingStatus("on_hold")}
+                    />
+                    On Hold — not for sale yet
+                  </label>
+                </div>
+              ) : (
+                <p className="mt-2 pl-6 text-xs text-slate-500 dark:text-slate-400">
+                  Default: stock is received as <span className="font-semibold">On Hold</span> until you release it.
+                </p>
+              )}
+            </div>
           </div>
 
         </PoSection>
@@ -881,15 +928,60 @@ export default function PurchaseOrderCreateForm({
                       : null;
                     const lineQtyNum = Number(row.qty);
                     const lineQtyOver =
+                      productLimit != null &&
                       lineQtyMax != null &&
                       Number.isFinite(lineQtyNum) &&
                       lineQtyNum > lineQtyMax;
+                    const lineQtyOverBy =
+                      lineQtyOver && lineQtyMax != null ? Math.max(0, lineQtyNum - lineQtyMax) : 0;
 
                     return (
-                      <tr
-                        key={row.key}
-                        className={`align-top ${productQtyOver ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}
-                      >
+                      <React.Fragment key={row.key}>
+                        {row.product_id && isFirstProductLine ? (
+                          <tr
+                            className={`border-b border-slate-200/80 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/50 ${
+                              productQtyOver ? "bg-red-50/50 dark:bg-red-950/15" : ""
+                            }`}
+                          >
+                            <td colSpan={10} className="px-2 py-2">
+                              <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+                                <div className="w-36">
+                                  <label
+                                    htmlFor={`po-product-limit-${row.key}`}
+                                    className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400"
+                                  >
+                                    Total qty limit
+                                  </label>
+                                  <input
+                                    id={`po-product-limit-${row.key}`}
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    className={poTableFieldClass}
+                                    value={productQtyLimits[String(row.product_id)] ?? ""}
+                                    onChange={(e) => setProductQtyLimit(row.product_id, e.target.value)}
+                                    placeholder="Optional"
+                                    aria-label={`Total quantity limit for ${product?.name || "product"}`}
+                                  />
+                                </div>
+                                <p
+                                  className={`pb-1 text-[10px] font-medium ${
+                                    productQtyOver
+                                      ? "font-semibold text-red-700 dark:text-red-300"
+                                      : "text-sky-700 dark:text-sky-300"
+                                  }`}
+                                >
+                                  Used {productQtyUsed}
+                                  {productLimit != null ? ` / ${productLimit}` : ""} across all sizes & colors
+                                  {productQtyOver ? ` — over by ${productQtyOver.overBy}` : ""}
+                                </p>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                        <tr
+                          className={`align-top ${productQtyOver ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}
+                        >
                         <td className="px-2 py-2.5 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
                           {index + 1}
                         </td>
@@ -914,39 +1006,7 @@ export default function PurchaseOrderCreateForm({
                               {stockHint}
                             </p>
                           ) : null}
-                          {row.product_id && isFirstProductLine ? (
-                            <div className="mt-1.5">
-                              <label
-                                htmlFor={`po-product-limit-${row.key}`}
-                                className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400"
-                              >
-                                Total qty limit<span className="ml-0.5 text-red-500">*</span>
-                              </label>
-                              <input
-                                id={`po-product-limit-${row.key}`}
-                                type="number"
-                                min={1}
-                                step={1}
-                                required
-                                className={poTableFieldClass}
-                                value={productQtyLimits[String(row.product_id)] ?? ""}
-                                onChange={(e) => setProductQtyLimit(row.product_id, e.target.value)}
-                                placeholder="e.g. 100"
-                                aria-label={`Total quantity limit for ${product?.name || "product"}`}
-                              />
-                              <p
-                                className={`mt-1 text-[10px] font-medium ${
-                                  productQtyOver
-                                    ? "font-semibold text-red-700 dark:text-red-300"
-                                    : "text-sky-700 dark:text-sky-300"
-                                }`}
-                              >
-                                Used {productQtyUsed}
-                                {productLimit != null ? ` / ${productLimit}` : ""} across all sizes & colors
-                                {productQtyOver ? ` — over by ${productQtyOver.overBy}` : ""}
-                              </p>
-                            </div>
-                          ) : row.product_id && productLimit != null ? (
+                          {row.product_id && !isFirstProductLine ? (
                             <p
                               className={`mt-1.5 text-[10px] font-medium ${
                                 productQtyOver
@@ -954,7 +1014,8 @@ export default function PurchaseOrderCreateForm({
                                   : "text-sky-700 dark:text-sky-300"
                               }`}
                             >
-                              Qty budget: {productQtyUsed} / {productLimit}
+                              Used {productQtyUsed}
+                              {productLimit != null ? ` / ${productLimit}` : ""} across all sizes & colors
                               {productQtyOver ? ` — over by ${productQtyOver.overBy}` : ""}
                             </p>
                           ) : null}
@@ -1009,7 +1070,6 @@ export default function PurchaseOrderCreateForm({
                             id={`po-qty-${row.key}`}
                             type="number"
                             min={1}
-                            max={lineQtyMax != null && lineQtyMax >= 1 ? lineQtyMax : undefined}
                             step={1}
                             inputMode="numeric"
                             required
@@ -1024,16 +1084,17 @@ export default function PurchaseOrderCreateForm({
                             aria-label={`Quantity for line ${index + 1}`}
                             aria-invalid={productQtyOver || lineQtyOver ? true : undefined}
                           />
-                          {row.product_id && productLimit != null ? (
-                            <p
-                              className={`mt-1 text-[10px] font-medium ${
-                                productQtyOver || lineQtyOver
-                                  ? "font-semibold text-red-600 dark:text-red-400"
-                                  : "text-slate-500 dark:text-slate-400"
-                              }`}
-                            >
-                              Max {Math.max(0, lineQtyMax ?? 0)} on this line
-                              {lineQtyOver ? " — reduce qty" : ""}
+                          {row.product_id && productQtyOver ? (
+                            <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                              Over limit by {productQtyOver.overBy}
+                            </p>
+                          ) : row.product_id && lineQtyOver ? (
+                            <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                              Over by {lineQtyOverBy} on this line
+                            </p>
+                          ) : row.product_id && productLimit != null && lineQtyMax != null ? (
+                            <p className="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                              Max {Math.max(0, lineQtyMax)} on this line
                             </p>
                           ) : null}
                         </td>
@@ -1081,6 +1142,7 @@ export default function PurchaseOrderCreateForm({
                           ) : null}
                         </td>
                       </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -1099,8 +1161,8 @@ export default function PurchaseOrderCreateForm({
                 Add item
               </button>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                <span className="font-semibold">Add item</span> — pick a product not already on this order and set its total qty limit.{" "}
-                <span className="font-semibold">Add same product</span> — copy product and prices; only change size, color, and qty (shared limit).
+                <span className="font-semibold">Add item</span> — pick a product not already on this order.{" "}
+                <span className="font-semibold">Add same product</span> — copy product and prices; only change size, color, and qty. Optional total qty limit caps quantity across all variant lines.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700 dark:text-slate-200">

@@ -491,14 +491,10 @@ export function validatePoFormItems(items, productById, productQtyLimits = {}) {
 
   for (const pid of productIds) {
     const limit = poMaxQtyForProduct(productQtyLimits, pid);
+    if (limit == null) continue;
+
     const product = productById?.get?.(pid);
     const name = product?.name || `Product #${pid}`;
-
-    if (limit == null) {
-      errors.push(`${name}: set total qty limit for all sizes and colors.`);
-      continue;
-    }
-
     const total = poQtyUsedForProduct(lines, pid);
     if (total > limit) {
       errors.push(`${name}: total qty ${total} exceeds limit ${limit} across all variant lines.`);

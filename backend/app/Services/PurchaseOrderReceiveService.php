@@ -110,13 +110,15 @@ class PurchaseOrderReceiveService
             ->where('category_id', (int) $result['received']->id)
             ->value('id');
 
+        $listingStatus = $this->resolveReceiveListingStatus($order);
+
         $lot = $this->inventoryLots->createFromPurchaseReceive(
             $product,
             $item,
             $qty,
             (float) $item->cost_per_unit,
             $stockReceivedId ? (int) $stockReceivedId : null,
-            InventoryLot::LISTING_ON_HOLD,
+            $listingStatus,
         );
 
         $this->detailAudit->record(
@@ -143,6 +145,17 @@ class PurchaseOrderReceiveService
                 'inventory_lot_id' => (int) $lot->id,
             ],
         ];
+    }
+
+    private function resolveReceiveListingStatus(PurchaseOrder $order): string
+    {
+        $status = strtolower(trim((string) ($order->receive_listing_status ?? '')));
+
+        if ($status === InventoryLot::LISTING_ACTIVE) {
+            return InventoryLot::LISTING_ACTIVE;
+        }
+
+        return InventoryLot::LISTING_ON_HOLD;
     }
 
     private function applyProductStock(Product $product, PurchaseOrderItem $item, int $qty): void
