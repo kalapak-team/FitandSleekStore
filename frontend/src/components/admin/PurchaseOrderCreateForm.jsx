@@ -759,52 +759,6 @@ export default function PurchaseOrderCreateForm({
                 placeholder="Optional notes"
               />
             </div>
-            <div className="sm:col-span-2 rounded-xl border border-slate-200/90 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
-                  checked={configureReceiveListing}
-                  onChange={(e) => setConfigureReceiveListing(e.target.checked)}
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
-                    Set sell status when stock is received
-                  </span>
-                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                    Choose whether inventory lots are sellable immediately after this PO is marked received.
-                  </span>
-                </span>
-              </label>
-              {configureReceiveListing ? (
-                <div className="mt-3 flex flex-wrap gap-4 pl-6">
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <input
-                      type="radio"
-                      name="po-receive-listing-status"
-                      className="h-4 w-4 border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
-                      checked={receiveListingStatus === "active"}
-                      onChange={() => setReceiveListingStatus("active")}
-                    />
-                    Active — sell immediately
-                  </label>
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <input
-                      type="radio"
-                      name="po-receive-listing-status"
-                      className="h-4 w-4 border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
-                      checked={receiveListingStatus === "on_hold"}
-                      onChange={() => setReceiveListingStatus("on_hold")}
-                    />
-                    On Hold — not for sale yet
-                  </label>
-                </div>
-              ) : (
-                <p className="mt-2 pl-6 text-xs text-slate-500 dark:text-slate-400">
-                  Default: stock is received as <span className="font-semibold">On Hold</span> until you release it.
-                </p>
-              )}
-            </div>
           </div>
 
         </PoSection>
@@ -842,6 +796,53 @@ export default function PurchaseOrderCreateForm({
                 </select>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                checked={configureReceiveListing}
+                onChange={(e) => setConfigureReceiveListing(e.target.checked)}
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Set sell status when stock is received
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                  Choose whether inventory lots are sellable immediately after this PO is marked received.
+                </span>
+              </span>
+            </label>
+            {configureReceiveListing ? (
+              <div className="mt-3 flex flex-wrap gap-4 pl-6">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="po-receive-listing-status"
+                    className="h-4 w-4 border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                    checked={receiveListingStatus === "active"}
+                    onChange={() => setReceiveListingStatus("active")}
+                  />
+                  Active — sell immediately
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input
+                    type="radio"
+                    name="po-receive-listing-status"
+                    className="h-4 w-4 border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                    checked={receiveListingStatus === "on_hold"}
+                    onChange={() => setReceiveListingStatus("on_hold")}
+                  />
+                  On Hold — not for sale yet
+                </label>
+              </div>
+            ) : (
+              <p className="mt-2 pl-6 text-xs text-slate-500 dark:text-slate-400">
+                Default: stock is received as <span className="font-semibold">On Hold</span> until you release it.
+              </p>
+            )}
           </div>
 
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-sky-600 dark:text-sky-400">
