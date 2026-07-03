@@ -17,7 +17,24 @@ import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 import { AdminConfirmDialog } from "../../components/admin/AdminModal.jsx";
 import { useTheme } from "../../state/theme.jsx";
 import { AdminSectionLoader, AdminContentSkeleton } from "@/components/admin/AdminLoading";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { useAdminUiPreference } from "../../lib/adminUiPreferences";
+
+const BANNER_POSITION_OPTIONS = [
+  { value: "hero", label: "Hero (Main Banner)" },
+  { value: "mid", label: "Mid Page" },
+  { value: "sidebar", label: "Sidebar" },
+  { value: "popup", label: "Popup" },
+  { value: "promo", label: "Promo Slider" },
+  { value: "discounts", label: "Discounts page banner" },
+];
+
+const COLLECTION_GENDER_OPTIONS = [
+  { value: "women", label: "Women" },
+  { value: "men", label: "Men" },
+  { value: "boys", label: "Boys" },
+  { value: "girls", label: "Girls" },
+];
 
 const BANNER_AUDIENCE_OPTIONS = [
  { value: "all", label: "All users" },
@@ -643,18 +660,15 @@ export default function HomePageManager() {
 
  <div>
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Position</label>
- <select
+ <AdminSearchSelect
  value={bannerForm.position}
- onChange={(e) => setBannerForm((s) => ({ ...s, position: e.target.value }))}
- className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
- >
- <option value="hero">Hero (Main Banner)</option>
- <option value="mid">Mid Page</option>
- <option value="sidebar">Sidebar</option>
- <option value="popup">Popup</option>
- <option value="promo">Promo Slider</option>
- <option value="discounts">Discounts page banner</option>
- </select>
+ onChange={(position) => setBannerForm((s) => ({ ...s, position }))}
+ options={BANNER_POSITION_OPTIONS}
+ inputClassName="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
+ ariaLabel="Banner position"
+ placeholder="Search position…"
+ allowEmpty={false}
+ />
  </div>
 
 <div>
@@ -1013,16 +1027,15 @@ Priority map: {BANNER_PRIORITY_SEGMENTS.map((segment) => `${segment}:${normalize
 
  <div>
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Gender *</label>
- <select
+ <AdminSearchSelect
  value={collectionForm.gender}
- onChange={(e) => setCollectionForm((s) => ({ ...s, gender: e.target.value }))}
- className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
- >
- <option value="women">Women</option>
- <option value="men">Men</option>
- <option value="boys">Boys</option>
- <option value="girls">Girls</option>
- </select>
+ onChange={(gender) => setCollectionForm((s) => ({ ...s, gender }))}
+ options={COLLECTION_GENDER_OPTIONS}
+ inputClassName="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
+ ariaLabel="Collection gender"
+ placeholder="Search gender…"
+ allowEmpty={false}
+ />
  </div>
 
  <div>

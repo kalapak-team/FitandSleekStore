@@ -1,10 +1,12 @@
 import React from "react";
 import { ADMIN_LIST_FIELD_CLASS, adminListFiltersActive } from "../../lib/adminListQuery.js";
+import { mapIdLabelOptions } from "../../lib/adminSelectHelpers.js";
 import {
   LOT_LISTING_STATUS_FILTER_OPTIONS,
   LOT_TIER_FILTER_OPTIONS,
 } from "../../lib/inventoryLotHelpers.js";
 import { useAdminSidebarPinned } from "../../lib/useAdminSidebarPinned.js";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
 
 function formatCount(value) {
   return new Intl.NumberFormat("en-US").format(Number(value) || 0);
@@ -59,30 +61,26 @@ export default function InventoryLotsQueryToolbar({
           className={searchClass}
           aria-label="Search inventory lots"
         />
-        <select
+        <AdminSearchSelect
           value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value)}
-          className={`${field} h-10 w-full min-w-[8.5rem] sm:w-[9.5rem]`}
-          aria-label="Filter by listing status"
-        >
-          {LOT_LISTING_STATUS_FILTER_OPTIONS.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
+          onChange={onStatusFilterChange}
+          options={mapIdLabelOptions(LOT_LISTING_STATUS_FILTER_OPTIONS)}
+          ariaLabel="Filter by listing status"
+          inputClassName={`${field} h-10 w-full min-w-[8.5rem] sm:w-[9.5rem]`}
+          className="w-full min-w-[8.5rem] sm:w-[9.5rem]"
+          placeholder="Search status…"
+          allowEmpty={false}
+        />
+        <AdminSearchSelect
           value={lotTierFilter}
-          onChange={(e) => onLotTierFilterChange(e.target.value)}
-          className={`${field} h-10 w-full min-w-[8.5rem] sm:w-[9.5rem]`}
-          aria-label="Filter by lot tier"
-        >
-          {LOT_TIER_FILTER_OPTIONS.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          onChange={onLotTierFilterChange}
+          options={mapIdLabelOptions(LOT_TIER_FILTER_OPTIONS)}
+          ariaLabel="Filter by lot tier"
+          inputClassName={`${field} h-10 w-full min-w-[8.5rem] sm:w-[9.5rem]`}
+          className="w-full min-w-[8.5rem] sm:w-[9.5rem]"
+          placeholder="Search tier…"
+          allowEmpty={false}
+        />
         <input
           type="date"
           value={fromDate}

@@ -4,7 +4,8 @@ import { AlertTriangle, ClipboardList, Copy, Info, Package, Plus, Search, Trash2
 import api from "../../lib/api";
 import { loadPoApplyProduct, loadPoCreateDraft } from "../../lib/poCreateBridge.js";
 import AdminModal from "./AdminModal.jsx";
-import PoLineSearchSelect from "./PoLineSearchSelect.jsx";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+import { mapIdLabelOptions } from "../../lib/adminSelectHelpers.js";
 import AdminProducts from "../../pages/admin/Products.jsx";
 import { useTheme } from "../../state/theme.jsx";
 import { useAuth } from "../../state/auth.jsx";
@@ -51,6 +52,12 @@ const poTableFieldClass =
 
 const poTableReadOnlyClass =
   "flex h-9 w-full min-w-0 items-center justify-end rounded-md border border-slate-200/80 bg-slate-50 px-2 text-sm font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-100";
+
+const PARTS_FILTER_OPTIONS = [
+  { id: "all", label: "All products" },
+  { id: "low", label: "Low stock" },
+  { id: "out", label: "Out of stock" },
+];
 
 function FieldLabel({ children, required = false, htmlFor }) {
   return (
@@ -435,10 +442,10 @@ export default function PurchaseOrderCreateForm({
         prev.map((row) =>
           row.key === key
             ? {
-                ...row,
-                cost_per_unit: String(pricing.cost_per_unit ?? ""),
-                sell_price: String(pricing.sell_price ?? ""),
-              }
+              ...row,
+              cost_per_unit: String(pricing.cost_per_unit ?? ""),
+              sell_price: String(pricing.sell_price ?? ""),
+            }
             : row,
         ),
       );
@@ -700,7 +707,7 @@ export default function PurchaseOrderCreateForm({
               <FieldLabel htmlFor="po-supplier" required>
                 Supplier
               </FieldLabel>
-              <PoLineSearchSelect
+              <AdminSearchSelect
                 inputId="po-supplier"
                 value={supplierId}
                 onChange={pickSupplier}
@@ -798,16 +805,16 @@ export default function PurchaseOrderCreateForm({
               </div>
               <div className="w-full sm:w-48">
                 <FieldLabel htmlFor="po-parts-filter">Show</FieldLabel>
-                <select
-                  id="po-parts-filter"
-                  className={poFieldClass}
+                <AdminSearchSelect
+                  inputId="po-parts-filter"
+                  inputClassName={poFieldClass}
                   value={partsFilter}
-                  onChange={(e) => setPartsFilter(e.target.value)}
-                >
-                  <option value="all">All products</option>
-                  <option value="low">Low stock</option>
-                  <option value="out">Out of stock</option>
-                </select>
+                  onChange={setPartsFilter}
+                  options={mapIdLabelOptions(PARTS_FILTER_OPTIONS)}
+                  ariaLabel="Filter products"
+                  placeholder="Search filter…"
+                  allowEmpty={false}
+                />
               </div>
             </div>
           </div>
@@ -954,9 +961,8 @@ export default function PurchaseOrderCreateForm({
                       <React.Fragment key={row.key}>
                         {row.product_id && isFirstProductLine ? (
                           <tr
-                            className={`border-b border-slate-200/80 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/50 ${
-                              productQtyOver ? "bg-red-50/50 dark:bg-red-950/15" : ""
-                            }`}
+                            className={`border-b border-slate-200/80 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/50 ${productQtyOver ? "bg-red-50/50 dark:bg-red-950/15" : ""
+                              }`}
                           >
                             <td colSpan={10} className="px-2 py-2">
                               <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
@@ -980,11 +986,10 @@ export default function PurchaseOrderCreateForm({
                                   />
                                 </div>
                                 <p
-                                  className={`pb-1 text-[10px] font-medium ${
-                                    productQtyOver
+                                  className={`pb-1 text-[10px] font-medium ${productQtyOver
                                       ? "font-semibold text-red-700 dark:text-red-300"
                                       : "text-sky-700 dark:text-sky-300"
-                                  }`}
+                                    }`}
                                 >
                                   Used {productQtyUsed}
                                   {productLimit != null ? ` / ${productLimit}` : ""} across all sizes & colors
@@ -997,167 +1002,165 @@ export default function PurchaseOrderCreateForm({
                         <tr
                           className={`align-top ${productQtyOver ? "bg-red-50/60 dark:bg-red-950/20" : ""}`}
                         >
-                        <td className="px-2 py-2.5 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          {index + 1}
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <PoLineSearchSelect
-                            value={String(row.product_id ?? "")}
-                            onChange={(v) => pickProductForLine(row.key, v)}
-                            pinnedOptions={[
-                              {
-                                value: QUICK_CREATE_OPTION,
-                                label: "+ Create new product…",
-                                special: true,
-                              },
-                            ]}
-                            options={lineCatalog.map((p) => ({
-                              value: String(p.id),
-                              label: productPartOptionLabel(p),
-                            }))}
-                            placeholder="Search product…"
-                            emptyLabel="— Select product —"
-                            ariaLabel={`Product for line ${index + 1}`}
-                            inputClassName={poTableFieldClass}
-                            listClassName="min-w-[18rem]"
-                          />
-                          {stockHint ? (
-                            <p className="mt-1 text-[10px] font-medium leading-tight text-slate-500 dark:text-slate-400">
-                              {stockHint}
-                            </p>
-                          ) : null}
-                          {row.product_id && !isFirstProductLine ? (
-                            <p
-                              className={`mt-1.5 text-[10px] font-medium ${
-                                productQtyOver
-                                  ? "font-semibold text-red-700 dark:text-red-300"
-                                  : "text-sky-700 dark:text-sky-300"
-                              }`}
-                            >
-                              Used {productQtyUsed}
-                              {productLimit != null ? ` / ${productLimit}` : ""} across all sizes & colors
-                              {productQtyOver ? ` — over by ${productQtyOver.overBy}` : ""}
-                            </p>
-                          ) : null}
-                          {row.product_id && poIsLastSameProductLine(items, row.key) ? (
-                            <button
-                              type="button"
-                              onClick={() => addVariantForLine(row.key)}
-                              className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-sky-200/80 bg-sky-50/80 px-2 py-1 text-[10px] font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-900/50"
-                              title="Same product — only pick size, color, and qty"
-                            >
-                              <Copy className="h-3 w-3" strokeWidth={2.25} aria-hidden />
-                              Add same product
-                            </button>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <PoLineSearchSelect
-                            value={row.size ?? ""}
-                            onChange={(v) => updateItem(row.key, { size: v })}
-                            options={sizeOptions.map((s) => ({ value: s, label: s }))}
-                            disabled={!row.product_id}
-                            placeholder="Search size…"
-                            emptyLabel="— Select size —"
-                            ariaLabel={`Size for line ${index + 1}`}
-                            inputClassName={poTableFieldClass}
-                          />
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <PoLineSearchSelect
-                            value={row.color ?? ""}
-                            onChange={(v) => updateItem(row.key, { color: v })}
-                            options={colorOptions.map((c) => ({
-                              value: c,
-                              label: c,
-                              imageUrl: poColorSwatchUrlForName(product, c),
-                            }))}
-                            disabled={!row.product_id}
-                            showOptionImage
-                            placeholder="Search color…"
-                            emptyLabel="— Select color —"
-                            ariaLabel={`Color for line ${index + 1}`}
-                            inputClassName={poTableFieldClass}
-                            listClassName="min-w-[9rem]"
-                          />
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <input
-                            id={`po-qty-${row.key}`}
-                            type="number"
-                            min={1}
-                            step={1}
-                            inputMode="numeric"
-                            required
-                            className={`${poTableFieldClass} ${
-                              productQtyOver || lineQtyOver
-                                ? "border-red-400 focus:border-red-500 focus:ring-red-200/80 dark:border-red-600 dark:focus:ring-red-900/40"
-                                : ""
-                            }`}
-                            value={row.qty === "" ? "" : row.qty}
-                            onChange={(e) => updateItem(row.key, { qty: e.target.value })}
-                            onBlur={() => blurQtyItem(row.key)}
-                            aria-label={`Quantity for line ${index + 1}`}
-                            aria-invalid={productQtyOver || lineQtyOver ? true : undefined}
-                          />
-                          {row.product_id && productQtyOver ? (
-                            <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
-                              Over limit by {productQtyOver.overBy}
-                            </p>
-                          ) : row.product_id && lineQtyOver ? (
-                            <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
-                              Over by {lineQtyOverBy} on this line
-                            </p>
-                          ) : row.product_id && productLimit != null && lineQtyMax != null ? (
-                            <p className="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                              Max {Math.max(0, lineQtyMax)} on this line
-                            </p>
-                          ) : null}
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <input
-                            id={`po-price-${row.key}`}
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            required={Boolean(row.product_id)}
-                            className={poTableFieldClass}
-                            value={row.cost_per_unit}
-                            onChange={(e) => updateItem(row.key, { cost_per_unit: e.target.value })}
-                            aria-label={`Cost per unit for line ${index + 1}`}
-                          />
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <input
-                            id={`po-sell-${row.key}`}
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            className={poTableFieldClass}
-                            value={row.sell_price}
-                            onChange={(e) => updateItem(row.key, { sell_price: e.target.value })}
-                            aria-label={`Sell price for line ${index + 1}`}
-                          />
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <div className={poTableReadOnlyClass}>{formatPoMoney(lineCost)}</div>
-                        </td>
-                        <td className="px-2 py-2.5">
-                          <div className={poTableReadOnlyClass}>{formatPoMoney(lineSell)}</div>
-                        </td>
-                        <td className="px-2 py-2.5">
-                          {items.length > 1 ? (
-                            <button
-                              type="button"
-                              onClick={() => removeItem(row.key)}
-                              className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-300"
-                              aria-label={`Remove line ${index + 1}`}
-                            >
-                              <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
-                            </button>
-                          ) : null}
-                        </td>
-                      </tr>
+                          <td className="px-2 py-2.5 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            {index + 1}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <AdminSearchSelect
+                              value={String(row.product_id ?? "")}
+                              onChange={(v) => pickProductForLine(row.key, v)}
+                              pinnedOptions={[
+                                {
+                                  value: QUICK_CREATE_OPTION,
+                                  label: "+ Create new product…",
+                                  special: true,
+                                },
+                              ]}
+                              options={lineCatalog.map((p) => ({
+                                value: String(p.id),
+                                label: productPartOptionLabel(p),
+                              }))}
+                              placeholder="Search product…"
+                              emptyLabel="— Select product —"
+                              ariaLabel={`Product for line ${index + 1}`}
+                              inputClassName={poTableFieldClass}
+                              listClassName="min-w-[18rem]"
+                            />
+                            {stockHint ? (
+                              <p className="mt-1 text-[10px] font-medium leading-tight text-slate-500 dark:text-slate-400">
+                                {stockHint}
+                              </p>
+                            ) : null}
+                            {row.product_id && !isFirstProductLine ? (
+                              <p
+                                className={`mt-1.5 text-[10px] font-medium ${productQtyOver
+                                    ? "font-semibold text-red-700 dark:text-red-300"
+                                    : "text-sky-700 dark:text-sky-300"
+                                  }`}
+                              >
+                                Used {productQtyUsed}
+                                {productLimit != null ? ` / ${productLimit}` : ""} across all sizes & colors
+                                {productQtyOver ? ` — over by ${productQtyOver.overBy}` : ""}
+                              </p>
+                            ) : null}
+                            {row.product_id && poIsLastSameProductLine(items, row.key) ? (
+                              <button
+                                type="button"
+                                onClick={() => addVariantForLine(row.key)}
+                                className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-sky-200/80 bg-sky-50/80 px-2 py-1 text-[10px] font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-900/50"
+                                title="Same product — only pick size, color, and qty"
+                              >
+                                <Copy className="h-3 w-3" strokeWidth={2.25} aria-hidden />
+                                Add same product
+                              </button>
+                            ) : null}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <AdminSearchSelect
+                              value={row.size ?? ""}
+                              onChange={(v) => updateItem(row.key, { size: v })}
+                              options={sizeOptions.map((s) => ({ value: s, label: s }))}
+                              disabled={!row.product_id}
+                              placeholder="Search size…"
+                              emptyLabel="— Select size —"
+                              ariaLabel={`Size for line ${index + 1}`}
+                              inputClassName={poTableFieldClass}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <AdminSearchSelect
+                              value={row.color ?? ""}
+                              onChange={(v) => updateItem(row.key, { color: v })}
+                              options={colorOptions.map((c) => ({
+                                value: c,
+                                label: c,
+                                imageUrl: poColorSwatchUrlForName(product, c),
+                              }))}
+                              disabled={!row.product_id}
+                              showOptionImage
+                              placeholder="Search color…"
+                              emptyLabel="— Select color —"
+                              ariaLabel={`Color for line ${index + 1}`}
+                              inputClassName={poTableFieldClass}
+                              listClassName="min-w-[9rem]"
+                            />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <input
+                              id={`po-qty-${row.key}`}
+                              type="number"
+                              min={1}
+                              step={1}
+                              inputMode="numeric"
+                              required
+                              className={`${poTableFieldClass} ${productQtyOver || lineQtyOver
+                                  ? "border-red-400 focus:border-red-500 focus:ring-red-200/80 dark:border-red-600 dark:focus:ring-red-900/40"
+                                  : ""
+                                }`}
+                              value={row.qty === "" ? "" : row.qty}
+                              onChange={(e) => updateItem(row.key, { qty: e.target.value })}
+                              onBlur={() => blurQtyItem(row.key)}
+                              aria-label={`Quantity for line ${index + 1}`}
+                              aria-invalid={productQtyOver || lineQtyOver ? true : undefined}
+                            />
+                            {row.product_id && productQtyOver ? (
+                              <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                                Over limit by {productQtyOver.overBy}
+                              </p>
+                            ) : row.product_id && lineQtyOver ? (
+                              <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                                Over by {lineQtyOverBy} on this line
+                              </p>
+                            ) : row.product_id && productLimit != null && lineQtyMax != null ? (
+                              <p className="mt-1 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                                Max {Math.max(0, lineQtyMax)} on this line
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <input
+                              id={`po-price-${row.key}`}
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              required={Boolean(row.product_id)}
+                              className={poTableFieldClass}
+                              value={row.cost_per_unit}
+                              onChange={(e) => updateItem(row.key, { cost_per_unit: e.target.value })}
+                              aria-label={`Cost per unit for line ${index + 1}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <input
+                              id={`po-sell-${row.key}`}
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              className={poTableFieldClass}
+                              value={row.sell_price}
+                              onChange={(e) => updateItem(row.key, { sell_price: e.target.value })}
+                              aria-label={`Sell price for line ${index + 1}`}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <div className={poTableReadOnlyClass}>{formatPoMoney(lineCost)}</div>
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <div className={poTableReadOnlyClass}>{formatPoMoney(lineSell)}</div>
+                          </td>
+                          <td className="px-2 py-2.5">
+                            {items.length > 1 ? (
+                              <button
+                                type="button"
+                                onClick={() => removeItem(row.key)}
+                                className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                                aria-label={`Remove line ${index + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
                       </React.Fragment>
                     );
                   })}

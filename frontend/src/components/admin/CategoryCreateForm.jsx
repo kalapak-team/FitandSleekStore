@@ -3,6 +3,26 @@ import api from "../../lib/api";
 import { useTheme } from "../../state/theme.jsx";
 import { closeSwal, errorAlert, loadingAlert, toastSuccess } from "../../lib/swal";
 import { getAdminValidationMessage } from "../../lib/adminValidation.js";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+
+const GENDER_OPTIONS = [
+  { value: "", label: "All Genders" },
+  { value: "MEN", label: "Men" },
+  { value: "WOMEN", label: "Women" },
+  { value: "BOY", label: "Boy" },
+  { value: "GIRL", label: "Girl" },
+];
+
+const CATEGORY_TYPE_OPTIONS = [
+  { value: "", label: "Select type" },
+  { value: "clothes", label: "Clothes" },
+  { value: "shoes", label: "Shoes" },
+  { value: "belt", label: "Belt" },
+  { value: "hat", label: "Hat" },
+  { value: "bag", label: "Bag" },
+  { value: "accessory", label: "Accessory" },
+  { value: "other", label: "Other" },
+];
 
 const EMPTY = { name: "", gender: "", type: "", is_active: true };
 
@@ -78,35 +98,26 @@ export default function CategoryCreateForm({ onSuccess, onCancel, showToast = tr
 
       <label className="md:col-span-3">
         <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Gender (Optional)</span>
-        <select
+        <AdminSearchSelect
           value={form.gender}
-          onChange={(e) => setForm((s) => ({ ...s, gender: e.target.value }))}
-          className={fieldClass}
-        >
-          <option value="">All Genders</option>
-          <option value="MEN">Men</option>
-          <option value="WOMEN">Women</option>
-          <option value="BOY">Boy</option>
-          <option value="GIRL">Girl</option>
-        </select>
+          onChange={(v) => setForm((s) => ({ ...s, gender: v }))}
+          options={GENDER_OPTIONS}
+          inputClassName={fieldClass}
+          placeholder="Search gender…"
+          ariaLabel="Gender"
+        />
       </label>
 
       <label className="md:col-span-3">
         <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Category Type</span>
-        <select
+        <AdminSearchSelect
           value={form.type}
-          onChange={(e) => setForm((s) => ({ ...s, type: e.target.value }))}
-          className={fieldClass}
-        >
-          <option value="">Select type</option>
-          <option value="clothes">Clothes</option>
-          <option value="shoes">Shoes</option>
-          <option value="belt">Belt</option>
-          <option value="hat">Hat</option>
-          <option value="bag">Bag</option>
-          <option value="accessory">Accessory</option>
-          <option value="other">Other</option>
-        </select>
+          onChange={(v) => setForm((s) => ({ ...s, type: v }))}
+          options={CATEGORY_TYPE_OPTIONS}
+          inputClassName={fieldClass}
+          placeholder="Search type…"
+          ariaLabel="Category type"
+        />
       </label>
 
       <label className="md:col-span-6 flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3">

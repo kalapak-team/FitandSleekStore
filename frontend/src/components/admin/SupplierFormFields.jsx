@@ -1,4 +1,10 @@
 import React from "react";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+
+const SUPPLIER_STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
 
 function RequiredMark() {
   return <span className="text-red-500 ml-0.5">*</span>;
@@ -99,15 +105,16 @@ export default function SupplierFormFields({
   const statusField = (
     <div>
       <FieldLabel htmlFor={pid("supplier_status")}>Status</FieldLabel>
-      <select
-        id={pid("supplier_status")}
-        className={supplierInputClass}
+      <AdminSearchSelect
+        inputId={pid("supplier_status")}
+        inputClassName={supplierInputClass}
         value={values.is_active ? "active" : "inactive"}
-        onChange={(e) => onChange({ is_active: e.target.value === "active" })}
-      >
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-      </select>
+        onChange={(v) => onChange({ is_active: v === "active" })}
+        options={SUPPLIER_STATUS_OPTIONS}
+        ariaLabel="Supplier status"
+        placeholder="Search status…"
+        allowEmpty={false}
+      />
     </div>
   );
 

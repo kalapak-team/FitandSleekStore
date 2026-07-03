@@ -15,6 +15,13 @@ import {
 } from "../../components/admin/TableColumnVisibilityMenu.jsx";
 import AdminListPaginationBar from "../../components/admin/AdminListPaginationBar.jsx";
 import { sliceAdminListPage } from "../../lib/adminListQuery.js";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+import { mapAdminSelectOptions } from "../../lib/adminSelectHelpers.js";
+
+const DISCOUNT_TYPE_OPTIONS = [
+  { value: "percentage", label: "Percentage (%)" },
+  { value: "fixed", label: "Fixed Amount ($)" },
+];
 
 const DISCOUNTS_TABLE_COLUMNS = [
   { id: "product", label: "Product" },
@@ -401,31 +408,31 @@ export default function AdminDiscounts() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Product *</label>
-              <select
+              <AdminSearchSelect
                 value={form.product_id}
-                onChange={(e) => setForm({ ...form, product_id: e.target.value, sale_price: "" })}
-                className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
-                required
-              >
-                <option value="">Select Product</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} - ${p.price}
-                  </option>
-                ))}
-              </select>
+                onChange={(product_id) => setForm({ ...form, product_id, sale_price: "" })}
+                options={mapAdminSelectOptions(products, {
+                  valueKey: "id",
+                  labelFn: (p) => `${p.name} - $${p.price}`,
+                })}
+                inputClassName="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
+                emptyLabel="Select Product"
+                placeholder="Search product…"
+                ariaLabel="Product"
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">Discount Type *</label>
-              <select
+              <AdminSearchSelect
                 value={form.discount_type}
-                onChange={(e) => setForm({ ...form, discount_type: e.target.value, sale_price: "" })}
-                className="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
-              >
-                <option value="percentage">Percentage (%)</option>
-                <option value="fixed">Fixed Amount ($)</option>
-              </select>
+                onChange={(discount_type) => setForm({ ...form, discount_type, sale_price: "" })}
+                options={DISCOUNT_TYPE_OPTIONS}
+                inputClassName="w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500"
+                ariaLabel="Discount type"
+                placeholder="Search type…"
+                allowEmpty={false}
+              />
             </div>
 
             <div>

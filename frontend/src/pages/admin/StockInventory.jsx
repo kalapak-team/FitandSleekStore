@@ -12,6 +12,25 @@ import { AdminContentSkeleton, AdminDashboardLoader } from "@/components/admin/A
 import AdminModal, { AdminConfirmDialog } from "../../components/admin/AdminModal.jsx";
 import CountryOriginPicker from "../../components/admin/CountryOriginPicker";
 import CategoryPicker from "../../components/admin/CategoryPicker";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+import { VARIANT_BARCODE_FORMAT_OPTIONS } from "../../lib/variantBarcode.js";
+
+const STOCK_UNIT_OPTIONS = [
+    { value: "", label: "Select unit" },
+    { value: "Piece", label: "Piece" },
+    { value: "Pair", label: "Pair" },
+    { value: "Box", label: "Box" },
+    { value: "Kg", label: "Kg" },
+    { value: "Liter", label: "Liter" },
+    { value: "Set", label: "Set" },
+];
+
+const BARCODE_PRINT_ROTATION_OPTIONS = [
+    { value: "0", label: "Normal (0°)" },
+    { value: "90", label: "90°" },
+    { value: "180", label: "180°" },
+    { value: "270", label: "270°" },
+];
 import {
     buildAllColumnsVisibility,
     loadTableColumnVisibility,
@@ -2117,19 +2136,14 @@ export default function AdminBarcodeQR() {
                         {/* Unit */}
                         <div>
                             <label className={labelCls}>Unit</label>
-                            <select
+                            <AdminSearchSelect
                                 value={data.unit || ""}
-                                onChange={(e) => setData((s) => ({ ...s, unit: e.target.value }))}
-                                className={selectCls}
-                            >
-                                <option value="">Select unit</option>
-                                <option>Piece</option>
-                                <option>Pair</option>
-                                <option>Box</option>
-                                <option>Kg</option>
-                                <option>Liter</option>
-                                <option>Set</option>
-                            </select>
+                                onChange={(unit) => setData((s) => ({ ...s, unit }))}
+                                options={STOCK_UNIT_OPTIONS}
+                                inputClassName={selectCls}
+                                ariaLabel="Unit"
+                                placeholder="Search unit…"
+                            />
                         </div>
 
                         <CountryOriginPicker
@@ -2384,20 +2398,15 @@ export default function AdminBarcodeQR() {
                         <label className={addStockLabelCls} htmlFor="add-stock-unit">
                             Unit
                         </label>
-                        <select
-                            id="add-stock-unit"
+                        <AdminSearchSelect
+                            inputId="add-stock-unit"
                             value={form.unit || ""}
-                            onChange={(e) => setForm((s) => ({ ...s, unit: e.target.value }))}
-                            className={addStockInputCls}
-                        >
-                            <option value="">Select unit</option>
-                            <option>Piece</option>
-                            <option>Pair</option>
-                            <option>Box</option>
-                            <option>Kg</option>
-                            <option>Liter</option>
-                            <option>Set</option>
-                        </select>
+                            onChange={(unit) => setForm((s) => ({ ...s, unit }))}
+                            options={STOCK_UNIT_OPTIONS}
+                            inputClassName={addStockInputCls}
+                            ariaLabel="Unit"
+                            placeholder="Search unit…"
+                        />
                     </div>
                     <div>
                         <label className={addStockLabelCls} htmlFor="add-stock-date-in">
@@ -3509,17 +3518,16 @@ export default function AdminBarcodeQR() {
                                                     <label className={printForm.label} htmlFor="bqr-print-rotation">
                                                         Rotation
                                                     </label>
-                                                    <select
-                                                        id="bqr-print-rotation"
-                                                        value={appearance.rotation}
-                                                        onChange={(e) => setAppearance((s) => ({ ...s, rotation: parseInt(e.target.value, 10) }))}
-                                                        className={printForm.select}
-                                                    >
-                                                        <option value={0}>Normal (0Â°)</option>
-                                                        <option value={90}>90Â°</option>
-                                                        <option value={180}>180Â°</option>
-                                                        <option value={270}>270Â°</option>
-                                                    </select>
+                                                    <AdminSearchSelect
+                                                        inputId="bqr-print-rotation"
+                                                        value={String(appearance.rotation)}
+                                                        onChange={(v) => setAppearance((s) => ({ ...s, rotation: parseInt(v, 10) }))}
+                                                        options={BARCODE_PRINT_ROTATION_OPTIONS}
+                                                        inputClassName={printForm.select}
+                                                        ariaLabel="Rotation"
+                                                        placeholder="Search rotation…"
+                                                        allowEmpty={false}
+                                                    />
                                                 </div>
 
                                                 <div className={printForm.strip}>Options</div>
@@ -3630,21 +3638,16 @@ export default function AdminBarcodeQR() {
                                                     <label className={`${printForm.label} mb-2 block`} htmlFor="bqr-print-format">
                                                         Barcode format
                                                     </label>
-                                                    <select
-                                                        id="bqr-print-format"
+                                                    <AdminSearchSelect
+                                                        inputId="bqr-print-format"
                                                         value={appearance.format}
-                                                        onChange={(e) => setAppearance((s) => ({ ...s, format: e.target.value }))}
-                                                        className={`${printForm.select} !mt-0`}
-                                                    >
-                                                        <option value="CODE128">CODE 128 â€” any text</option>
-                                                        <option value="CODE39">CODE 39 â€” alphanumeric</option>
-                                                        <option value="EAN13">EAN-13 â€” 12 digits</option>
-                                                        <option value="EAN8">EAN-8 â€” 7 digits</option>
-                                                        <option value="UPC">UPC-A â€” 11 digits</option>
-                                                        <option value="ITF14">ITF-14 â€” 14 digits</option>
-                                                        <option value="pharmacode">Pharmacode â€” numeric</option>
-                                                        <option value="codabar">Codabar</option>
-                                                    </select>
+                                                        onChange={(format) => setAppearance((s) => ({ ...s, format }))}
+                                                        options={VARIANT_BARCODE_FORMAT_OPTIONS}
+                                                        inputClassName={`${printForm.select} !mt-0`}
+                                                        ariaLabel="Barcode format"
+                                                        placeholder="Search format…"
+                                                        allowEmpty={false}
+                                                    />
                                                     <p className={`${printForm.hint} mt-2`}>
                                                         EAN / UPC need numeric codes that match length rules.
                                                     </p>

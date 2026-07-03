@@ -8,9 +8,15 @@ import Logo from "../../components/Logo.jsx";
 import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { AdminPageLoader } from "@/components/admin/AdminLoading";
 import AdminReportExportMenu from "../../components/admin/AdminReportExportMenu.jsx";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { downloadBlobResponse } from "../../lib/adminReportDownload.js";
 import { exportAdminTable } from "../../lib/adminTableExport.js";
 import { toastSuccess } from "../../lib/swal";
+
+const PAPER_SIZE_OPTIONS = [
+  { value: "a4", label: "A4" },
+  { value: "thermal", label: "4x6 Thermal" },
+];
 
 function money(value) {
  return `$${Number(value || 0).toFixed(2)}`;
@@ -122,14 +128,15 @@ export default function AdminInvoicePage() {
  )}
  <div className="flex items-center gap-2">
  <label className="text-sm text-slate-600 dark:text-slate-300">Paper</label>
- <select
+ <AdminSearchSelect
  value={paperSize}
- onChange={(e) => setPaperSize(e.target.value)}
- className="h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-100"
- >
- <option value="a4">A4</option>
- <option value="thermal">4x6 Thermal</option>
- </select>
+ onChange={setPaperSize}
+ options={PAPER_SIZE_OPTIONS}
+ inputClassName="h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-100"
+ ariaLabel="Paper size"
+ placeholder="Search size…"
+ allowEmpty={false}
+ />
  <button onClick={() => window.print()} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Print</button>
  <AdminReportExportMenu
  label="Download"

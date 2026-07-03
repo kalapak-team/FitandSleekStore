@@ -1,11 +1,24 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import api from "../../lib/api";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { ADMIN_BRAND_PRIMARY, useTheme } from "../../state/theme.jsx";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import AdminSaveToast, { AdminFormErrorBanner, flashAdminMessage } from "../../components/admin/AdminFormToast.jsx";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+
+const THEME_MODE_OPTIONS = [
+  { value: "light", label: "Light Mode" },
+  { value: "dark", label: "Dark Mode" },
+];
+
+const CURRENCY_OPTIONS = [
+  { value: "USD", label: "USD ($)" },
+  { value: "EUR", label: "EUR (€)" },
+  { value: "GBP", label: "GBP (£)" },
+  { value: "THB", label: "THB (฿)" },
+];
 
 export default function Settings() {
  const { user, can, permissionsReady } = useAdminPermissions();
@@ -194,10 +207,15 @@ export default function Settings() {
  <div className="grid md:grid-cols-2 gap-6">
  <div>
  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Theme Mode</label>
- <select value={formThemeMode} onChange={(e) => handleThemeModeChange(e.target.value)} className={inputClass}>
- <option value="light">Light Mode</option>
- <option value="dark">Dark Mode</option>
- </select>
+ <AdminSearchSelect
+ value={formThemeMode}
+ onChange={handleThemeModeChange}
+ options={THEME_MODE_OPTIONS}
+ inputClassName={inputClass}
+ ariaLabel="Theme mode"
+ placeholder="Search mode…"
+ allowEmpty={false}
+ />
  </div>
 
  <div>
@@ -253,12 +271,15 @@ export default function Settings() {
  <div className="grid md:grid-cols-3 gap-6">
  <div>
  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Currency</label>
- <select value={form.currency} onChange={(e) => handleChange("currency", e.target.value)} className={inputClass}>
- <option value="USD">USD ($)</option>
- <option value="EUR">EUR (€)</option>
- <option value="GBP">GBP (£)</option>
- <option value="THB">THB (฿)</option>
- </select>
+ <AdminSearchSelect
+ value={form.currency}
+ onChange={(v) => handleChange("currency", v)}
+ options={CURRENCY_OPTIONS}
+ inputClassName={inputClass}
+ ariaLabel="Currency"
+ placeholder="Search currency…"
+ allowEmpty={false}
+ />
  </div>
  <div>
  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Tax Rate (%)</label>

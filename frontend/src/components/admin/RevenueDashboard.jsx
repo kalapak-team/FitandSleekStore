@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ChartResizeMenu from "./ChartResizeMenu.jsx";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import api from "../../lib/api";
 import { formatCountryLabel } from "../../lib/countries.js";
 import { REPORT_CLUSTER } from "../../lib/reportChartTheme.js";
@@ -83,22 +84,20 @@ function FilterSelect({ label, value, onChange, options, theme }) {
       >
         {label}
       </span>
-      <select
+      <AdminSearchSelect
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none dark:[color-scheme:dark]"
-        style={{
+        onChange={onChange}
+        options={options}
+        inputClassName="h-10 w-full rounded-xl border px-3 text-sm font-medium outline-none dark:[color-scheme:dark]"
+        inputStyle={{
           background: theme.isDark ? "rgba(255,255,255,0.05)" : "#F8FAFC",
           borderColor: theme.cardBorder,
           color: theme.title,
         }}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+        ariaLabel={label}
+        placeholder={`Search ${label.toLowerCase()}…`}
+        allowEmpty={false}
+      />
     </label>
   );
 }

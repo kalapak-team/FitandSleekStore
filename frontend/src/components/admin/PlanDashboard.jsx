@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChartResizeMenu from "./ChartResizeMenu.jsx";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import api from "../../lib/api";
 import { toastSuccess } from "../../lib/swal";
 import { REPORT_CLUSTER } from "../../lib/reportChartTheme.js";
@@ -54,23 +55,21 @@ function PeriodSelect({ label, value, onChange, options, theme, id }) {
       >
         {label}
       </span>
-      <select
-        id={id}
+      <AdminSearchSelect
+        inputId={id}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-10 w-full rounded-xl border px-3 text-sm outline-none dark:[color-scheme:dark]"
-        style={{
+        onChange={onChange}
+        options={options}
+        inputClassName="h-10 w-full rounded-xl border px-3 text-sm outline-none dark:[color-scheme:dark]"
+        inputStyle={{
           background: theme.isDark ? "rgba(15, 23, 42, 0.6)" : "#ffffff",
           borderColor: theme.cardBorder,
           color: theme.title,
         }}
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+        ariaLabel={label}
+        placeholder={`Search ${label.toLowerCase()}…`}
+        allowEmpty={false}
+      />
     </label>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import ChartResizeMenu from "../../components/admin/ChartResizeMenu.jsx";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import api from "../../lib/api";
 import { errorAlert, toastSuccess } from "../../lib/swal";
 import { useAdminAccents } from "../../lib/adminAccents.js";
@@ -46,6 +47,11 @@ import { ADMIN_NUMBER_FORMAT, formatNumber, formatUsd, formatUsdFull } from "../
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, "0");
 const fmtDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const REPORT_TYPE_OPTIONS = [
+  { value: "dashboard", label: "Dashboard Summary" },
+  { value: "sales", label: "Sales Report" },
+];
 
 function truncateChartLabel(value, max = 26) {
   const s = String(value || "").trim();
@@ -709,19 +715,20 @@ export default function Reports() {
                       <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
                         Report Type
                       </label>
-                      <select
+                      <AdminSearchSelect
                         value={reportType}
-                        onChange={(e) => setReportType(e.target.value)}
-                        className="w-full h-10 rounded-xl border px-3 text-sm outline-none dark:[color-scheme:dark] font-medium"
-                        style={{
+                        onChange={setReportType}
+                        options={REPORT_TYPE_OPTIONS}
+                        inputClassName="w-full h-10 rounded-xl border px-3 text-sm outline-none dark:[color-scheme:dark] font-medium"
+                        inputStyle={{
                           borderColor: isDark ? "rgba(148,163,184,0.2)" : "#E2E8F0",
                           background: isDark ? "rgba(255,255,255,0.05)" : "#F8FAFC",
                           color: isDark ? "#F1F5F9" : "#0F172A",
                         }}
-                      >
-                        <option value="dashboard">Dashboard Summary</option>
-                        <option value="sales">Sales Report</option>
-                      </select>
+                        ariaLabel="Report type"
+                        placeholder="Search type…"
+                        allowEmpty={false}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>

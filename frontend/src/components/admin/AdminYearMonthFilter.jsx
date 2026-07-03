@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import {
   buildYearOptions,
   MONTH_ALL,
@@ -33,40 +34,35 @@ export default function AdminYearMonthFilter({
           <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Year
           </span>
-          <select
+          <AdminSearchSelect
             value={value?.year ?? YEAR_ALL}
-            onChange={(e) => {
-              const year = e.target.value;
+            onChange={(year) => {
               onChange({
                 year,
                 month: year === YEAR_ALL ? MONTH_ALL : value?.month ?? MONTH_ALL,
               });
             }}
-            className={SELECT_CLASS}
-          >
-            {yearOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            options={yearOptions}
+            inputClassName={SELECT_CLASS}
+            ariaLabel="Year"
+            placeholder="Search year…"
+            allowEmpty={false}
+          />
         </label>
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Month
           </span>
-          <select
+          <AdminSearchSelect
             value={value?.month ?? MONTH_ALL}
             disabled={monthDisabled}
-            onChange={(e) => onChange({ ...value, month: e.target.value })}
-            className={`${SELECT_CLASS} disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {MONTH_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onChange={(month) => onChange({ ...value, month })}
+            options={MONTH_OPTIONS}
+            inputClassName={`${SELECT_CLASS} disabled:cursor-not-allowed disabled:opacity-50`}
+            ariaLabel="Month"
+            placeholder="Search month…"
+            allowEmpty={false}
+          />
         </label>
       </div>
     </div>

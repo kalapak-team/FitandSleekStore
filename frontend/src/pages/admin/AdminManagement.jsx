@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import apiClient from "../../lib/api";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+
+const ADMIN_ROLE_OPTIONS = [{ value: "admin", label: "Admin" }];
 
 export default function AdminManagement() {
  const [loading, setLoading] = useState(false);
@@ -187,17 +190,22 @@ export default function AdminManagement() {
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
  Role <span className="text-red-500">*</span>
  </label>
- <select
- name="role"
+ <AdminSearchSelect
+ inputId="admin-mgmt-role"
  value={formData.role}
- onChange={handleChange}
- className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors ${errors.role
+ onChange={(role) => {
+ setFormData((prev) => ({ ...prev, role }));
+ if (errors.role) setErrors((prev) => ({ ...prev, role: undefined }));
+ }}
+ options={ADMIN_ROLE_OPTIONS}
+ inputClassName={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-colors ${errors.role
  ? "border-red-500 dark:border-red-500"
  : "border-slate-300 dark:border-slate-600 focus:border-[var(--admin-primary)] dark:focus:border-[var(--admin-primary)]"
  } focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.2)]`}
- >
- <option value="admin">Admin</option>
- </select>
+ ariaLabel="Role"
+ placeholder="Search role…"
+ allowEmpty={false}
+ />
  {errors.role && (
  <p className="mt-1 text-sm text-red-500">{errors.role}</p>
  )}

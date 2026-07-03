@@ -7,6 +7,36 @@ import AdminModal, { AdminConfirmDialog } from "../../components/admin/AdminModa
 import { AdminContentSkeleton, AdminDashboardLoader } from "@/components/admin/AdminLoading";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+
+const MESSAGE_LANGUAGE_FILTER_OPTIONS = [
+  { value: "all", label: "All Languages" },
+  { value: "en", label: "English" },
+  { value: "km", label: "Khmer" },
+];
+
+const MESSAGE_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All Status" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+];
+
+const MESSAGE_LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "km", label: "Khmer" },
+];
+
+const MESSAGE_MEDIA_TYPE_OPTIONS = [
+  { value: "", label: "Auto" },
+  { value: "image", label: "Image" },
+  { value: "video", label: "Video" },
+];
+
+const MESSAGE_AUDIENCE_OPTIONS = [
+  { value: "all", label: "All Users" },
+  { value: "customers", label: "Customers Only" },
+  { value: "guests", label: "Guests Only" },
+];
 
 export default function AdminMessages() {
  const { user, can, permissionsReady } = useAdminPermissions();
@@ -361,27 +391,27 @@ export default function AdminMessages() {
  ) : null}
  <div>
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Language</label>
- <select
+ <AdminSearchSelect
  value={filters.language}
- onChange={(e) => setFilters({ ...filters, language: e.target.value })}
- className="h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
- >
- <option value="all">All Languages</option>
- <option value="en">English</option>
- <option value="km">Khmer</option>
- </select>
+ onChange={(language) => setFilters({ ...filters, language })}
+ options={MESSAGE_LANGUAGE_FILTER_OPTIONS}
+ inputClassName="h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
+ ariaLabel="Filter by language"
+ placeholder="Search language…"
+ allowEmpty={false}
+ />
  </div>
  <div>
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Status</label>
- <select
+ <AdminSearchSelect
  value={filters.status}
- onChange={(e) => setFilters({ ...filters, status: e.target.value })}
- className="h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
- >
- <option value="all">All Status</option>
- <option value="active">Active</option>
- <option value="inactive">Inactive</option>
- </select>
+ onChange={(status) => setFilters({ ...filters, status })}
+ options={MESSAGE_STATUS_FILTER_OPTIONS}
+ inputClassName="h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
+ ariaLabel="Filter by status"
+ placeholder="Search status…"
+ allowEmpty={false}
+ />
  </div>
  <div className="flex-1 min-w-[220px]">
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Search</label>
@@ -572,15 +602,14 @@ export default function AdminMessages() {
  {uploadingMedia && (
  <span className="text-xs text-slate-500 dark:text-slate-400">Uploading…</span>
  )}
- <select
+ <AdminSearchSelect
  value={formData.media_type || ''}
- onChange={(e) => setFormData({ ...formData, media_type: e.target.value })}
- className="h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none text-sm"
- >
- <option value="">Auto</option>
- <option value="image">Image</option>
- <option value="video">Video</option>
- </select>
+ onChange={(media_type) => setFormData({ ...formData, media_type })}
+ options={MESSAGE_MEDIA_TYPE_OPTIONS}
+ inputClassName="h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none text-sm"
+ ariaLabel="Media type"
+ placeholder="Search type…"
+ />
  </div>
  {uploadError && (
  <p className="text-xs text-red-600 mt-2">{uploadError}</p>
@@ -612,27 +641,28 @@ export default function AdminMessages() {
  <div className="grid grid-cols-2 gap-4">
  <div>
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Language</label>
- <select
+ <AdminSearchSelect
  value={formData.language}
- onChange={(e) => setFormData({ ...formData, language: e.target.value })}
- className="w-full h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
- >
- <option value="en">English</option>
- <option value="km">Khmer</option>
- </select>
+ onChange={(language) => setFormData({ ...formData, language })}
+ options={MESSAGE_LANGUAGE_OPTIONS}
+ inputClassName="w-full h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
+ ariaLabel="Message language"
+ placeholder="Search language…"
+ allowEmpty={false}
+ />
  </div>
 
  <div>
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Target Audience</label>
- <select
+ <AdminSearchSelect
  value={formData.target_audience}
- onChange={(e) => setFormData({ ...formData, target_audience: e.target.value })}
- className="w-full h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
- >
- <option value="all">All Users</option>
- <option value="customers">Customers Only</option>
- <option value="guests">Guests Only</option>
- </select>
+ onChange={(target_audience) => setFormData({ ...formData, target_audience })}
+ options={MESSAGE_AUDIENCE_OPTIONS}
+ inputClassName="w-full h-10 px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)]"
+ ariaLabel="Target audience"
+ placeholder="Search audience…"
+ allowEmpty={false}
+ />
  </div>
  </div>
 

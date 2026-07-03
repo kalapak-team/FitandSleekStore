@@ -1,4 +1,6 @@
 import React from "react";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+import { mapAdminSelectOptions } from "../../lib/adminSelectHelpers.js";
 import { ADMIN_APPEARANCE_PRESETS, ADMIN_SPECTRUM_SWATCH, useTheme } from "../../state/theme.jsx";
 import { useLanguage } from "../../lib/i18n.jsx";
 import { useAdminUiPreference } from "../../lib/adminUiPreferences.js";
@@ -90,25 +92,25 @@ export default function AdminAppearancePanel() {
             }
             aria-hidden
           />
-          <select
-            id="admin-theme-preset"
+          <AdminSearchSelect
+            inputId="admin-theme-preset"
             value={selectValue}
-            onChange={(e) => {
-              const v = e.target.value;
+            onChange={(v) => {
               if (v === CUSTOM_VALUE) return;
               setPreset(v);
             }}
-            className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.35)]"
-          >
-            {presetId === "custom" && (
-              <option value={CUSTOM_VALUE}>Custom (from Settings)</option>
-            )}
-            {ADMIN_APPEARANCE_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+            pinnedOptions={
+              presetId === "custom"
+                ? [{ value: CUSTOM_VALUE, label: "Custom (from Settings)" }]
+                : []
+            }
+            options={mapAdminSelectOptions(ADMIN_APPEARANCE_PRESETS, { valueKey: "id", labelKey: "label" })}
+            inputClassName="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.35)]"
+            className="min-w-0 flex-1"
+            ariaLabel="Theme preset"
+            placeholder="Search preset…"
+            allowEmpty={false}
+          />
         </div>
       </div>
 

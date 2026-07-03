@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react";
 import api from "../../lib/api";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { toast } from "react-hot-toast";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
+
+const CARD_PROVIDER_OPTIONS = [
+  { value: "demo", label: "Demo (Testing Only)" },
+  { value: "stripe", label: "Stripe" },
+  { value: "square", label: "Square" },
+];
 
 export default function PaymentSettings() {
  const [loading, setLoading] = useState(true);
@@ -189,17 +196,15 @@ export default function PaymentSettings() {
  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
  Payment Provider
  </label>
- <select
+ <AdminSearchSelect
  value={settings.card.provider}
- onChange={(e) =>
- handleInputChange("card", "provider", e.target.value)
- }
- className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
- >
- <option value="demo">Demo (Testing Only)</option>
- <option value="stripe">Stripe</option>
- <option value="square">Square</option>
- </select>
+ onChange={(provider) => handleInputChange("card", "provider", provider)}
+ options={CARD_PROVIDER_OPTIONS}
+ inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
+ ariaLabel="Payment provider"
+ placeholder="Search provider…"
+ allowEmpty={false}
+ />
  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
  Select your preferred card payment processor
  </p>

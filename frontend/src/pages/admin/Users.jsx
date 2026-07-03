@@ -15,6 +15,7 @@ import {
  loadTableColumnVisibility,
  TableColumnVisibilityMenu,
 } from "../../components/admin/TableColumnVisibilityMenu.jsx";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 
 const CUSTOMER_TABLE_COLUMNS = [
  { id: "select", label: "Select" },
@@ -921,46 +922,39 @@ export default function Users({ showCustomers = true, showAdmins = true }) {
 
  <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/40">
  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:flex-wrap">
- <select
+ <AdminSearchSelect
  value={statusFilter}
- onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
- className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
- aria-label="Filter by status"
- >
- {CUSTOMER_STATUS_OPTIONS.map((opt) => (
- <option key={opt.value || "all-status"} value={opt.value}>{opt.label}</option>
- ))}
- </select>
- <select
+ onChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}
+ options={CUSTOMER_STATUS_OPTIONS}
+ inputClassName="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
+ ariaLabel="Filter by status"
+ placeholder="Search status…"
+ />
+ <AdminSearchSelect
  value={loyaltyFilter}
- onChange={(e) => { setLoyaltyFilter(e.target.value); setCurrentPage(1); }}
- className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
- aria-label="Filter by loyalty tier"
- >
- {CUSTOMER_LOYALTY_OPTIONS.map((opt) => (
- <option key={opt.value || "all-tier"} value={opt.value}>{opt.label}</option>
- ))}
- </select>
- <select
+ onChange={(v) => { setLoyaltyFilter(v); setCurrentPage(1); }}
+ options={CUSTOMER_LOYALTY_OPTIONS}
+ inputClassName="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
+ ariaLabel="Filter by loyalty tier"
+ placeholder="Search tier…"
+ />
+ <AdminSearchSelect
  value={ordersFilter}
- onChange={(e) => { setOrdersFilter(e.target.value); setCurrentPage(1); }}
- className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
- aria-label="Filter by orders"
- >
- {CUSTOMER_ORDERS_OPTIONS.map((opt) => (
- <option key={opt.value || "all-orders"} value={opt.value}>{opt.label}</option>
- ))}
- </select>
- <select
+ onChange={(v) => { setOrdersFilter(v); setCurrentPage(1); }}
+ options={CUSTOMER_ORDERS_OPTIONS}
+ inputClassName="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
+ ariaLabel="Filter by orders"
+ placeholder="Search filter…"
+ />
+ <AdminSearchSelect
  value={sortFilter}
- onChange={(e) => { setSortFilter(e.target.value); setCurrentPage(1); }}
- className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
- aria-label="Sort customers"
- >
- {CUSTOMER_SORT_OPTIONS.map((opt) => (
- <option key={opt.value} value={opt.value}>{opt.label}</option>
- ))}
- </select>
+ onChange={(v) => { setSortFilter(v); setCurrentPage(1); }}
+ options={CUSTOMER_SORT_OPTIONS}
+ inputClassName="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100"
+ ariaLabel="Sort customers"
+ placeholder="Search sort…"
+ allowEmpty={false}
+ />
  {hasActiveCustomerFilters ? (
  <button
  type="button"
@@ -1168,21 +1162,19 @@ export default function Users({ showCustomers = true, showAdmins = true }) {
  {isSuperAdmin ? (
  <label className="space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 block sm:max-w-xs">
  <span>Role</span>
- <select
+ <AdminSearchSelect
  value={formData.role}
- onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value }))}
+ onChange={(role) => setFormData((prev) => ({ ...prev, role }))}
  disabled={
  !!editingUser &&
  (normalizeRoleValue(editingUser.role) === "superadmin" || editingUser.id === user?.id)
  }
- className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--admin-primary)] dark:focus:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
- >
- {USER_ROLE_OPTIONS.map((option) => (
- <option key={option.value} value={option.value}>
- {option.label}
- </option>
- ))}
- </select>
+ options={USER_ROLE_OPTIONS}
+ inputClassName="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[var(--admin-primary)] dark:focus:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+ ariaLabel="User role"
+ placeholder="Search role…"
+ allowEmpty={false}
+ />
  {editingUser?.id === user?.id ? (
  <p className="text-xs font-normal text-slate-500 dark:text-slate-400">You cannot change your own role.</p>
  ) : null}

@@ -1,6 +1,34 @@
 import React from "react";
 import { ADMIN_LIST_FIELD_CLASS, adminListFiltersActive } from "../../lib/adminListQuery.js";
+import { mapIdLabelOptions, SORT_DIR_OPTIONS } from "../../lib/adminSelectHelpers.js";
 import { useAdminSidebarPinned } from "../../lib/useAdminSidebarPinned.js";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+
+function ToolbarSearchSelect({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  className,
+  wrapperClassName = "",
+  placeholder = "Search…",
+  menuMinWidth,
+}) {
+  if (!options?.length) return null;
+  return (
+    <AdminSearchSelect
+      value={value}
+      onChange={onChange}
+      options={mapIdLabelOptions(options)}
+      ariaLabel={ariaLabel}
+      inputClassName={className}
+      className={wrapperClassName}
+      placeholder={placeholder}
+      allowEmpty={false}
+      menuMinWidth={menuMinWidth}
+    />
+  );
+}
 
 /**
  * Search + optional filter selects + sort (matches Purchase Orders list toolbar).
@@ -104,85 +132,73 @@ export default function AdminListQueryToolbar({
   const controlSelects = (
     <>
       {statusOptions?.length ? (
-        <select
+        <ToolbarSearchSelect
           value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value)}
+          onChange={onStatusFilterChange}
+          options={statusOptions}
+          ariaLabel="Filter by status"
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[9.5rem]", "min-w-[8rem] max-w-[9rem]")}`}
-          aria-label="Filter by status"
-        >
-          {statusOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          wrapperClassName={inlineFieldClass}
+          menuMinWidth={152}
+        />
       ) : null}
       {supplierOptions?.length ? (
-        <select
+        <ToolbarSearchSelect
           value={supplierFilter}
-          onChange={(e) => onSupplierFilterChange(e.target.value)}
+          onChange={onSupplierFilterChange}
+          options={supplierOptions}
+          ariaLabel="Filter by supplier"
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[10rem]", "min-w-[8.5rem] max-w-[9.5rem]")}`}
-          aria-label="Filter by supplier"
-        >
-          {supplierOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          wrapperClassName={inlineFieldClass}
+          menuMinWidth={160}
+        />
       ) : null}
       {stockOptions?.length ? (
-        <select
+        <ToolbarSearchSelect
           value={stockFilter}
-          onChange={(e) => onStockFilterChange(e.target.value)}
+          onChange={onStockFilterChange}
+          options={stockOptions}
+          ariaLabel={stockFilterAriaLabel}
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[9.5rem]", "min-w-[8rem] max-w-[9rem]")}`}
-          aria-label={stockFilterAriaLabel}
-        >
-          {stockOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          wrapperClassName={inlineFieldClass}
+          menuMinWidth={152}
+        />
       ) : null}
       {methodOptions?.length ? (
-        <select
+        <ToolbarSearchSelect
           value={methodFilter}
-          onChange={(e) => onMethodFilterChange(e.target.value)}
+          onChange={onMethodFilterChange}
+          options={methodOptions}
+          ariaLabel="Filter by method"
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[10rem]", "min-w-[8.5rem] max-w-[9.5rem]")}`}
-          aria-label="Filter by method"
-        >
-          {methodOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          wrapperClassName={inlineFieldClass}
+          menuMinWidth={160}
+        />
       ) : null}
       {showSort ? (
         <>
-          <select
+          <ToolbarSearchSelect
             value={sortBy}
-            onChange={(e) => onSortByChange(e.target.value)}
+            onChange={onSortByChange}
+            options={sortOptions.map((opt) => ({
+              id: opt.id,
+              label: sortOptionLabel(opt),
+            }))}
+            ariaLabel="Sort by"
             className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[10.5rem]", "min-w-[9rem] max-w-[10rem]")}`}
-            aria-label="Sort by"
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {sortOptionLabel(opt)}
-              </option>
-            ))}
-          </select>
+            wrapperClassName={inlineFieldClass}
+            menuMinWidth={168}
+          />
           {showSortDir ? (
-            <select
+            <ToolbarSearchSelect
               value={sortDir}
-              onChange={(e) => onSortDirChange(e.target.value)}
+              onChange={onSortDirChange}
+              options={SORT_DIR_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label }))}
+              ariaLabel="Sort direction"
               className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[5.5rem]", "min-w-[5rem] max-w-[5.5rem]")}`}
-              aria-label="Sort direction"
-            >
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
+              wrapperClassName={inlineFieldClass}
+              menuMinWidth={120}
+            />
           ) : null}
         </>
       ) : null}
@@ -265,85 +281,64 @@ export default function AdminListQueryToolbar({
           aria-label="Search list"
         />
         {statusOptions?.length ? (
-          <select
+          <ToolbarSearchSelect
             value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value)}
+            onChange={onStatusFilterChange}
+            options={statusOptions}
+            ariaLabel="Filter by status"
             className={`${ADMIN_LIST_FIELD_CLASS} lg:col-span-2`}
-            aria-label="Filter by status"
-          >
-            {statusOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            wrapperClassName="lg:col-span-2"
+          />
         ) : null}
         {supplierOptions?.length ? (
-          <select
+          <ToolbarSearchSelect
             value={supplierFilter}
-            onChange={(e) => onSupplierFilterChange(e.target.value)}
+            onChange={onSupplierFilterChange}
+            options={supplierOptions}
+            ariaLabel="Filter by supplier"
             className={`${ADMIN_LIST_FIELD_CLASS} lg:col-span-3`}
-            aria-label="Filter by supplier"
-          >
-            {supplierOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            wrapperClassName="lg:col-span-3"
+          />
         ) : null}
         {stockOptions?.length ? (
-          <select
+          <ToolbarSearchSelect
             value={stockFilter}
-            onChange={(e) => onStockFilterChange(e.target.value)}
+            onChange={onStockFilterChange}
+            options={stockOptions}
+            ariaLabel={stockFilterAriaLabel}
             className={`${ADMIN_LIST_FIELD_CLASS} lg:col-span-2`}
-            aria-label={stockFilterAriaLabel}
-          >
-            {stockOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            wrapperClassName="lg:col-span-2"
+          />
         ) : null}
         {methodOptions?.length ? (
-          <select
+          <ToolbarSearchSelect
             value={methodFilter}
-            onChange={(e) => onMethodFilterChange(e.target.value)}
+            onChange={onMethodFilterChange}
+            options={methodOptions}
+            ariaLabel="Filter by method"
             className={`${ADMIN_LIST_FIELD_CLASS} lg:col-span-2`}
-            aria-label="Filter by method"
-          >
-            {methodOptions.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            wrapperClassName="lg:col-span-2"
+          />
         ) : null}
         {showSort ? (
           <>
-            <select
+            <ToolbarSearchSelect
               value={sortBy}
-              onChange={(e) => onSortByChange(e.target.value)}
+              onChange={onSortByChange}
+              options={sortOptions.map((opt) => ({ id: opt.id, label: `Sort: ${opt.label}` }))}
+              ariaLabel="Sort by"
               className={`${ADMIN_LIST_FIELD_CLASS} lg:col-span-2`}
-              aria-label="Sort by"
-            >
-              {sortOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  Sort: {opt.label}
-                </option>
-              ))}
-            </select>
+              wrapperClassName="lg:col-span-2"
+            />
             {showSortDir ? (
-              <select
+              <ToolbarSearchSelect
                 value={sortDir}
-                onChange={(e) => onSortDirChange(e.target.value)}
+                onChange={onSortDirChange}
+                options={SORT_DIR_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label }))}
+                ariaLabel="Sort direction"
                 className={`${ADMIN_LIST_FIELD_CLASS} lg:col-span-1`}
-                aria-label="Sort direction"
-              >
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
-              </select>
+                wrapperClassName="lg:col-span-1"
+              />
             ) : null}
           </>
         ) : null}

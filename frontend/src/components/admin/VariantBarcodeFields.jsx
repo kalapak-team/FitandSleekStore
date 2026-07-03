@@ -1,4 +1,5 @@
 import React from "react";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import {
   DEFAULT_VARIANT_BARCODE_FORMAT,
   VARIANT_BARCODE_FORMAT_OPTIONS,
@@ -42,26 +43,24 @@ export default function VariantBarcodeFields({
       >
         Variant Barcode <span className="text-red-500" aria-hidden>*</span>
       </label>
-      <select
-        id={`${idPrefix}-format`}
+      <AdminSearchSelect
+        inputId={`${idPrefix}-format`}
         value={fmt}
         disabled={disabled}
-        onChange={(e) => {
-          const nextFmt = normalizeVariantBarcodeFormat(e.target.value);
+        onChange={(v) => {
+          const nextFmt = normalizeVariantBarcodeFormat(v);
           const patch = { barcode_format: nextFmt };
           if (value) {
             patch.sku_barcode = sanitizeVariantBarcodeInput(value, nextFmt);
           }
           onChange?.(patch);
         }}
-        className={`${selectClass} mb-2${invalid ? ` ${inputErrClass}` : ""}`}
-      >
-        {VARIANT_BARCODE_FORMAT_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+        options={VARIANT_BARCODE_FORMAT_OPTIONS}
+        inputClassName={`${selectClass} mb-2${invalid ? ` ${inputErrClass}` : ""}`}
+        ariaLabel="Variant barcode format"
+        placeholder="Search format…"
+        allowEmpty={false}
+      />
       <div className="flex min-w-0 gap-2">
         <input
           id={`${idPrefix}-code`}

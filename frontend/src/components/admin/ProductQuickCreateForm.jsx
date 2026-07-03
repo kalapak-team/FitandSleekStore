@@ -7,7 +7,9 @@ import { supplierInputClass } from "./SupplierFormFields.jsx";
 import AdminModal from "./AdminModal.jsx";
 import CategoryCreateForm from "./CategoryCreateForm.jsx";
 import BrandCreateForm from "./BrandCreateForm.jsx";
-import { CreateNewSelectOption, QUICK_CREATE_OPTION } from "./FieldWithQuickCreate.jsx";
+import { QUICK_CREATE_OPTION } from "./FieldWithQuickCreate.jsx";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+import { mapAdminSelectOptions } from "../../lib/adminSelectHelpers.js";
 
 const EMPTY = {
   name: "",
@@ -89,17 +91,21 @@ export default function ProductQuickCreateForm({
     return true;
   };
 
-  const onCategoryChange = (e) => {
-    const v = e.target.value;
+  const onCategoryChange = (v) => {
     if (tryOpenNested("category", v)) return;
     setForm((p) => ({ ...p, category_id: v }));
   };
 
-  const onBrandChange = (e) => {
-    const v = e.target.value;
+  const onBrandChange = (v) => {
     if (tryOpenNested("brand", v)) return;
     setForm((p) => ({ ...p, brand_id: v }));
   };
+
+  const categoryOptions = mapAdminSelectOptions(categories, { valueKey: "id", labelKey: "name" });
+  const brandOptions = mapAdminSelectOptions(brands, { valueKey: "id", labelKey: "name" });
+  const quickCreatePinned = (label) => [
+    { value: QUICK_CREATE_OPTION, label, special: true },
+  ];
 
   const handleNestedSuccess = async (type, created) => {
     await loadCatalog();
@@ -208,38 +214,31 @@ export default function ProductQuickCreateForm({
             <FieldLabel htmlFor="po-qc-product-category" required>
               Category
             </FieldLabel>
-            <select
-              id="po-qc-product-category"
-              className={supplierInputClass}
+            <AdminSearchSelect
+              inputId="po-qc-product-category"
+              inputClassName={supplierInputClass}
               value={form.category_id}
               onChange={onCategoryChange}
-              required
-            >
-              <CreateNewSelectOption label="+ Create new category…" />
-              <option value="">— Select category —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              pinnedOptions={quickCreatePinned("+ Create new category…")}
+              options={categoryOptions}
+              emptyLabel="— Select category —"
+              placeholder="Search category…"
+              ariaLabel="Category"
+            />
           </div>
           <div>
             <FieldLabel htmlFor="po-qc-product-brand">Brand</FieldLabel>
-            <select
-              id="po-qc-product-brand"
-              className={supplierInputClass}
+            <AdminSearchSelect
+              inputId="po-qc-product-brand"
+              inputClassName={supplierInputClass}
               value={form.brand_id}
               onChange={onBrandChange}
-            >
-              <CreateNewSelectOption label="+ Create new brand…" />
-              <option value="">— Optional —</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              pinnedOptions={quickCreatePinned("+ Create new brand…")}
+              options={brandOptions}
+              emptyLabel="— Optional —"
+              placeholder="Search brand…"
+              ariaLabel="Brand"
+            />
           </div>
         </div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">

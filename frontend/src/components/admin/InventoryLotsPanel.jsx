@@ -10,7 +10,9 @@ import {
   rowMatchesSearch,
   sliceDetailTablePage,
 } from "../../lib/adminListQuery.js";
+import { mapIdLabelOptions } from "../../lib/adminSelectHelpers.js";
 import AdminListQueryToolbar from "./AdminListQueryToolbar.jsx";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import AdminTablePagination from "./AdminTablePagination.jsx";
 import LotHistoryModal from "./LotHistoryModal.jsx";
 import AdminModal from "./AdminModal.jsx";
@@ -623,11 +625,15 @@ export default function InventoryLotsPanel({
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
               Listing Status
-              <select className={ADMIN_LIST_FIELD_CLASS} value={form.listing_status} onChange={(e) => setForm((f) => ({ ...f, listing_status: e.target.value }))}>
-                {LISTING_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              <AdminSearchSelect
+                value={form.listing_status}
+                onChange={(listing_status) => setForm((f) => ({ ...f, listing_status }))}
+                options={mapIdLabelOptions(LISTING_STATUSES)}
+                inputClassName={ADMIN_LIST_FIELD_CLASS}
+                ariaLabel="Listing status"
+                placeholder="Search status…"
+                allowEmpty={false}
+              />
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
               Qty On Hand
@@ -643,11 +649,15 @@ export default function InventoryLotsPanel({
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
               Price Rule
-              <select className={ADMIN_LIST_FIELD_CLASS} value={form.price_rule} onChange={(e) => setForm((f) => ({ ...f, price_rule: e.target.value }))}>
-                {PRICE_RULES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              <AdminSearchSelect
+                value={form.price_rule}
+                onChange={(price_rule) => setForm((f) => ({ ...f, price_rule }))}
+                options={mapIdLabelOptions(PRICE_RULES)}
+                inputClassName={ADMIN_LIST_FIELD_CLASS}
+                ariaLabel="Price rule"
+                placeholder="Search rule…"
+                allowEmpty={false}
+              />
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
               Barcode (optional)

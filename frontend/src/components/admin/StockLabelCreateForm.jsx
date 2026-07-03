@@ -6,6 +6,17 @@ import { closeSwal, errorAlert, loadingAlert, toastSuccess } from "../../lib/swa
 import { getAdminValidationMessage } from "../../lib/adminValidation.js";
 import { BARCODE_QR_TYPE } from "../../lib/stockLabelReceipts";
 import CategoryPicker from "./CategoryPicker.jsx";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+
+const STOCK_UNIT_OPTIONS = [
+  { value: "", label: "Select unit" },
+  { value: "Piece", label: "Piece" },
+  { value: "Pair", label: "Pair" },
+  { value: "Box", label: "Box" },
+  { value: "Kg", label: "Kg" },
+  { value: "Liter", label: "Liter" },
+  { value: "Set", label: "Set" },
+];
 
 const todayYmd = () => {
   const d = new Date();
@@ -323,20 +334,15 @@ export default function StockLabelCreateForm({
           <label className={labelCls} htmlFor="qc-stock-unit">
             Unit
           </label>
-          <select
-            id="qc-stock-unit"
+          <AdminSearchSelect
+            inputId="qc-stock-unit"
             value={form.unit || ""}
-            onChange={(e) => setForm((s) => ({ ...s, unit: e.target.value }))}
-            className={inputCls}
-          >
-            <option value="">Select unit</option>
-            <option>Piece</option>
-            <option>Pair</option>
-            <option>Box</option>
-            <option>Kg</option>
-            <option>Liter</option>
-            <option>Set</option>
-          </select>
+            onChange={(unit) => setForm((s) => ({ ...s, unit }))}
+            options={STOCK_UNIT_OPTIONS}
+            inputClassName={inputCls}
+            ariaLabel="Unit"
+            placeholder="Search unit…"
+          />
         </div>
         <div>
           <label className={labelCls} htmlFor="qc-stock-date-in">

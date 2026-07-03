@@ -6,6 +6,7 @@ import { AdminContentSkeleton } from '@/components/admin/AdminLoading';
 import { useTheme } from '../../state/theme.jsx';
 import { AdminConfirmDialog } from '../../components/admin/AdminModal.jsx';
 import TopNavDropdownEditor from '../../components/admin/TopNavDropdownEditor.jsx';
+import AdminSearchSelect from '../../components/admin/AdminSearchSelect.jsx';
 import ChromeBackgroundImageField from '../../components/admin/ChromeBackgroundImageField.jsx';
 import AdminSaveToast, { AdminFormErrorBanner, flashAdminMessage } from '../../components/admin/AdminFormToast.jsx';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions.js';
@@ -90,6 +91,21 @@ import {
   updateCookiesLocaleSection,
   updateCookiesSectionItem,
 } from '../../lib/cookiesPageContent.js';
+
+const FOOTER_SOCIAL_PLATFORM_OPTIONS = [
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "twitter", label: "Twitter / X" },
+  { value: "youtube", label: "YouTube" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "telegram", label: "Telegram" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "website", label: "Website" },
+];
+
+const PAGE_LINK_SELECT_CLASS =
+  "h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100";
 
 function withoutMenuVisibilitySection(leftMenu) {
  if (!Array.isArray(leftMenu)) return [];
@@ -1442,22 +1458,19 @@ const sharedChromeBg = () =>
  }}
  className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
  />
- <select
+ <AdminSearchSelect
  value={item.to || ''}
- onChange={(e) => {
+ onChange={(to) => {
  const next = [...(headerSettings.custom_nav || [])];
- next[idx] = { ...next[idx], to: e.target.value };
+ next[idx] = { ...next[idx], to };
  handleHeaderChange('custom_nav', next);
  }}
- className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
- >
- <option value="">Select a page</option>
- {headerLinkOptions.map((option) => (
- <option key={option.value} value={option.value}>
- {option.label}
- </option>
- ))}
- </select>
+ options={headerLinkOptions}
+ inputClassName={PAGE_LINK_SELECT_CLASS}
+ emptyLabel="Select a page"
+ placeholder="Search page…"
+ ariaLabel="Custom nav link"
+ />
  <button
  onClick={() => setPendingRemove({ type: 'custom_nav', index: idx })}
  title="Remove"
@@ -1527,24 +1540,21 @@ const sharedChromeBg = () =>
  }}
  className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
  />
- <select
+ <AdminSearchSelect
  value={item.to || ''}
- onChange={(e) => {
+ onChange={(to) => {
  const next = [...(headerSettings.left_menu || [])];
  const items = [...(next[sIdx].items || [])];
- items[iIdx] = { ...items[iIdx], to: e.target.value };
+ items[iIdx] = { ...items[iIdx], to };
  next[sIdx] = { ...next[sIdx], items };
  handleHeaderChange('left_menu', next);
  }}
- className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
- >
- <option value="">Select a page</option>
- {headerLinkOptions.map((option) => (
- <option key={option.value} value={option.value}>
- {option.label}
- </option>
- ))}
- </select>
+ options={headerLinkOptions}
+ inputClassName={PAGE_LINK_SELECT_CLASS}
+ emptyLabel="Select a page"
+ placeholder="Search page…"
+ ariaLabel="Menu link destination"
+ />
  <input
  type="text"
  placeholder="Image URL"
@@ -1796,25 +1806,19 @@ const sharedChromeBg = () =>
  <div className="space-y-4">
  {footerSocials.map((item, idx) => (
  <div key={`${item.platform}-${idx}`} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
- <select
+ <AdminSearchSelect
  value={item.platform}
- onChange={(e) => {
+ onChange={(platform) => {
  const next = [...footerSocials];
- next[idx] = { ...next[idx], platform: e.target.value };
+ next[idx] = { ...next[idx], platform };
  setFooterSocials(next);
  }}
- className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
- >
- <option value="facebook">Facebook</option>
- <option value="instagram">Instagram</option>
- <option value="twitter">Twitter / X</option>
- <option value="youtube">YouTube</option>
- <option value="tiktok">TikTok</option>
- <option value="whatsapp">WhatsApp</option>
- <option value="telegram">Telegram</option>
- <option value="linkedin">LinkedIn</option>
- <option value="website">Website</option>
- </select>
+ options={FOOTER_SOCIAL_PLATFORM_OPTIONS}
+ inputClassName={PAGE_LINK_SELECT_CLASS}
+ ariaLabel="Social platform"
+ placeholder="Search platform…"
+ allowEmpty={false}
+ />
  <input
  type="text"
  placeholder="https://..."
@@ -1914,18 +1918,15 @@ const sharedChromeBg = () =>
  onChange={(e) => handleFooterLinkChange(sectionKey, idx, 'label', e.target.value)}
  className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
  />
- <select
+ <AdminSearchSelect
  value={link.link}
- onChange={(e) => handleFooterLinkChange(sectionKey, idx, 'link', e.target.value)}
- className="h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-0 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
- >
- <option value="">Select a page</option>
- {footerLinkOptions.map((option) => (
- <option key={option.value} value={option.value}>
- {option.label}
- </option>
- ))}
- </select>
+ onChange={(v) => handleFooterLinkChange(sectionKey, idx, 'link', v)}
+ options={footerLinkOptions}
+ inputClassName={PAGE_LINK_SELECT_CLASS}
+ emptyLabel="Select a page"
+ placeholder="Search page…"
+ ariaLabel="Footer link destination"
+ />
  <button
  onClick={() => handleRemoveFooterLink(sectionKey, idx)}
  title="Remove Link"

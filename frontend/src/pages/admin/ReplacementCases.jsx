@@ -9,6 +9,15 @@ import { useTheme } from "@/state/theme";
 import { ReplacementCaseItemsList } from "../../components/ReplacementRequestModal.jsx";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+
+const REPLACEMENT_STATUS_OPTIONS = [
+  { value: "all", label: "All Statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "completed", label: "Completed" },
+];
 
 function adminPrimaryRgbTriplet() {
  if (typeof document === "undefined") return "107, 126, 115";
@@ -316,17 +325,15 @@ export default function AdminReplacementCases() {
  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
  <div>
  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Status</label>
- <select
+ <AdminSearchSelect
  value={filters.status}
- onChange={(e) => setFilters({ ...filters, status: e.target.value })}
- className="w-full px-4 py-2 border admin-border admin-surface rounded-lg focus:outline-none dark:text-white"
- >
- <option value="all">All Statuses</option>
- <option value="pending">Pending</option>
- <option value="approved">Approved</option>
- <option value="rejected">Rejected</option>
- <option value="completed">Completed</option>
- </select>
+ onChange={(status) => setFilters({ ...filters, status })}
+ options={REPLACEMENT_STATUS_OPTIONS}
+ inputClassName="w-full px-4 py-2 border admin-border admin-surface rounded-lg focus:outline-none dark:text-white"
+ ariaLabel="Filter by status"
+ placeholder="Search status…"
+ allowEmpty={false}
+ />
  </div>
  <div className="md:col-span-2">
  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Search</label>

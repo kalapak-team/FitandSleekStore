@@ -19,6 +19,15 @@ import AdminListPaginationBar from "../../components/admin/AdminListPaginationBa
 import { ADMIN_LIST_PAGE_SIZE, ADMIN_LIST_PAGINATE_AT } from "../../lib/adminListQuery.js";
 import { listingStatusLabel, lotTierLabel } from "../../lib/inventoryLotHelpers.js";
 import OrderShipmentPanel from "../../components/admin/OrderShipmentPanel.jsx";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+
+const ORDER_STATUS_OPTIONS = [
+  { value: "pending_payment", label: "Awaiting payment" },
+  { value: "processing", label: "Processing" },
+  { value: "shipped", label: "Shipped" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 const ORDERS_TABLE_COLUMNS = [
  { id: "select", label: "Select" },
@@ -1013,17 +1022,16 @@ export default function AdminOrders() {
  Payment is recorded separately when the customer pays (e.g. Bakong KHQR).
  </p>
  <div className="flex gap-3">
- <select
+ <AdminSearchSelect
  value={status === 'paid' ? 'processing' : (status === 'pending' ? 'pending_payment' : status)}
- onChange={(e) => setStatus(e.target.value)}
- className="flex-1 h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] dark:focus:border-[rgba(var(--admin-primary-rgb),0.7)] focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.2)] focus:bg-white dark:focus:bg-slate-950 transition-all"
- >
- <option value="pending_payment">Awaiting payment</option>
- <option value="processing">Processing</option>
- <option value="shipped">Shipped</option>
- <option value="completed">Completed</option>
- <option value="cancelled">Cancelled</option>
- </select>
+ onChange={setStatus}
+ options={ORDER_STATUS_OPTIONS}
+ inputClassName="flex-1 h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] dark:focus:border-[rgba(var(--admin-primary-rgb),0.7)] focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.2)] focus:bg-white dark:focus:bg-slate-950 transition-all"
+ className="flex-1 min-w-0"
+ ariaLabel="Order status"
+ placeholder="Search status…"
+ allowEmpty={false}
+ />
  <button
  onClick={save}
  className="h-12 px-6 rounded-xl bg-[color:var(--admin-primary)] text-white font-semibold hover:brightness-110 transition-colors"

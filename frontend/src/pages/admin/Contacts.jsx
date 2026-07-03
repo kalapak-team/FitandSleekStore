@@ -11,6 +11,22 @@ import {
 } from "../../components/admin/TableColumnVisibilityMenu.jsx";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+
+const CONTACT_STATUS_OPTIONS = [
+  { value: "", label: "All Status" },
+  { value: "new", label: "New" },
+  { value: "read", label: "Read" },
+  { value: "replied", label: "Replied" },
+  { value: "closed", label: "Closed" },
+];
+
+const CONTACT_SORT_OPTIONS = [
+  { value: "created_at-desc", label: "Newest First" },
+  { value: "created_at-asc", label: "Oldest First" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
+];
 
 const CONTACTS_TABLE_COLUMNS = [
  { id: "select", label: "Select" },
@@ -290,30 +306,26 @@ export default function Contacts() {
  className="w-full h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)] focus:bg-white dark:focus:bg-slate-900 transition-all"
  />
  </div>
- <select
+ <AdminSearchSelect
  value={filters.status}
- onChange={(e) => setFilters({ ...filters, status: e.target.value })}
- className="h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)] transition-all"
- >
- <option value="">All Status</option>
- <option value="new">New</option>
- <option value="read">Read</option>
- <option value="replied">Replied</option>
- <option value="closed">Closed</option>
- </select>
- <select
+ onChange={(status) => setFilters({ ...filters, status })}
+ options={CONTACT_STATUS_OPTIONS}
+ inputClassName="h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)] transition-all"
+ ariaLabel="Filter by status"
+ placeholder="Search status…"
+ />
+ <AdminSearchSelect
  value={filters.sort_by + "-" + filters.sort_dir}
- onChange={(e) => {
- const [sort_by, sort_dir] = e.target.value.split("-");
+ onChange={(v) => {
+ const [sort_by, sort_dir] = v.split("-");
  setFilters({ ...filters, sort_by, sort_dir });
  }}
- className="h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)] transition-all"
- >
- <option value="created_at-desc">Newest First</option>
- <option value="created_at-asc">Oldest First</option>
- <option value="name-asc">Name A-Z</option>
- <option value="name-desc">Name Z-A</option>
- </select>
+ options={CONTACT_SORT_OPTIONS}
+ inputClassName="h-10 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.22)] transition-all"
+ ariaLabel="Sort contacts"
+ placeholder="Search sort…"
+ allowEmpty={false}
+ />
  {canBulkSelect && selectedIds.length > 0 && (
  <div className="flex items-center gap-2">
  {canEditContacts ? (

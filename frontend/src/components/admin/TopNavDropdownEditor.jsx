@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../lib/api";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+import { mapAdminSelectOptions } from "../../lib/adminSelectHelpers.js";
 import { storefrontSearchUrl } from "../../lib/storefrontNavLinks.js";
 
 function categoryMatchesGender(category, gender) {
@@ -176,21 +178,18 @@ export default function TopNavDropdownEditor({
                 + Link
               </button>
               {filteredCategories.length > 0 && (
-                <select
-                  className="h-8 rounded border border-slate-300 dark:border-slate-600 text-xs px-2 max-w-[200px]"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (e.target.value) addFromCategory(sIdx, e.target.value);
-                    e.target.value = "";
+                <AdminSearchSelect
+                  value=""
+                  onChange={(categoryId) => {
+                    if (categoryId) addFromCategory(sIdx, categoryId);
                   }}
-                >
-                  <option value="">+ From category…</option>
-                  {filteredCategories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  options={mapAdminSelectOptions(filteredCategories, { valueKey: "id", labelKey: "name" })}
+                  inputClassName="h-8 rounded border border-slate-300 dark:border-slate-600 text-xs px-2 max-w-[200px]"
+                  className="max-w-[200px]"
+                  emptyLabel="+ From category…"
+                  placeholder="+ From category…"
+                  ariaLabel="Add link from category"
+                />
               )}
             </div>
           </div>

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "../../lib/api";
+import AdminSearchSelect from "./AdminSearchSelect.jsx";
+import { mapAdminSelectOptions } from "../../lib/adminSelectHelpers.js";
 import {
   applyCourierTemplate,
   COURIER_URL_PRESETS,
@@ -12,6 +14,18 @@ const DEFAULT_PROVIDERS = [
   "Ninja Van",
   "Kerry Express",
   "Other",
+];
+
+const PROVIDER_OPTIONS = mapAdminSelectOptions(
+  DEFAULT_PROVIDERS.map((p) => ({ id: p, label: p })),
+);
+
+const PRESET_OPTIONS = [
+  { value: "", label: "Manual URL" },
+  ...COURIER_URL_PRESETS.map((p) => ({
+    value: p.id,
+    label: `${p.label} template`,
+  })),
 ];
 
 export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved }) {
@@ -104,28 +118,26 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Courier</label>
-              <select
+              <AdminSearchSelect
                 value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-                className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                {DEFAULT_PROVIDERS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
+                onChange={setProvider}
+                options={PROVIDER_OPTIONS}
+                inputClassName="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                ariaLabel="Courier"
+                placeholder="Search courier…"
+                allowEmpty={false}
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">URL preset</label>
-              <select
+              <AdminSearchSelect
                 value={presetId}
-                onChange={(e) => applyPreset(e.target.value)}
-                className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-              >
-                <option value="">Manual URL</option>
-                {COURIER_URL_PRESETS.map((p) => (
-                  <option key={p.id} value={p.id}>{p.label} template</option>
-                ))}
-              </select>
+                onChange={applyPreset}
+                options={PRESET_OPTIONS}
+                inputClassName="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                ariaLabel="URL preset"
+                placeholder="Search preset…"
+              />
             </div>
           </div>
 

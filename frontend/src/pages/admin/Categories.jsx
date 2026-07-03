@@ -8,6 +8,26 @@ import { useTheme } from "../../state/theme.jsx";
 import { closeSwal, errorAlert, loadingAlert, toastSuccess } from "../../lib/swal";
 import AdminModal, { AdminConfirmDialog } from "../../components/admin/AdminModal.jsx";
 import { AdminContentSkeleton, AdminDashboardLoader } from "@/components/admin/AdminLoading";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+
+const CATEGORY_GENDER_OPTIONS = [
+  { value: "", label: "All Genders" },
+  { value: "MEN", label: "Men" },
+  { value: "WOMEN", label: "Women" },
+  { value: "BOY", label: "Boy" },
+  { value: "GIRL", label: "Girl" },
+];
+
+const CATEGORY_TYPE_OPTIONS = [
+  { value: "", label: "Select type" },
+  { value: "clothes", label: "Clothes" },
+  { value: "shoes", label: "Shoes" },
+  { value: "belt", label: "Belt" },
+  { value: "hat", label: "Hat" },
+  { value: "bag", label: "Bag" },
+  { value: "accessory", label: "Accessory" },
+  { value: "other", label: "Other" },
+];
 
 export default function AdminCategories() {
  const { refresh: refreshAuth } = useAuth();
@@ -378,35 +398,26 @@ export default function AdminCategories() {
 
  <label className="md:col-span-3">
  <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Gender (Optional)</span>
- <select
+ <AdminSearchSelect
  value={form.gender}
- onChange={(e) => setForm((s) => ({ ...s, gender: e.target.value }))}
- className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-200"
- >
- <option value="">All Genders</option>
- <option value="MEN">Men</option>
- <option value="WOMEN">Women</option>
- <option value="BOY">Boy</option>
- <option value="GIRL">Girl</option>
- </select>
+ onChange={(gender) => setForm((s) => ({ ...s, gender }))}
+ options={CATEGORY_GENDER_OPTIONS}
+ inputClassName="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-200"
+ ariaLabel="Gender"
+ placeholder="Search gender…"
+ />
  </label>
 
  <label className="md:col-span-3">
  <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Category Type</span>
- <select
+ <AdminSearchSelect
  value={form.type}
- onChange={(e) => setForm((s) => ({ ...s, type: e.target.value }))}
- className="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-200"
- >
- <option value="">Select type</option>
- <option value="clothes">Clothes</option>
- <option value="shoes">Shoes</option>
- <option value="belt">Belt</option>
- <option value="hat">Hat</option>
- <option value="bag">Bag</option>
- <option value="accessory">Accessory</option>
- <option value="other">Other</option>
- </select>
+ onChange={(type) => setForm((s) => ({ ...s, type }))}
+ options={CATEGORY_TYPE_OPTIONS}
+ inputClassName="w-full h-12 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-200"
+ ariaLabel="Category type"
+ placeholder="Search type…"
+ />
  </label>
 
  <label className="md:col-span-6 flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3">
@@ -630,35 +641,26 @@ export default function AdminCategories() {
 
  <div>
  <label className="block text-sm font-semibold text-slate-600 mb-2">Gender</label>
- <select
+ <AdminSearchSelect
  value={editing.gender || ""}
- onChange={(e) => setEditing((s) => ({ ...s, gender: e.target.value }))}
- className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
- >
- <option value="">All Genders</option>
- <option value="MEN">Men</option>
- <option value="WOMEN">Women</option>
- <option value="BOY">Boy</option>
- <option value="GIRL">Girl</option>
- </select>
+ onChange={(gender) => setEditing((s) => ({ ...s, gender }))}
+ options={CATEGORY_GENDER_OPTIONS}
+ inputClassName="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
+ ariaLabel="Gender"
+ placeholder="Search gender…"
+ />
  </div>
 
  <div>
  <label className="block text-sm font-semibold text-slate-600 mb-2">Category Type</label>
- <select
+ <AdminSearchSelect
  value={editing.type || ""}
- onChange={(e) => setEditing((s) => ({ ...s, type: e.target.value }))}
- className="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
- >
- <option value="">Select type</option>
- <option value="clothes">Clothes</option>
- <option value="shoes">Shoes</option>
- <option value="belt">Belt</option>
- <option value="hat">Hat</option>
- <option value="bag">Bag</option>
- <option value="accessory">Accessory</option>
- <option value="other">Other</option>
- </select>
+ onChange={(type) => setEditing((s) => ({ ...s, type }))}
+ options={CATEGORY_TYPE_OPTIONS}
+ inputClassName="w-full h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-slate-500 dark:focus:border-slate-400 focus:bg-white dark:focus:bg-slate-900 transition-all duration-300"
+ ariaLabel="Category type"
+ placeholder="Search type…"
+ />
  </div>
 
  <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">

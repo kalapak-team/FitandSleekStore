@@ -26,7 +26,9 @@ import ProductDetailDrawer from "../../components/admin/ProductDetailDrawer.jsx"
 import AdminSortMenu from "../../components/admin/AdminSortMenu.jsx";
 import BrandCreateForm from "../../components/admin/BrandCreateForm.jsx";
 import CategoryCreateForm from "../../components/admin/CategoryCreateForm.jsx";
-import FieldWithQuickCreate, { CreateNewSelectOption, QUICK_CREATE_OPTION } from "../../components/admin/FieldWithQuickCreate.jsx";
+import FieldWithQuickCreate, { QUICK_CREATE_OPTION } from "../../components/admin/FieldWithQuickCreate.jsx";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+import { mapAdminSelectOptions } from "../../lib/adminSelectHelpers.js";
 import { CatalogPricingReadOnly } from "../../components/admin/CatalogPricingFields.jsx";
 import StockLabelCreateForm from "../../components/admin/StockLabelCreateForm.jsx";
 import SupplierCreateForm from "../../components/admin/SupplierCreateForm.jsx";
@@ -1030,6 +1032,20 @@ export default function AdminProducts({
 
   const productRelationSelectCls = stockBarcodeFieldCls;
 
+  const quickCreatePinned = (label) => [
+    { value: QUICK_CREATE_OPTION, label, special: true },
+  ];
+
+  const categorySelectOptions = useMemo(
+    () => mapAdminSelectOptions(catalogCategories, { valueKey: "id", labelKey: "name" }),
+    [catalogCategories],
+  );
+
+  const brandSelectOptions = useMemo(
+    () => mapAdminSelectOptions(brands, { valueKey: "id", labelKey: "name" }),
+    [brands],
+  );
+
   const renderStockLabelField = ({
     selectId,
     stockLabelId,
@@ -1050,29 +1066,26 @@ export default function AdminProducts({
         invalid={invalid}
         optionalHint={required ? undefined : "(optional)"}
       >
-        <select
-          id={selectId}
+        <AdminSearchSelect
+          inputId={selectId}
           value={String(stockLabelId || "").trim()}
-          onChange={(e) => {
-            const v = e.target.value;
+          onChange={(v) => {
             if (v === QUICK_CREATE_OPTION) {
               onCreateStock?.();
               return;
             }
             onStockLabelChange(v || "");
           }}
-          className={`${stockBarcodeFieldCls}${invalid ? createInputErrorClass(true) : ""}`}
-        >
-          <CreateNewSelectOption label="+ Create new stock label…" />
-          <option value="">
-            {emptyOptionLabel ?? (required ? `Select ${label.toLowerCase()}…` : "Select stock…")}
-          </option>
-          {pickerOptions.map((row) => (
-            <option key={row.id} value={String(row.id)}>
-              {formatStockBarcodePickerLabel(row)}
-            </option>
-          ))}
-        </select>
+          pinnedOptions={quickCreatePinned("+ Create new stock label…")}
+          options={mapAdminSelectOptions(pickerOptions, {
+            valueKey: "id",
+            labelFn: formatStockBarcodePickerLabel,
+          })}
+          emptyLabel={emptyOptionLabel ?? (required ? `Select ${label.toLowerCase()}…` : "Select stock…")}
+          inputClassName={`${stockBarcodeFieldCls}${invalid ? createInputErrorClass(true) : ""}`}
+          ariaLabel={label}
+          placeholder={`Search ${label.toLowerCase()}…`}
+        />
       </FieldWithQuickCreate>
       <p className="mt-1.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
         Links inventory only. For color/size items, use Variant Barcode on each variant row.
@@ -1378,15 +1391,13 @@ export default function AdminProducts({
     return true;
   };
 
-  const onCategorySelectChange = (target) => (e) => {
-    const v = e.target.value;
+  const onCategorySelectChange = (target) => (v) => {
     if (tryOpenQuickCreateFromSelect("category", target, v)) return;
     applyProductFieldPatch(target, { category_id: v });
     if (target === "create" && v) clearCreateFieldError("sizes");
   };
 
-  const onBrandSelectChange = (target) => (e) => {
-    const v = e.target.value;
+  const onBrandSelectChange = (target) => (v) => {
     if (tryOpenQuickCreateFromSelect("brand", target, v)) return;
     applyProductFieldPatch(target, { brand_id: v });
     if (target === "create" && v) clearCreateFieldError("brand_id");
@@ -2720,19 +2731,17 @@ export default function AdminProducts({
                     htmlFor="create-product-category"
                     required
                   >
-                    <select
-                      id="create-product-category"
+                    <AdminSearchSelect
+                      inputId="create-product-category"
                       value={form.category_id}
                       onChange={onCategorySelectChange("create")}
-                      required
-                      className={productRelationSelectCls}
-                    >
-                      {canCreateCategories ? <CreateNewSelectOption /> : null}
-                      <option value="">Select a category</option>
-                      {catalogCategories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                      pinnedOptions={canCreateCategories ? quickCreatePinned("+ Create new…") : []}
+                      options={categorySelectOptions}
+                      emptyLabel="Select a category"
+                      inputClassName={productRelationSelectCls}
+                      ariaLabel="Category"
+                      placeholder="Search category…"
+                    />
                   </FieldWithQuickCreate>
                   <FieldWithQuickCreate
                     label="Brand"
@@ -2740,18 +2749,17 @@ export default function AdminProducts({
                     required
                     invalid={Boolean(createFieldErrors.brand_id)}
                   >
-                    <select
-                      id="create-product-brand"
+                    <AdminSearchSelect
+                      inputId="create-product-brand"
                       value={form.brand_id}
                       onChange={onBrandSelectChange("create")}
-                      className={`${productRelationSelectCls}${createInputErrorClass(createFieldErrors.brand_id)}`}
-                    >
-                      {canCreateBrands ? <CreateNewSelectOption /> : null}
-                      <option value="">Select a brand</option>
-                      {brands.map((b) => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </select>
+                      pinnedOptions={canCreateBrands ? quickCreatePinned("+ Create new…") : []}
+                      options={brandSelectOptions}
+                      emptyLabel="Select a brand"
+                      inputClassName={`${productRelationSelectCls}${createInputErrorClass(createFieldErrors.brand_id)}`}
+                      ariaLabel="Brand"
+                      placeholder="Search brand…"
+                    />
                   </FieldWithQuickCreate>
                 </div>
 
@@ -3726,19 +3734,17 @@ export default function AdminProducts({
                           htmlFor="edit-product-category"
                           required
                         >
-                          <select
-                            id="edit-product-category"
+                          <AdminSearchSelect
+                            inputId="edit-product-category"
                             value={editing.category_id || ""}
                             onChange={onCategorySelectChange("edit")}
-                            required
-                            className={productRelationSelectCls}
-                          >
-                            {canCreateCategories ? <CreateNewSelectOption /> : null}
-                            <option value="">Select a category</option>
-                            {catalogCategories.map((c) => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
+                            pinnedOptions={canCreateCategories ? quickCreatePinned("+ Create new…") : []}
+                            options={categorySelectOptions}
+                            emptyLabel="Select a category"
+                            inputClassName={productRelationSelectCls}
+                            ariaLabel="Category"
+                            placeholder="Search category…"
+                          />
                         </FieldWithQuickCreate>
                         <FieldWithQuickCreate
                           label="Brand"
@@ -3746,18 +3752,17 @@ export default function AdminProducts({
                           required
                           invalid={Boolean(editFieldErrors.brand_id)}
                         >
-                          <select
-                            id="edit-product-brand"
+                          <AdminSearchSelect
+                            inputId="edit-product-brand"
                             value={editing.brand_id || ""}
                             onChange={onBrandSelectChange("edit")}
-                            className={`${productRelationSelectCls}${createInputErrorClass(editFieldErrors.brand_id)}`}
-                          >
-                            {canCreateBrands ? <CreateNewSelectOption /> : null}
-                            <option value="">Select a brand</option>
-                            {brands.map((b) => (
-                              <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                          </select>
+                            pinnedOptions={canCreateBrands ? quickCreatePinned("+ Create new…") : []}
+                            options={brandSelectOptions}
+                            emptyLabel="Select a brand"
+                            inputClassName={`${productRelationSelectCls}${createInputErrorClass(editFieldErrors.brand_id)}`}
+                            ariaLabel="Brand"
+                            placeholder="Search brand…"
+                          />
                         </FieldWithQuickCreate>
                       </div>
 

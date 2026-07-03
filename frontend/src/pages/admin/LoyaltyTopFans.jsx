@@ -3,6 +3,29 @@ import api from "../../lib/api";
 import { useAdminUiPreference } from "../../lib/adminUiPreferences";
 import AdminModal from "../../components/admin/AdminModal.jsx";
 import AdminListPaginationBar from "../../components/admin/AdminListPaginationBar.jsx";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+import { SORT_DIR_OPTIONS } from "../../lib/adminSelectHelpers.js";
+
+const TIER_FILTER_OPTIONS = [
+  { value: "all", label: "All tiers" },
+  { value: "bronze", label: "Bronze" },
+  { value: "silver", label: "Silver" },
+  { value: "gold", label: "Gold" },
+  { value: "vip", label: "VIP" },
+];
+
+const LOYALTY_SORT_OPTIONS = [
+  { value: "user", label: "Sort: User" },
+  { value: "tier", label: "Sort: Tier" },
+  { value: "points", label: "Sort: Points" },
+  { value: "orders_count", label: "Sort: Orders" },
+  { value: "lifetime_spend", label: "Sort: Lifetime Spend" },
+];
+
+const PAGE_SIZE_OPTIONS = [6, 12, 24, 50].map((size) => ({
+  value: String(size),
+  label: String(size),
+}));
 
 const DEFAULT_TIER_RULES = {
   bronze: { min_points: 0, discount_percent: 0 },
@@ -374,36 +397,36 @@ export default function LoyaltyTopFans() {
               placeholder="Search user, email, tier..."
               className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-4"
             />
-            <select
+            <AdminSearchSelect
               value={tierFilter}
-              onChange={(e) => setTierFilter(e.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-2"
-            >
-              <option value="all">All tiers</option>
-              <option value="bronze">Bronze</option>
-              <option value="silver">Silver</option>
-              <option value="gold">Gold</option>
-              <option value="vip">VIP</option>
-            </select>
-            <select
+              onChange={setTierFilter}
+              options={TIER_FILTER_OPTIONS}
+              inputClassName="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-2"
+              className="lg:col-span-2"
+              ariaLabel="Filter by tier"
+              placeholder="Search tier…"
+              allowEmpty={false}
+            />
+            <AdminSearchSelect
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-2"
-            >
-              <option value="user">Sort: User</option>
-              <option value="tier">Sort: Tier</option>
-              <option value="points">Sort: Points</option>
-              <option value="orders_count">Sort: Orders</option>
-              <option value="lifetime_spend">Sort: Lifetime Spend</option>
-            </select>
-            <select
+              onChange={setSortBy}
+              options={LOYALTY_SORT_OPTIONS}
+              inputClassName="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-2"
+              className="lg:col-span-2"
+              ariaLabel="Sort by"
+              placeholder="Search sort…"
+              allowEmpty={false}
+            />
+            <AdminSearchSelect
               value={sortDir}
-              onChange={(e) => setSortDir(e.target.value)}
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-1"
-            >
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
+              onChange={setSortDir}
+              options={SORT_DIR_OPTIONS}
+              inputClassName="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 lg:col-span-1"
+              className="lg:col-span-1"
+              ariaLabel="Sort direction"
+              placeholder="Asc/Desc"
+              allowEmpty={false}
+            />
             <div className="flex items-center gap-2 lg:col-span-3 lg:justify-end">
               {["list", "grid", "split"].map((mode) => (
                 <button
@@ -432,15 +455,15 @@ export default function LoyaltyTopFans() {
             </span>
             <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
               Page size
-              <select
-                value={Number(pageSize) || 12}
-                onChange={(e) => setPageSize(Number(e.target.value || 12))}
-                className="h-7 rounded-md border border-slate-300 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              >
-                {[6, 12, 24, 50].map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
+              <AdminSearchSelect
+                value={String(Number(pageSize) || 12)}
+                onChange={(v) => setPageSize(Number(v || 12))}
+                options={PAGE_SIZE_OPTIONS}
+                inputClassName="h-7 rounded-md border border-slate-300 px-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                ariaLabel="Page size"
+                placeholder="Size"
+                allowEmpty={false}
+              />
             </label>
             <button
               type="button"

@@ -1,7 +1,29 @@
 import React, { useState, useEffect } from "react";
 import apiClient from "../../lib/api";
+import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { errorAlert, toastSuccess, warningConfirm } from "../../lib/swal";
 import { AdminSectionLoader } from "@/components/admin/AdminLoading";
+
+const ROLE_FILTER_OPTIONS = [
+  { value: "", label: "All Roles" },
+  { value: "superadmin", label: "Superadmin" },
+  { value: "admin", label: "Admin" },
+  { value: "driver", label: "Driver" },
+  { value: "customer", label: "Customer" },
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "All Status" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "suspended", label: "Suspended" },
+];
+
+const FORM_ROLE_OPTIONS = [
+  { value: "admin", label: "Admin" },
+  { value: "driver", label: "Driver" },
+  { value: "customer", label: "Customer" },
+];
 
 export default function UserManagement() {
  const [users, setUsers] = useState([]);
@@ -213,27 +235,22 @@ export default function UserManagement() {
  onChange={(e) => setSearchTerm(e.target.value)}
  className="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white placeholder-slate-500 dark:placeholder-slate-400"
  />
- <select
+ <AdminSearchSelect
  value={roleFilter}
- onChange={(e) => setRoleFilter(e.target.value)}
- className="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
- >
- <option value="">All Roles</option>
- <option value="superadmin">Superadmin</option>
- <option value="admin">Admin</option>
- <option value="driver">Driver</option>
- <option value="customer">Customer</option>
- </select>
- <select
+ onChange={setRoleFilter}
+ options={ROLE_FILTER_OPTIONS}
+ inputClassName="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
+ ariaLabel="Filter by role"
+ placeholder="Search role…"
+ />
+ <AdminSearchSelect
  value={statusFilter}
- onChange={(e) => setStatusFilter(e.target.value)}
- className="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
- >
- <option value="">All Status</option>
- <option value="active">Active</option>
- <option value="inactive">Inactive</option>
- <option value="suspended">Suspended</option>
- </select>
+ onChange={setStatusFilter}
+ options={STATUS_FILTER_OPTIONS}
+ inputClassName="px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white"
+ ariaLabel="Filter by status"
+ placeholder="Search status…"
+ />
  </div>
  </div>
 
@@ -356,17 +373,15 @@ export default function UserManagement() {
  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
  Role
  </label>
- <select
+ <AdminSearchSelect
  value={formData.role}
- onChange={(e) =>
- setFormData({ ...formData, role: e.target.value })
- }
- className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
- >
- <option value="admin">Admin</option>
- <option value="driver">Driver</option>
- <option value="customer">Customer</option>
- </select>
+ onChange={(role) => setFormData({ ...formData, role })}
+ options={FORM_ROLE_OPTIONS}
+ inputClassName="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+ ariaLabel="Role"
+ placeholder="Search role…"
+ allowEmpty={false}
+ />
  </div>
  </div>
 
