@@ -44,6 +44,7 @@ export default function PoLineSearchSelect({
   placeholder = "Search…",
   emptyLabel = "— Select —",
   ariaLabel,
+  inputId,
   inputClassName = "",
   showOptionImage = false,
   pinnedOptions = [],
@@ -259,6 +260,7 @@ export default function PoLineSearchSelect({
         ) : null}
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           role="combobox"
           aria-expanded={open}

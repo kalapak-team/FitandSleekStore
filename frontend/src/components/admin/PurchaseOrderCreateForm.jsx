@@ -9,7 +9,7 @@ import AdminProducts from "../../pages/admin/Products.jsx";
 import { useTheme } from "../../state/theme.jsx";
 import { useAuth } from "../../state/auth.jsx";
 import { getAdminValidationMessage } from "../../lib/adminValidation.js";
-import { CreateNewSelectOption, QUICK_CREATE_OPTION } from "./FieldWithQuickCreate.jsx";
+import { QUICK_CREATE_OPTION } from "./FieldWithQuickCreate.jsx";
 import SupplierCreateForm from "./SupplierCreateForm.jsx";
 import {
   createEmptyPoItem,
@@ -361,10 +361,23 @@ export default function PurchaseOrderCreateForm({
     onCatalogRefresh?.();
   };
 
-  const onSupplierSelectChange = (e) => {
-    const v = e.target.value;
+  const supplierOptions = useMemo(() => {
+    const opts = localSuppliers.map((s) => ({
+      value: String(s.id),
+      label: `${s.name || "Supplier"}${s.supplier_code ? ` (${s.supplier_code})` : ""}`,
+    }));
+    const sid = String(supplierId ?? "").trim();
+    if (sid && !opts.some((o) => o.value === sid) && selectedSupplier) {
+      opts.unshift({
+        value: sid,
+        label: `${selectedSupplier.name || "Supplier"}${selectedSupplier.supplier_code ? ` (${selectedSupplier.supplier_code})` : ""}`,
+      });
+    }
+    return opts;
+  }, [localSuppliers, supplierId, selectedSupplier]);
+
+  const pickSupplier = (v) => {
     if (v === QUICK_CREATE_OPTION) {
-      e.target.value = supplierId || "";
       openSupplierCreateModal();
       return;
     }
@@ -687,22 +700,24 @@ export default function PurchaseOrderCreateForm({
               <FieldLabel htmlFor="po-supplier" required>
                 Supplier
               </FieldLabel>
-              <select
-                id="po-supplier"
-                className={poFieldClass}
+              <PoLineSearchSelect
+                inputId="po-supplier"
                 value={supplierId}
-                onChange={onSupplierSelectChange}
-                required
-              >
-                <CreateNewSelectOption label="+ Create new supplier…" />
-                <option value="">— Select supplier —</option>
-                {localSuppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                    {s.supplier_code ? ` (${s.supplier_code})` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={pickSupplier}
+                pinnedOptions={[
+                  {
+                    value: QUICK_CREATE_OPTION,
+                    label: "+ Create new supplier…",
+                    special: true,
+                  },
+                ]}
+                options={supplierOptions}
+                placeholder="Search supplier…"
+                emptyLabel="— Select supplier —"
+                ariaLabel="Supplier"
+                inputClassName={poFieldClass}
+                listClassName="min-w-[16rem]"
+              />
               {selectedSupplier?.supplier_code ? (
                 <p className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                   <Truck className="h-3 w-3 shrink-0 opacity-60" aria-hidden />
