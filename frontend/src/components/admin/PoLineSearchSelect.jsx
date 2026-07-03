@@ -42,6 +42,7 @@ export default function PoLineSearchSelect({
   ariaLabel,
   inputClassName = "",
   showOptionImage = false,
+  pinnedOptions = [],
   listClassName = "",
 }) {
   const listId = useId();
