@@ -1,6 +1,10 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import { resolveImageUrl } from "../../lib/images.js";
+
+const MENU_MAX_HEIGHT = 208;
+const MENU_GAP = 4;
 
 function filterOptions(options, query) {
   const q = String(query || "").trim().toLowerCase();
@@ -47,10 +51,12 @@ export default function PoLineSearchSelect({
 }) {
   const listId = useId();
   const rootRef = useRef(null);
+  const listRef = useRef(null);
   const inputRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [menuStyle, setMenuStyle] = useState(null);
 
   const allOptions = useMemo(() => {
     const pinned = Array.isArray(pinnedOptions) ? pinnedOptions : [];
@@ -72,12 +78,65 @@ export default function PoLineSearchSelect({
     return [selected, ...list];
   }, [allOptions, query, value, selected]);
 
+  const updateMenuPosition = () => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    const rect = input.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldOpenUp = spaceBelow < MENU_MAX_HEIGHT && spaceAbove > spaceBelow;
+
+    const maxHeight = Math.max(
+      120,
+      Math.min(MENU_MAX_HEIGHT, (shouldOpenUp ? spaceAbove : spaceBelow) - MENU_GAP * 2),
+    );
+
+    const minWidth = listClassName.includes("min-w-[18rem]")
+      ? 288
+      : listClassName.includes("min-w-[9rem]")
+        ? 144
+        : 160;
+
+    setMenuStyle({
+      position: "fixed",
+      left: rect.left,
+      width: Math.max(rect.width, minWidth),
+      zIndex: 9999,
+      maxHeight,
+      ...(shouldOpenUp
+        ? { bottom: window.innerHeight - rect.top + MENU_GAP }
+        : { top: rect.bottom + MENU_GAP }),
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuStyle(null);
+      return;
+    }
+    updateMenuPosition();
+  }, [open, filtered.length, listClassName]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const onReposition = () => updateMenuPosition();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, filtered.length, listClassName]);
+
   useEffect(() => {
     const onPointerDown = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) {
-        setOpen(false);
-        setQuery("");
-      }
+      if (rootRef.current?.contains(e.target)) return;
+      if (listRef.current?.contains(e.target)) return;
+      setOpen(false);
+      setQuery("");
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
@@ -148,6 +207,48 @@ export default function PoLineSearchSelect({
   const displayValue = open ? query : selected?.label || "";
   const showSwatch = showOptionImage && !open && selected?.value;
 
+  const menu =
+    open && menuStyle ? (
+      <ul
+        ref={listRef}
+        id={`${listId}-listbox`}
+        role="listbox"
+        style={menuStyle}
+        className={`overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-950/5 dark:border-slate-600 dark:bg-slate-900 dark:ring-white/10 ${listClassName}`}
+      >
+        {filtered.length === 0 ? (
+          <li className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">No matches</li>
+        ) : (
+          filtered.map((opt, idx) => {
+            const isActive = idx === activeIndex;
+            const isSelected = String(value) === String(opt.value);
+            const isSpecial = Boolean(opt.special);
+            return (
+              <li key={`${opt.value}-${idx}`} role="option" aria-selected={isSelected}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(opt.value)}
+                  className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs transition ${
+                    isActive
+                      ? "bg-sky-50 text-sky-950 dark:bg-sky-950/50 dark:text-sky-100"
+                      : isSelected
+                        ? "bg-slate-50 font-semibold text-slate-900 dark:bg-white/5 dark:text-slate-100"
+                        : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/5"
+                  } ${isSpecial ? "font-semibold text-[color:var(--admin-primary)]" : ""}`}
+                >
+                  {showOptionImage ? (
+                    <SwatchThumb imageUrl={opt.imageUrl} label={opt.label} className="h-6 w-6" />
+                  ) : null}
+                  <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                </button>
+              </li>
+            );
+          })
+        )}
+      </ul>
+    ) : null;
+
   return (
     <div ref={rootRef} className="relative min-w-0">
       <div className="relative flex items-center">
@@ -195,44 +296,7 @@ export default function PoLineSearchSelect({
           <ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`} aria-hidden />
         </button>
       </div>
-      {open ? (
-        <ul
-          id={`${listId}-listbox`}
-          role="listbox"
-          className={`absolute z-[70] mt-1 max-h-52 w-full min-w-[10rem] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-950/5 dark:border-slate-600 dark:bg-slate-900 dark:ring-white/10 ${listClassName}`}
-        >
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">No matches</li>
-          ) : (
-            filtered.map((opt, idx) => {
-              const isActive = idx === activeIndex;
-              const isSelected = String(value) === String(opt.value);
-              const isSpecial = Boolean(opt.special);
-              return (
-                <li key={`${opt.value}-${idx}`} role="option" aria-selected={isSelected}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pick(opt.value)}
-                    className={`flex w-full items-center gap-2 px-2.5 py-2 text-left text-xs transition ${
-                      isActive
-                        ? "bg-sky-50 text-sky-950 dark:bg-sky-950/50 dark:text-sky-100"
-                        : isSelected
-                          ? "bg-slate-50 font-semibold text-slate-900 dark:bg-white/5 dark:text-slate-100"
-                          : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/5"
-                    } ${isSpecial ? "font-semibold text-[color:var(--admin-primary)]" : ""}`}
-                  >
-                    {showOptionImage ? (
-                      <SwatchThumb imageUrl={opt.imageUrl} label={opt.label} className="h-6 w-6" />
-                    ) : null}
-                    <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-                  </button>
-                </li>
-              );
-            })
-          )}
-        </ul>
-      ) : null}
+      {typeof document !== "undefined" && menu ? createPortal(menu, document.body) : null}
     </div>
   );
 }
