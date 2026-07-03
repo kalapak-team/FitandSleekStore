@@ -263,6 +263,43 @@ export function poProductQtyLimitsFromOrder(order) {
   return limits;
 }
 
+export function poColorSwatchUrlForName(product, colorName) {
+  const want = String(colorName ?? "").trim().toLowerCase();
+  if (!want) return "";
+  for (const row of poProductColorSwatchRows(product)) {
+    if (row.name.toLowerCase() === want) return row.image_url || "";
+  }
+  return "";
+}
+
+/** Color swatch rows from a catalog product (name + optional image). */
+export function poProductColorSwatchRows(product) {
+  if (!product?.colors) return [];
+  if (Array.isArray(product.colors)) {
+    const rows = [];
+    const seen = new Set();
+    for (const item of product.colors) {
+      const name =
+        typeof item === "string"
+          ? item.trim()
+          : String(item?.name ?? item?.label ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        name,
+        image_url:
+          typeof item === "object" && item?.image_url
+            ? String(item.image_url).trim()
+            : null,
+      });
+    }
+    return rows;
+  }
+  return parseProductColors(product.colors).map((name) => ({ name, image_url: null }));
+}
+
 export function poMaxQtyForProduct(productQtyLimits, productId) {
   const raw = productQtyLimits?.[String(productId ?? "").trim()];
   if (raw == null || raw === "") return null;

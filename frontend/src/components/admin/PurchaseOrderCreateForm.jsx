@@ -4,6 +4,7 @@ import { AlertTriangle, ClipboardList, Copy, Info, Package, Plus, Search, Trash2
 import api from "../../lib/api";
 import { loadPoApplyProduct, loadPoCreateDraft } from "../../lib/poCreateBridge.js";
 import AdminModal from "./AdminModal.jsx";
+import PoLineSearchSelect from "./PoLineSearchSelect.jsx";
 import AdminProducts from "../../pages/admin/Products.jsx";
 import { useTheme } from "../../state/theme.jsx";
 import { useAuth } from "../../state/auth.jsx";
@@ -20,6 +21,7 @@ import {
   poAvailableColorsForLine,
   poAvailableSizesForLine,
   poCatalogOptionsForLine,
+  poColorSwatchUrlForName,
   poIsFirstSameProductLine,
   poIsLastSameProductLine,
   poMaxQtyForLineInput,
@@ -379,11 +381,8 @@ export default function PurchaseOrderCreateForm({
     setShowProductCreateModal(true);
   };
 
-  const onProductSelectChange = (itemKey) => (e) => {
-    const v = e.target.value;
+  const pickProductForLine = (itemKey, v) => {
     if (v === QUICK_CREATE_OPTION) {
-      const row = items.find((r) => r.key === itemKey);
-      e.target.value = String(row?.product_id ?? "");
       openProductCreateModal(itemKey);
       return;
     }
@@ -886,7 +885,7 @@ export default function PurchaseOrderCreateForm({
                     <th className="w-[88px] px-2 py-2.5">
                       Size<span className="ml-0.5 text-red-500">*</span>
                     </th>
-                    <th className="w-[100px] px-2 py-2.5">
+                    <th className="w-[116px] px-2 py-2.5">
                       Color<span className="ml-0.5 text-red-500">*</span>
                     </th>
                     <th className="w-[72px] px-2 py-2.5">
@@ -987,21 +986,26 @@ export default function PurchaseOrderCreateForm({
                           {index + 1}
                         </td>
                         <td className="px-2 py-2.5">
-                          <select
-                            className={poTableFieldClass}
+                          <PoLineSearchSelect
                             value={String(row.product_id ?? "")}
-                            onChange={onProductSelectChange(row.key)}
-                            required
-                            aria-label={`Product for line ${index + 1}`}
-                          >
-                            <CreateNewSelectOption label="+ Create new product…" />
-                            <option value="">— Select product —</option>
-                            {lineCatalog.map((p) => (
-                              <option key={p.id} value={String(p.id)}>
-                                {productPartOptionLabel(p)}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(v) => pickProductForLine(row.key, v)}
+                            pinnedOptions={[
+                              {
+                                value: QUICK_CREATE_OPTION,
+                                label: "+ Create new product…",
+                                special: true,
+                              },
+                            ]}
+                            options={lineCatalog.map((p) => ({
+                              value: String(p.id),
+                              label: productPartOptionLabel(p),
+                            }))}
+                            placeholder="Search product…"
+                            emptyLabel="— Select product —"
+                            ariaLabel={`Product for line ${index + 1}`}
+                            inputClassName={poTableFieldClass}
+                            listClassName="min-w-[18rem]"
+                          />
                           {stockHint ? (
                             <p className="mt-1 text-[10px] font-medium leading-tight text-slate-500 dark:text-slate-400">
                               {stockHint}
@@ -1033,38 +1037,34 @@ export default function PurchaseOrderCreateForm({
                           ) : null}
                         </td>
                         <td className="px-2 py-2.5">
-                          <select
-                            className={poTableFieldClass}
+                          <PoLineSearchSelect
                             value={row.size ?? ""}
+                            onChange={(v) => updateItem(row.key, { size: v })}
+                            options={sizeOptions.map((s) => ({ value: s, label: s }))}
                             disabled={!row.product_id}
-                            required={Boolean(row.product_id)}
-                            onChange={(e) => updateItem(row.key, { size: e.target.value })}
-                            aria-label={`Size for line ${index + 1}`}
-                          >
-                            <option value="">— Select size —</option>
-                            {sizeOptions.map((s) => (
-                              <option key={s} value={s}>
-                                {s}
-                              </option>
-                            ))}
-                          </select>
+                            placeholder="Search size…"
+                            emptyLabel="— Select size —"
+                            ariaLabel={`Size for line ${index + 1}`}
+                            inputClassName={poTableFieldClass}
+                          />
                         </td>
                         <td className="px-2 py-2.5">
-                          <select
-                            className={poTableFieldClass}
+                          <PoLineSearchSelect
                             value={row.color ?? ""}
+                            onChange={(v) => updateItem(row.key, { color: v })}
+                            options={colorOptions.map((c) => ({
+                              value: c,
+                              label: c,
+                              imageUrl: poColorSwatchUrlForName(product, c),
+                            }))}
                             disabled={!row.product_id}
-                            required={Boolean(row.product_id)}
-                            onChange={(e) => updateItem(row.key, { color: e.target.value })}
-                            aria-label={`Color for line ${index + 1}`}
-                          >
-                            <option value="">— Select color —</option>
-                            {colorOptions.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
+                            showOptionImage
+                            placeholder="Search color…"
+                            emptyLabel="— Select color —"
+                            ariaLabel={`Color for line ${index + 1}`}
+                            inputClassName={poTableFieldClass}
+                            listClassName="min-w-[9rem]"
+                          />
                         </td>
                         <td className="px-2 py-2.5">
                           <input
