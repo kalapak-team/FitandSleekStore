@@ -4,15 +4,28 @@ namespace App\Services;
 
 use App\Models\Notification;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Shipment;
 use App\Models\TelegramOrderSubscription;
 use App\Models\TelegramUser;
+use Endroid\QrCode\Color\Color;
+use Endroid\QrCode\Encoding\Encoding;
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class TelegramService
 {
+    public function __construct(
+        private readonly OrderReceiptTokenService $receiptTokens,
+        private readonly CodCollectionService $codCollection,
+        private readonly RielpayPaymentService $rielpayPayments,
+    ) {
+    }
+
     public function isEnabled(): bool
     {
         return filled(config('services.telegram.bot_token'));
@@ -72,7 +85,6 @@ class TelegramService
             'Your payment was received. We are preparing your order.'
         );
 
-        $link = $this->buildOrderConnectLink($order);
         $label = $order->order_number ?: '#'.$order->id;
         $total = number_format((float) $order->total, 2);
 
@@ -82,13 +94,195 @@ class TelegramService
             ."Status: Preparing for shipment\n\n"
             ."You will receive updates when your order ships.";
 
-        $replyMarkup = $link ? [
-            'inline_keyboard' => [[
-                ['text' => '📦 Track this order on Telegram', 'url' => $link],
-            ]],
-        ] : null;
+        $replyMarkup = $this->buildOrderActionKeyboard($order);
 
         $this->notifyOrderRecipients($order, $message, $replyMarkup);
+    }
+
+    public function buildReceiptUrl(Order $order): string
+    {
+        return $this->receiptTokens->buildReceiptUrl($order);
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}|null
+     */
+    public function buildOrderActionKeyboard(Order $order, ?Shipment $shipment = null): ?array
+    {
+        $order->loadMissing('shipment');
+        $shipment ??= $order->shipment;
+        $rows = [];
+
+        $actionRow = [];
+        $receiptUrl = $this->buildReceiptUrl($order);
+        $actionRow[] = ['text' => '🧾 វិក័យបត្រ / Invoice', 'url' => $receiptUrl];
+
+        if ($order->payment_status !== 'paid') {
+            $actionRow[] = [
+                'text' => $order->payment_method === 'cod'
+                    ? '💳 Scan KHQR (COD)'
+                    : '💳 Payment QR',
+                'callback_data' => 'payqr_'.$order->id,
+            ];
+        }
+
+        if ($actionRow !== []) {
+            $rows[] = $actionRow;
+        }
+
+        if ($shipment && filled($shipment->external_tracking_url)) {
+            $provider = $shipment->provider ?: 'Courier';
+            $rows[] = [[
+                'text' => "Track on {$provider}",
+                'url' => $shipment->external_tracking_url,
+            ]];
+        }
+
+        return $rows !== [] ? ['inline_keyboard' => $rows] : null;
+    }
+
+    public function canChatAccessOrder(int $chatId, Order $order, ?TelegramUser $telegramUser = null): bool
+    {
+        if (TelegramOrderSubscription::where('order_id', $order->id)->where('chat_id', $chatId)->exists()) {
+            return true;
+        }
+
+        if ($telegramUser?->user_id && (int) $telegramUser->user_id === (int) $order->user_id) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function sendPaymentQrToChat(int $chatId, Order $order): bool
+    {
+        if ($order->payment_status === 'paid') {
+            $this->sendMessage((string) $chatId, '✅ This order is already paid.');
+
+            return false;
+        }
+
+        try {
+            $payment = $this->resolvePaymentQrForOrder($order);
+            $qrString = (string) ($payment['qr_string'] ?? '');
+            if ($qrString === '') {
+                $this->sendMessage((string) $chatId, '❌ Could not generate payment QR. Please try again later.');
+
+                return false;
+            }
+
+            $amount = $payment['amount'] ?? null;
+            $currency = (string) ($payment['currency'] ?? 'KHR');
+            $amountLabel = $currency === 'KHR'
+                ? number_format((float) $amount).' ៛'
+                : '$'.number_format((float) $amount, 2);
+
+            $label = $order->order_number ?: '#'.$order->id;
+            $codNote = $order->payment_method === 'cod'
+                ? "\n\n_បង់ពេលដឹកដល់ — Scan with ABA / Bakong_"
+                : "\n\n_Scan with your banking app to pay_";
+
+            $caption = "💳 *Payment QR*\n\n"
+                ."Order: `{$label}`\n"
+                ."Amount: *{$amountLabel}*"
+                .$codNote;
+
+            return $this->sendPhoto((string) $chatId, $this->buildQrPngBytes($qrString), $caption);
+        } catch (\Throwable $e) {
+            Log::error('Telegram payment QR failed', [
+                'order_id' => $order->id,
+                'chat_id' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+            $this->sendMessage((string) $chatId, '❌ Failed to generate payment QR. Please try again.');
+
+            return false;
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolvePaymentQrForOrder(Order $order): array
+    {
+        if ($order->payment_method === 'cod') {
+            $result = $this->codCollection->createCodKhqr($order);
+
+            return $result['payment'];
+        }
+
+        if ($order->payment_method !== 'bakong_khqr') {
+            throw new \RuntimeException('Online payment is not available for this order.');
+        }
+
+        $existing = Payment::where('order_id', $order->id)
+            ->khqrProvider()
+            ->where('status', 'pending')
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->latest('id')
+            ->first();
+
+        if ($existing && $existing->qr_string) {
+            return [
+                'qr_string' => $existing->qr_string,
+                'amount' => $existing->amount,
+                'currency' => $existing->currency,
+                'status' => $existing->status,
+            ];
+        }
+
+        return DB::transaction(function () use ($order, $existing) {
+            Payment::where('order_id', $order->id)
+                ->khqrProvider()
+                ->where('status', 'pending')
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now())
+                ->update(['status' => 'expired']);
+
+            $payment = $existing ?: Payment::create([
+                'order_id' => $order->id,
+                'provider' => 'rielpay',
+                'amount' => $order->total,
+                'currency' => config('services.rielpay.currency', 'KHR'),
+                'method' => 'bakong_khqr',
+                'status' => 'pending',
+            ]);
+
+            $result = $this->rielpayPayments->generate($order, $payment);
+            $payment->update([
+                'provider' => 'rielpay',
+                'bill_number' => $result['bill_number'],
+                'md5' => $result['md5'],
+                'khqr_payload' => $result['payload'],
+                'qr_string' => $result['qr_string'],
+                'expires_at' => $result['expires_at'],
+                'raw_response' => $result['payload'],
+            ]);
+
+            $fresh = $payment->fresh();
+
+            return [
+                'qr_string' => $fresh->qr_string,
+                'amount' => $fresh->amount,
+                'currency' => $fresh->currency,
+                'status' => $fresh->status,
+            ];
+        });
+    }
+
+    private function buildQrPngBytes(string $qrString): string
+    {
+        $writer = new PngWriter();
+        $qrCode = QrCode::create($qrString)
+            ->setEncoding(new Encoding('UTF-8'))
+            ->setSize(480)
+            ->setMargin(12)
+            ->setForegroundColor(new Color(0, 0, 0))
+            ->setBackgroundColor(new Color(255, 255, 255));
+
+        return $writer->write($qrCode)->getString();
     }
 
     public function notifyOrderShipped(Shipment $shipment): void
@@ -112,14 +306,7 @@ class TelegramService
             ."Courier: {$provider}\n"
             ."Tracking: `{$trackingCode}`";
 
-        $buttons = [];
-        if (filled($shipment->external_tracking_url)) {
-            $buttons[] = [
-                ['text' => "Track on {$provider}", 'url' => $shipment->external_tracking_url],
-            ];
-        }
-
-        $replyMarkup = $buttons !== [] ? ['inline_keyboard' => $buttons] : null;
+        $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment);
 
         $this->createInAppNotification(
             $order,
@@ -157,6 +344,9 @@ class TelegramService
 
         $message = "🎉 *Order delivered*\n\n"
             ."Order: `{$label}`\n"
+            .($order->payment_method === 'cod' && $order->payment_status !== 'paid'
+                ? "Pay on delivery — tap *Payment QR* below or pay cash to the driver.\n\n"
+                : '')
             ."Thank you for shopping with Fitandsleek!";
 
         $this->createInAppNotification(
@@ -166,7 +356,8 @@ class TelegramService
             'Your order has been delivered. Thank you for shopping with us!'
         );
 
-        $this->notifyOrderRecipients($order, $message);
+        $replyMarkup = $this->buildOrderActionKeyboard($order);
+        $this->notifyOrderRecipients($order, $message, $replyMarkup);
         $this->notifyAdminOrderDelivered($order);
     }
 
@@ -272,17 +463,76 @@ class TelegramService
             }
         }
 
-        $replyMarkup = null;
-        if ($shipment && filled($shipment->external_tracking_url)) {
-            $provider = $shipment->provider ?: 'Courier';
-            $replyMarkup = [
-                'inline_keyboard' => [[
-                    ['text' => "Track on {$provider}", 'url' => $shipment->external_tracking_url],
-                ]],
-            ];
+        if ($order->payment_status !== 'paid') {
+            $lines[] = 'Payment: Pending';
         }
 
+        $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment);
+
         $this->sendMessage((string) $chatId, implode("\n", $lines), $replyMarkup);
+    }
+
+    public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void
+    {
+        if (! $this->isEnabled()) {
+            return;
+        }
+
+        $payload = ['callback_query_id' => $callbackQueryId];
+        if ($text !== null) {
+            $payload['text'] = $text;
+        }
+
+        try {
+            Http::timeout(10)->post(
+                'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/answerCallbackQuery',
+                $payload
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Telegram answerCallbackQuery failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function sendPhoto(string $chatId, string $pngBytes, ?string $caption = null): bool
+    {
+        if (! $this->isEnabled()) {
+            return false;
+        }
+
+        try {
+            $multipart = [
+                ['name' => 'chat_id', 'contents' => $chatId],
+                ['name' => 'photo', 'contents' => $pngBytes, 'filename' => 'payment-qr.png'],
+            ];
+
+            if ($caption !== null) {
+                $multipart[] = ['name' => 'caption', 'contents' => $caption];
+                $multipart[] = ['name' => 'parse_mode', 'contents' => 'Markdown'];
+            }
+
+            $response = Http::timeout(20)
+                ->asMultipart()
+                ->post('https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendPhoto', $multipart);
+
+            if (! $response->successful()) {
+                Log::warning('Telegram sendPhoto failed', [
+                    'chat_id' => $chatId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('Telegram sendPhoto exception', [
+                'chat_id' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     public function sendMessage(string $chatId, string $text, ?array $replyMarkup = null): bool

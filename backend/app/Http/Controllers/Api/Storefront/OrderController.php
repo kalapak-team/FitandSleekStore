@@ -54,7 +54,13 @@ class OrderController extends Controller
     {
         $orders = Order::with(['items.product.category', 'shipment'])
             ->where('user_id', $request->user()->id)
-            ->paymentSuccessful()
+            ->where(function ($query) {
+                $query->paymentSuccessful()
+                    ->orWhere(function ($codQuery) {
+                        $codQuery->where('payment_method', 'cod')
+                            ->where('status', '!=', 'cancelled');
+                    });
+            })
             ->orderByDesc('id')
             ->paginate(10);
 
@@ -131,7 +137,7 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate([
-            'payment_method' => 'required|in:bakong_khqr,card_visa',
+            'payment_method' => 'required|in:bakong_khqr,cod',
             'shipping_address' => 'required|array',
             'shipping_address.province' => 'required|string|max:120',
             'billing_address' => 'nullable|array',
@@ -163,11 +169,19 @@ class OrderController extends Controller
         }
 
         $shippingProvince = (string) ($validated['shipping_address']['province'] ?? '');
+        $isCod = $validated['payment_method'] === 'cod';
+
+        if ($isCod && ! $this->deliveryFees->isPhnomPenh($shippingProvince)) {
+            throw ValidationException::withMessages([
+                'payment_method' => ['Pay on delivery is only available in Phnom Penh. Please pay with KHQR to ship to other provinces.'],
+            ]);
+        }
+
         $shippingFee = $this->deliveryFees->resolveForProvince($shippingProvince);
         $deliveryZone = $this->deliveryFees->resolveZone($shippingProvince);
 
         $discountPercent = $this->loyaltyService->discountPercentForUser($request->user());
-        $order = DB::transaction(function () use ($userId, $cart, $validated, $discountPercent, $shippingFee, $deliveryZone) {
+        $order = DB::transaction(function () use ($userId, $cart, $validated, $discountPercent, $shippingFee, $deliveryZone, $isCod) {
             $total = 0;
             $validatedProducts = [];
             $validatedUnitPrices = [];
@@ -196,7 +210,7 @@ class OrderController extends Controller
             $order = Order::create([
                 'user_id' => $userId,
                 'order_number' => $this->generateOrderNumber(),
-                'status' => 'pending_payment',
+                'status' => $isCod ? 'processing' : 'pending_payment',
                 'payment_status' => 'pending',
                 'subtotal' => round($total, 2),
                 'shipping' => round($shippingFee, 2),
@@ -233,15 +247,19 @@ class OrderController extends Controller
             // Create pending payment record
             \App\Models\Payment::create([
                 'order_id' => $order->id,
-                'provider' => $validated['payment_method'] === 'bakong_khqr' ? 'rielpay' : 'card',
+                'provider' => $isCod ? 'cod' : 'rielpay',
                 'amount' => $order->total,
-                'currency' => config('services.rielpay.currency', 'KHR'),
+                'currency' => $isCod ? 'USD' : config('services.rielpay.currency', 'KHR'),
                 'method' => $validated['payment_method'],
                 'status' => 'pending',
             ]);
 
             return $order->load(['items.product.category']);
         });
+
+        if ($validated['payment_method'] === 'cod') {
+            $cart->items()->delete();
+        }
 
         $shipping = $validated['shipping_address'] ?? [];
         $hasDeliveryGps = ! empty($shipping['latitude']) && ! empty($shipping['longitude']);
@@ -254,7 +272,9 @@ class OrderController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Checkout successful. Please complete payment.',
+            'message' => $isCod
+                ? 'Order placed. Pay when your order is delivered.'
+                : 'Checkout successful. Please complete payment.',
             'order' => $order,
         ], 201);
     }

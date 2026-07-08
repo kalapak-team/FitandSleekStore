@@ -32,17 +32,11 @@ class PaymentSettingsController extends Controller
                 'merchant_name' => $settings->get('bakong_merchant_name')?->value ?? '',
                 'merchant_city' => $settings->get('bakong_merchant_city')?->value ?? '',
             ],
-            'card' => [
-                'provider' => $settings->get('card_provider')?->value ?? 'demo',
-                'stripe_key' => $settings->get('stripe_key')?->value ?? '',
-                'stripe_secret' => $settings->get('stripe_secret')?->value ?? '',
-                'square_app_id' => $settings->get('square_app_id')?->value ?? '',
-                'square_access_token' => $settings->get('square_access_token')?->value ?? '',
-            ],
             'enabled_methods' => [
                 'bakong_khqr' => (bool) ($settings->get('payment_method_bakong_khqr')?->value ?? true),
-                'card_visa' => (bool) ($settings->get('payment_method_card_visa')?->value ?? true),
+                'cod' => (bool) ($settings->get('payment_method_cod')?->value ?? true),
             ],
+            'exchange_rate' => (int) (Setting::where('key', 'usd_khr_exchange_rate')->value('value') ?? 4100),
         ]);
     }
 
@@ -55,13 +49,9 @@ class PaymentSettingsController extends Controller
             'bakong.receive_account' => 'nullable|string',
             'bakong.merchant_name' => 'nullable|string',
             'bakong.merchant_city' => 'nullable|string',
-            'card.provider' => 'nullable|string|in:demo,stripe,square',
-            'card.stripe_key' => 'nullable|string',
-            'card.stripe_secret' => 'nullable|string',
-            'card.square_app_id' => 'nullable|string',
-            'card.square_access_token' => 'nullable|string',
             'enabled_methods.bakong_khqr' => 'nullable|boolean',
-            'enabled_methods.card_visa' => 'nullable|boolean',
+            'enabled_methods.cod' => 'nullable|boolean',
+            'exchange_rate' => 'nullable|integer|min:1|max:99999',
         ]);
 
         // Save Bakong settings
@@ -71,18 +61,18 @@ class PaymentSettingsController extends Controller
             }
         }
 
-        // Save Card settings
-        if (isset($validated['card'])) {
-            foreach ($validated['card'] as $key => $value) {
-                $this->saveSetting('card_' . $key, $value, 'payment');
-            }
-        }
-
         // Save enabled methods
         if (isset($validated['enabled_methods'])) {
             foreach ($validated['enabled_methods'] as $key => $value) {
                 $this->saveSetting('payment_method_' . $key, $value, 'payment');
             }
+        }
+
+        if (array_key_exists('exchange_rate', $validated) && $validated['exchange_rate'] !== null) {
+            Setting::updateOrCreate(
+                ['key' => 'usd_khr_exchange_rate'],
+                ['value' => (string) $validated['exchange_rate'], 'group' => 'commerce', 'type' => 'number']
+            );
         }
 
         return response()->json([

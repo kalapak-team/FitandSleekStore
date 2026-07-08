@@ -1,3 +1,14 @@
+/** Common couriers for shipment tracking and COD collection. */
+export const COURIER_PROVIDERS = [
+  "J&T Express",
+  "Vireak Buntham Express",
+  "Grab Express",
+  "Ninja Van",
+  "Kerry Express",
+  "In-house / Staff",
+  "Other",
+];
+
 /** Courier URL templates — {code} is replaced with the tracking number. */
 export const COURIER_URL_PRESETS = [
   {

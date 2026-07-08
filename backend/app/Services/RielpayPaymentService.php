@@ -91,11 +91,11 @@ class RielpayPaymentService
         } elseif ($status === 'expired') {
             $payment->update([
                 'status' => 'expired',
-                'raw_response' => $response,
+                'raw_response' => array_merge($payment->raw_response ?? [], $response),
             ]);
         } else {
             $payment->update([
-                'raw_response' => $response,
+                'raw_response' => array_merge($payment->raw_response ?? [], $response),
             ]);
         }
 
@@ -120,7 +120,7 @@ class RielpayPaymentService
             $lockedPayment->update([
                 'status' => 'paid',
                 'paid_at' => $paidAt ?? now(),
-                'raw_response' => $response,
+                'raw_response' => array_merge($lockedPayment->raw_response ?? [], $response),
             ]);
 
             if ($lockedOrder->payment_status !== 'paid') {

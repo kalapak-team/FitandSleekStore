@@ -19,6 +19,7 @@ import AdminListPaginationBar from "../../components/admin/AdminListPaginationBa
 import { ADMIN_LIST_PAGE_SIZE, ADMIN_LIST_PAGINATE_AT } from "../../lib/adminListQuery.js";
 import { listingStatusLabel, lotTierLabel } from "../../lib/inventoryLotHelpers.js";
 import OrderShipmentPanel from "../../components/admin/OrderShipmentPanel.jsx";
+import OrderCodCollectionPanel from "../../components/admin/OrderCodCollectionPanel.jsx";
 import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 
 const ORDER_STATUS_OPTIONS = [
@@ -1015,11 +1016,20 @@ export default function AdminOrders() {
  />
  ) : null}
 
+ <OrderCodCollectionPanel
+ order={selected}
+ canEdit={canEditOrders}
+ onCollected={(order) => {
+ setSelected((prev) => (prev ? { ...prev, ...order, payment_status: "paid" } : prev));
+ refetchOrders();
+ }}
+ />
+
  {canEditOrders ? (
  <div className="mb-6">
  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Update fulfillment status</label>
  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
- Payment is recorded separately when the customer pays (e.g. Bakong KHQR).
+ Payment: KHQR prepaid online, or COD (record cash/KHQR when delivered).
  </p>
  <div className="flex gap-3">
  <AdminSearchSelect

@@ -13,6 +13,7 @@ import OAuthCallback from "./pages/auth/OAuthCallback.jsx";
 import CartPage from "./pages/Cart.jsx";
 import Checkout from "./pages/Checkout.jsx";
 import PaymentProcess from "./pages/PaymentProcess.jsx";
+import PublicReceiptPage from "./pages/PublicReceipt.jsx";
 import Orders from "./pages/Orders.jsx";
 import ContactPage from "./pages/Contact.jsx";
 import SupportPage from "./pages/Support.jsx";
@@ -262,6 +263,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/driver/scan" element={<DriverScanPage />} />
+          <Route path="/receipt/:token" element={<PublicReceiptPage />} />
           <Route
             path="/profile"
             element={

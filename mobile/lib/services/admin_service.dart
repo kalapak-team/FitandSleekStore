@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../core/admin_report_period.dart';
 import '../core/api_client.dart';
 import '../models/brand_model.dart';
+import '../utils/cod_settlement.dart';
 
 class AdminDashboardStats {
   AdminDashboardStats({
@@ -319,6 +320,58 @@ class AdminService {
   Future<AdminOrderDetail> updateOrderStatus(int id, String status) async {
     final res = await _api.dio.patch('/admin/orders/$id', data: {'status': status});
     return AdminOrderDetail.fromJson(Map<String, dynamic>.from(res.data as Map));
+  }
+
+  Future<CodQuote> getCodQuote(int orderId) async {
+    final res = await _api.dio.get('/admin/orders/$orderId/cod');
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    return CodQuote.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  Future<AdminOrderDetail> collectCodCash({
+    required int orderId,
+    required String settlementMethod,
+    double? actualAmountReceived,
+    String? courierName,
+    String? notes,
+  }) async {
+    final res = await _api.dio.post('/admin/orders/$orderId/cod/cash', data: {
+      'settlement_method': settlementMethod,
+      if (actualAmountReceived != null) 'actual_amount_received': actualAmountReceived,
+      if (courierName != null && courierName.isNotEmpty) 'courier_name': courierName,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    final order = data['order'] as Map? ?? data;
+    return AdminOrderDetail.fromJson(Map<String, dynamic>.from(order));
+  }
+
+  Future<CodKhqrPayment> createCodKhqr({
+    required int orderId,
+    String? courierName,
+    String? notes,
+  }) async {
+    final res = await _api.dio.post('/admin/orders/$orderId/cod/khqr', data: {
+      if (courierName != null && courierName.isNotEmpty) 'courier_name': courierName,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    final payment = data['payment'] as Map? ?? data;
+    return CodKhqrPayment.fromJson(Map<String, dynamic>.from(payment));
+  }
+
+  Future<({String paymentStatus, AdminOrderDetail? order})> codKhqrStatus(int orderId) async {
+    final res = await _api.dio.get('/admin/orders/$orderId/cod/khqr/status');
+    final body = Map<String, dynamic>.from(res.data as Map);
+    final payment = body['payment'] as Map?;
+    final orderRaw = body['order'] as Map?;
+    return (
+      paymentStatus: (payment?['status'] ?? '').toString(),
+      order: orderRaw != null ? AdminOrderDetail.fromJson(Map<String, dynamic>.from(orderRaw)) : null,
+    );
   }
 
   Future<AdminPaymentPage> listPayments({
@@ -978,11 +1031,14 @@ class AdminOrderDetail {
     required this.paymentStatus,
     required this.total,
     required this.createdAt,
+    this.paymentMethod,
     this.customerName,
     this.customerEmail,
     this.customerPhone,
     this.shippingAddress,
+    this.shipmentProvider,
     this.items = const [],
+    this.payments = const [],
   });
 
   final int id;
@@ -991,15 +1047,39 @@ class AdminOrderDetail {
   final String paymentStatus;
   final double total;
   final String createdAt;
+  final String? paymentMethod;
   final String? customerName;
   final String? customerEmail;
   final String? customerPhone;
   final String? shippingAddress;
+  final String? shipmentProvider;
   final List<AdminOrderItemLine> items;
+  final List<AdminPaymentSnippet> payments;
+
+  bool get isCod => paymentMethod == 'cod';
+  bool get isCodPending => isCod && paymentStatus != 'paid';
 
   factory AdminOrderDetail.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map?;
     final itemsRaw = json['items'];
+    final paymentsRaw = json['payments'];
+    final shipment = json['shipment'] as Map?;
+    String? shipTo;
+    final addr = json['shipping_address'];
+    if (addr is Map) {
+      shipTo = (addr['formatted_address'] ??
+              [
+                addr['house_no'],
+                addr['street_no'],
+                addr['sangkat'],
+                addr['khan'],
+                addr['province'],
+              ].whereType<Object>().map((e) => e.toString()).where((s) => s.isNotEmpty).join(', '))
+          .toString();
+      if (shipTo.trim().isEmpty) shipTo = null;
+    } else if (addr != null) {
+      shipTo = addr.toString();
+    }
     return AdminOrderDetail(
       id: AdminDashboardStats._toInt(json['id']),
       orderNumber: (json['order_number'] ?? '').toString(),
@@ -1007,13 +1087,67 @@ class AdminOrderDetail {
       paymentStatus: (json['payment_status'] ?? '').toString(),
       total: AdminDashboardStats._toDouble(json['total']),
       createdAt: (json['created_at'] ?? '').toString(),
+      paymentMethod: json['payment_method']?.toString(),
       customerName: user?['name']?.toString(),
       customerEmail: user?['email']?.toString(),
       customerPhone: user?['phone']?.toString(),
-      shippingAddress: json['shipping_address']?.toString(),
+      shippingAddress: shipTo,
+      shipmentProvider: shipment?['provider']?.toString(),
       items: itemsRaw is List
           ? itemsRaw.whereType<Map>().map((e) => AdminOrderItemLine.fromJson(Map<String, dynamic>.from(e))).toList()
           : [],
+      payments: paymentsRaw is List
+          ? paymentsRaw
+              .whereType<Map>()
+              .map((e) => AdminPaymentSnippet.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : [],
+    );
+  }
+}
+
+class CodQuote {
+  CodQuote({
+    required this.usdAmount,
+    required this.khrAmount,
+    required this.exchangeRate,
+  });
+
+  final double usdAmount;
+  final int khrAmount;
+  final int exchangeRate;
+
+  factory CodQuote.fromJson(Map<String, dynamic> json) {
+    return CodQuote(
+      usdAmount: AdminDashboardStats._toDouble(json['usd_amount']),
+      khrAmount: AdminDashboardStats._toInt(json['khr_amount']),
+      exchangeRate: AdminDashboardStats._toInt(json['exchange_rate']),
+    );
+  }
+}
+
+class CodKhqrPayment {
+  CodKhqrPayment({
+    required this.id,
+    required this.status,
+    this.qrString,
+    this.amount,
+    this.currency,
+  });
+
+  final int id;
+  final String status;
+  final String? qrString;
+  final double? amount;
+  final String? currency;
+
+  factory CodKhqrPayment.fromJson(Map<String, dynamic> json) {
+    return CodKhqrPayment(
+      id: AdminDashboardStats._toInt(json['id']),
+      status: (json['status'] ?? '').toString(),
+      qrString: json['qr_string']?.toString(),
+      amount: json['amount'] != null ? AdminDashboardStats._toDouble(json['amount']) : null,
+      currency: json['currency']?.toString(),
     );
   }
 }

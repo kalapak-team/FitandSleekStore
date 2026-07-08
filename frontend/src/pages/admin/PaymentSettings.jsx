@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../../lib/api";
-import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { toast } from "react-hot-toast";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
-
-const CARD_PROVIDER_OPTIONS = [
-  { value: "demo", label: "Demo (Testing Only)" },
-  { value: "stripe", label: "Stripe" },
-  { value: "square", label: "Square" },
-];
 
 export default function PaymentSettings() {
  const [loading, setLoading] = useState(true);
@@ -19,17 +12,11 @@ export default function PaymentSettings() {
  merchant_name: "",
  merchant_city: "",
  },
- card: {
- provider: "demo",
- stripe_key: "",
- stripe_secret: "",
- square_app_id: "",
- square_access_token: "",
- },
  enabled_methods: {
  bakong_khqr: true,
- card_visa: true,
+ cod: true,
  },
+ exchange_rate: 4100,
  });
 
  useEffect(() => {
@@ -92,7 +79,6 @@ export default function PaymentSettings() {
  Payment Gateway Settings
  </h3>
 
- {/* Payment Methods Toggle */}
  <div className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
  <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-4">
  Enabled Payment Methods
@@ -106,24 +92,39 @@ export default function PaymentSettings() {
  className="h-4 w-4 text-[color:var(--admin-primary)] focus:ring-[rgba(var(--admin-primary-rgb),0.4)] border-gray-300 rounded"
  />
  <span className="ml-3 text-gray-700 dark:text-gray-300">
- Bakong KHQR (Cambodia)
+ Bakong KHQR — pay now (all provinces)
  </span>
  </label>
  <label className="flex items-center">
  <input
  type="checkbox"
- checked={settings.enabled_methods.card_visa}
- onChange={() => handleMethodToggle("card_visa")}
+ checked={settings.enabled_methods.cod}
+ onChange={() => handleMethodToggle("cod")}
  className="h-4 w-4 text-[color:var(--admin-primary)] focus:ring-[rgba(var(--admin-primary-rgb),0.4)] border-gray-300 rounded"
  />
  <span className="ml-3 text-gray-700 dark:text-gray-300">
- Credit/Debit Card (Visa/Mastercard)
+ Pay on delivery (Phnom Penh only)
  </span>
  </label>
  </div>
  </div>
 
- {/* Bakong Settings */}
+ <div className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
+ <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-4">
+ USD → KHR exchange rate (COD)
+ </h4>
+ <input
+ type="number"
+ min={1}
+ value={settings.exchange_rate ?? 4100}
+ onChange={(e) => setSettings((prev) => ({ ...prev, exchange_rate: Number(e.target.value) || 4100 }))}
+ className="w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700"
+ />
+ <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+ Used when collecting COD in Khmer Riel or showing KHQR amount at delivery.
+ </p>
+ </div>
+
  <div className="mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
  <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-4">
  Bakong KHQR Configuration (Cambodia)
@@ -142,9 +143,6 @@ export default function PaymentSettings() {
  placeholder="e.g., yourshop@bkrt"
  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
  />
- <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
- This is the Bakong username/account that actually receives customer payments.
- </p>
  </div>
 
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -161,9 +159,6 @@ export default function PaymentSettings() {
  placeholder="Fitandsleek Clothes Store"
  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
  />
- <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
- Displayed in the KHQR for customer confirmation.
- </p>
  </div>
  <div>
  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -178,107 +173,11 @@ export default function PaymentSettings() {
  placeholder="Phnom Penh"
  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
  />
- <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
- Used in the KHQR payload alongside your store name.
- </p>
  </div>
  </div>
  </div>
  </div>
 
- {/* Card Settings */}
- <div className="mb-8">
- <h4 className="text-md font-semibold text-gray-800 dark:text-gray-200 mb-4">
- Card Payment Configuration
- </h4>
- <div className="space-y-4">
- <div>
- <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
- Payment Provider
- </label>
- <AdminSearchSelect
- value={settings.card.provider}
- onChange={(provider) => handleInputChange("card", "provider", provider)}
- options={CARD_PROVIDER_OPTIONS}
- inputClassName="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
- ariaLabel="Payment provider"
- placeholder="Search provider…"
- allowEmpty={false}
- />
- <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
- Select your preferred card payment processor
- </p>
- </div>
-
- {settings.card.provider === "stripe" && (
- <>
- <div>
- <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
- Stripe Publishable Key
- </label>
- <input
- type="password"
- value={settings.card.stripe_key}
- onChange={(e) =>
- handleInputChange("card", "stripe_key", e.target.value)
- }
- placeholder="pk_live_..."
- className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
- />
- </div>
- <div>
- <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
- Stripe Secret Key
- </label>
- <input
- type="password"
- value={settings.card.stripe_secret}
- onChange={(e) =>
- handleInputChange("card", "stripe_secret", e.target.value)
- }
- placeholder="sk_live_..."
- className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
- />
- </div>
- </>
- )}
-
- {settings.card.provider === "square" && (
- <>
- <div>
- <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
- Square Application ID
- </label>
- <input
- type="password"
- value={settings.card.square_app_id}
- onChange={(e) =>
- handleInputChange("card", "square_app_id", e.target.value)
- }
- placeholder="Your Square App ID"
- className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
- />
- </div>
- <div>
- <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
- Square Access Token
- </label>
- <input
- type="password"
- value={settings.card.square_access_token}
- onChange={(e) =>
- handleInputChange("card", "square_access_token", e.target.value)
- }
- placeholder="Your Square Access Token"
- className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.4)]"
- />
- </div>
- </>
- )}
- </div>
- </div>
-
- {/* Save Button */}
  <div className="flex justify-end gap-3">
  <button
  onClick={fetchSettings}
@@ -298,17 +197,14 @@ export default function PaymentSettings() {
  </div>
  </div>
 
- {/* Help Section */}
  <div className="mt-8 bg-[rgba(var(--admin-primary-rgb),0.08)] dark:bg-[rgba(var(--admin-primary-rgb),0.12)] border border-[rgba(var(--admin-primary-rgb),0.25)] dark:border-[rgba(var(--admin-primary-rgb),0.35)] rounded-lg p-4">
  <h5 className="font-semibold text-slate-900 dark:text-white mb-2">
  Payment Configuration Guide
  </h5>
  <ul className="text-sm text-slate-700 dark:text-slate-200 space-y-1">
- <li>• <strong>Bakong Receive Account:</strong> Use your @bkrt Bakong ID that receives customer payments.</li>
- <li>• <strong>Merchant Details:</strong> Store name + city appear in the KHQR so match your business certificate.</li>
- <li>• <strong>Card Provider:</strong> Use "Demo" for testing, "Stripe" or "Square" for production.</li>
- <li>• <strong>Enable/Disable:</strong> Toggle payment methods to control which options customers see.</li>
- <li>• <strong>Security:</strong> All credentials are encrypted and only accessible to superadmin.</li>
+ <li>• <strong>KHQR:</strong> Customer pays immediately via Bakong scan — required for province delivery.</li>
+ <li>• <strong>COD:</strong> Customer pays on delivery in Phnom Penh; driver/shop records cash or KHQR.</li>
+ <li>• <strong>Exchange rate:</strong> Converts USD order total to KHR for COD collection.</li>
  </ul>
  </div>
  </div>

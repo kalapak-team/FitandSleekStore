@@ -27,6 +27,13 @@ class TelegramWebhookController extends Controller
         }
 
         $update = $request->all();
+
+        if (isset($update['callback_query']) && is_array($update['callback_query'])) {
+            $this->handleCallbackQuery($update['callback_query']);
+
+            return response()->json(['ok' => true]);
+        }
+
         $message = $update['message'] ?? null;
 
         if (! is_array($message)) {
@@ -210,7 +217,52 @@ class TelegramWebhookController extends Controller
             ."/track ORDER\\_NUMBER — order status\n"
             ."/orders — your recent orders\n"
             ."/help — this message\n\n"
-            ."Tip: tap *Get updates on Telegram* after checkout to subscribe instantly."
+            ."Tip: use *វិក័យបត្រ / Invoice* and *Payment QR* buttons on order updates."
         );
+    }
+
+    private function handleCallbackQuery(array $callback): void
+    {
+        $callbackId = (string) ($callback['id'] ?? '');
+        $data = (string) ($callback['data'] ?? '');
+        $from = $callback['from'] ?? null;
+        $message = $callback['message'] ?? null;
+        $chat = is_array($message) ? ($message['chat'] ?? null) : null;
+
+        if ($callbackId === '' || ! is_array($from) || ! is_array($chat)) {
+            return;
+        }
+
+        $chatId = (int) $chat['id'];
+        $telegramUser = $this->telegram->upsertTelegramUser($from, $chatId);
+
+        if (! str_starts_with($data, 'payqr_')) {
+            $this->telegram->answerCallbackQuery($callbackId);
+
+            return;
+        }
+
+        $orderId = (int) substr($data, 6);
+        if ($orderId <= 0) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Invalid order.');
+
+            return;
+        }
+
+        $order = Order::find($orderId);
+        if (! $order) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Order not found.');
+
+            return;
+        }
+
+        if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
+            $this->telegram->answerCallbackQuery($callbackId, 'You are not subscribed to this order.');
+
+            return;
+        }
+
+        $this->telegram->answerCallbackQuery($callbackId, 'Generating payment QR…');
+        $this->telegram->sendPaymentQrToChat($chatId, $order);
     }
 }

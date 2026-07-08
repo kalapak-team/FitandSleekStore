@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useSearchParams } from "react-router-dom";
 import { resolveImageUrl } from "../../lib/images";
 import Logo from "../../components/Logo.jsx";
+import OrderCodCollectionPanel from "../../components/admin/OrderCodCollectionPanel.jsx";
 import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { getDeviceHeaders, getDeviceMeta } from "../../lib/device";
 import { useHomepageSettings } from "../../state/homepageSettings";
@@ -174,10 +175,25 @@ export default function DriverScanPage() {
     const [receiptLoading, setReceiptLoading] = useState(false);
     const [receiptData, setReceiptData] = useState(null);
     const [showReceipt, setShowReceipt] = useState(false);
+    const [codOrder, setCodOrder] = useState(null);
 
     const scannerRef = useRef(null);
     const lastScanRef = useRef({ text: "", time: 0 });
     const scanProcessingRef = useRef(false);
+
+    const driverHttp = useMemo(() => {
+        if (!driverToken) return null;
+        const client = axios.create({
+            baseURL,
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${driverToken}`,
+                ...getDeviceHeaders(),
+            },
+        });
+        return client;
+    }, [baseURL, driverToken]);
 
     const stopCameraScan = useCallback(async () => {
         const scanner = scannerRef.current;
@@ -229,6 +245,23 @@ export default function DriverScanPage() {
             setShowScanSuccess(true);
             setSessionScanCount((count) => count + 1);
             triggerSuccessFeedback();
+
+            const scanData = data?.data;
+            if (
+                scanData?.needs_cod_collection
+                && scanData?.order_id
+                && scanData.status === "delivered"
+            ) {
+                setCodOrder({
+                    id: scanData.order_id,
+                    payment_method: scanData.payment_method || "cod",
+                    payment_status: scanData.payment_status || "pending",
+                    total: scanData.order_total,
+                    payments: [],
+                });
+            } else if (!scanData?.needs_cod_collection) {
+                setCodOrder(null);
+            }
 
             await wait(1000);
 
@@ -516,6 +549,7 @@ export default function DriverScanPage() {
         setDriverPassword("");
         setDriverStep("login");
         setResult(null);
+        setCodOrder(null);
         setScanNotice("");
         setCameraError("");
         setSessionScanCount(0);
@@ -689,6 +723,11 @@ export default function DriverScanPage() {
                                 <p>
                                     Status updated: <span className="font-semibold">{result.from_status}</span> → <span className="font-semibold">{result.status}</span>
                                 </p>
+                                {result.needs_cod_collection ? (
+                                    <p className="mt-1 text-amber-800">
+                                        COD pending — collect payment below (${Number(result.order_total || 0).toFixed(2)}).
+                                    </p>
+                                ) : null}
                                 <button
                                     type="button"
                                     onClick={handleViewReceipt}
@@ -698,6 +737,36 @@ export default function DriverScanPage() {
                                     {receiptLoading ? "Loading receipt..." : "View Digital Receipt"}
                                 </button>
                             </div>
+                        ) : null}
+
+                        {codOrder && driverHttp ? (
+                            <OrderCodCollectionPanel
+                                order={codOrder}
+                                canEdit
+                                apiScope="driver"
+                                apiClient={driverHttp}
+                                onCollected={(order) => {
+                                    setCodOrder((prev) =>
+                                        prev
+                                            ? {
+                                                ...prev,
+                                                ...(order || {}),
+                                                payment_status: "paid",
+                                                payments: order?.payments || prev.payments,
+                                            }
+                                            : prev
+                                    );
+                                    setResult((prev) =>
+                                        prev
+                                            ? {
+                                                ...prev,
+                                                payment_status: "paid",
+                                                needs_cod_collection: false,
+                                            }
+                                            : prev
+                                    );
+                                }}
+                            />
                         ) : null}
 
                         <button type="button" onClick={handleLogoutDriver} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">

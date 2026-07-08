@@ -291,6 +291,25 @@ class StorefrontL10n {
   String get placeOrder => _t('Place order', 'បញ្ជាទិញ');
   String get orderTotalLabel => _t('Order total', 'សរុបការបញ្ជាទិញ');
   String get paymentMethodTitle => _t('Payment method', 'មធ្យោបាយបង់ប្រាក់');
+  String get payWithKhqr => _t('Pay with KHQR', 'បង់ជាមួយ KHQR');
+  String get payWithKhqrSub => _t(
+        'Pay now via Bakong / bank app',
+        'បង់ឥឡូវតាម Bakong / កម្មវិធីធនាគារ',
+      );
+  String get payOnDelivery => _t('Pay on delivery', 'បង់ជាមួយអ្នកដឹក');
+  String get payOnDeliverySub => _t(
+        'Cash (USD/KHR) or scan KHQR when delivered — Phnom Penh only',
+        'លុយក្រៅ (USD/KHR) ឬ Scan KHQR ពេលដឹកដល់ — តែភ្នំពេញ',
+      );
+  String get codPhnomPenhOnly => _t(
+        'Pay on delivery is only available in Phnom Penh. Please pay with KHQR to ship to other provinces.',
+        'បង់ជាមួយអ្នកដឹកមានតែនៅភ្នំពេញ។ ខេត្តផ្សេងសូមបង់ជាមួយ KHQR។',
+      );
+  String get codOrderPlaced => _t('Order placed', 'បានបញ្ជាទិញ');
+  String get codOrderPlacedDesc => _t(
+        'Pay when your order is delivered. Our driver will help you pay by cash or KHQR.',
+        'បង់ពេលទំនិញដឹកដល់។ អ្នកដឹកនឹងជួយប្រមូលលុយក្រៅ ឬ Scan KHQR។',
+      );
   String get bankAppNotInstalled => _t(
         'Banking app not found. Install ABA Mobile or share the QR code.',
         'រកមិនឃើញកម្មវិធីធនាគារ។ ដំឡើង ABA Mobile ឬចែករំលែក QR។',

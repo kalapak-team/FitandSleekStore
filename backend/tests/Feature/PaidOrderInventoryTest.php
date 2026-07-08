@@ -224,7 +224,7 @@ class PaidOrderInventoryTest extends TestCase
             'order_number' => 'ORD2-'.uniqid(),
             'status' => 'processing',
             'payment_status' => 'paid',
-            'payment_method' => 'card_visa',
+            'payment_method' => 'bakong_khqr',
             'subtotal' => 10,
             'total' => 10,
         ]);

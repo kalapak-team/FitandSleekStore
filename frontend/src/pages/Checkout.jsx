@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import Swal from "sweetalert2";
@@ -6,11 +6,10 @@ import { useCart } from "../state/cart";
 import { useAuth } from "../state/auth";
 import { useLanguage } from "../lib/i18n.jsx";
 import CheckoutPaymentKhqr from "../components/payments/CheckoutPaymentKhqr";
-import CheckoutPaymentCard from "../components/payments/CheckoutPaymentCard";
 import KhqrSuccessModal from "../components/alerts/KhqrSuccessModal";
 import { requestDeliveryPin } from "../lib/geolocation";
 import { resolveImageUrl } from "../lib/images";
-import { DEFAULT_DELIVERY_RATES, resolveDeliveryFee } from "../lib/deliveryFee.js";
+import { DEFAULT_DELIVERY_RATES, isPhnomPenhProvince, resolveDeliveryFee } from "../lib/deliveryFee.js";
 import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 
 const KHQR_REDIRECT_SECONDS = 60;
@@ -32,24 +31,14 @@ export default function Checkout() {
   const [khqrSuccessOpen, setKhqrSuccessOpen] = useState(false);
   const [loyalty, setLoyalty] = useState(null);
   const [deliveryRates, setDeliveryRates] = useState(DEFAULT_DELIVERY_RATES);
+  const { t } = useLanguage();
+  const cartItems = cart.cart?.items || [];
 
   useEffect(() => {
     if (!khqrSuccessOpen) return;
     const t = setTimeout(() => nav("/orders"), KHQR_REDIRECT_SECONDS * 1000);
     return () => clearTimeout(t);
   }, [khqrSuccessOpen, nav]);
-
-  const [cardDetails, setCardDetails] = useState({
-    name: user?.name || "",
-    number: "",
-    expiry: "",
-    cvc: "",
-    country: "Cambodia",
-    remember: true,
-  });
-  const [cardErrors, setCardErrors] = useState({});
-  const { t } = useLanguage();
-  const cartItems = cart.cart?.items || [];
 
   useEffect(() => {
     let mounted = true;
@@ -110,26 +99,14 @@ export default function Checkout() {
     })();
   }, [user]);
 
-  useEffect(() => {
-    if (user?.name) {
-      setCardDetails((prev) => ({ ...prev, name: prev.name || user.name }));
-    }
-  }, [user?.name]);
+  const selectedAddress = addresses.find((a) => String(a.id) === String(selectedAddressId));
+  const codAvailable = selectedAddress ? isPhnomPenhProvince(selectedAddress.province) : false;
 
-  const validateCardDetails = useCallback(() => {
-    const errs = {};
-    const number = (cardDetails.number || "").replace(/\D/g, "");
-    if (!cardDetails.name?.trim()) errs.name = t('cardNameRequired') || "Name required";
-    if (number.length < 12) errs.number = t('cardNumberInvalid') || "Enter a valid card number";
-    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(cardDetails.expiry || "")) {
-      errs.expiry = t('cardExpiryInvalid') || "Use MM/YY";
+  useEffect(() => {
+    if (!codAvailable && paymentMethod === "cod") {
+      setPaymentMethod("bakong_khqr");
     }
-    if (!/^[0-9]{3,4}$/.test(cardDetails.cvc || "")) {
-      errs.cvc = t('cardCvcInvalid') || "3-4 digits";
-    }
-    if (!cardDetails.country?.trim()) errs.country = t('cardCountryRequired') || "Required";
-    return errs;
-  }, [cardDetails, t]);
+  }, [codAvailable, paymentMethod]);
 
   const place = async () => {
     if (!user) {
@@ -146,6 +123,12 @@ export default function Checkout() {
     // If an order is already created and pending, just reopen/continue without needing cart items again
     if (paymentMethod === "bakong_khqr" && khqrOrder?.id) {
       setKhqrOpen(true);
+      return;
+    }
+
+    if (paymentMethod === "cod" && !codAvailable) {
+      setMsg(t('codPhnomPenhOnly') || "Pay on delivery is only available in Phnom Penh.");
+      setMsgType('error');
       return;
     }
 
@@ -172,16 +155,6 @@ export default function Checkout() {
           }
         : {}),
     };
-
-    if (paymentMethod === "card_visa") {
-      const errs = validateCardDetails();
-      setCardErrors(errs);
-      if (Object.keys(errs).length) {
-        setMsg(t('cardFormFixErrors') || "Please fix the card details.");
-        setMsgType('error');
-        return;
-      }
-    }
 
     setLoading(true);
     setMsg("");
@@ -219,8 +192,17 @@ export default function Checkout() {
         return;
       }
 
-      // Redirect to payment processing page with card prefill so user types only once
-      nav(`/payment/${data.order.id}`, { state: { cardPrefill: cardDetails } });
+      if (paymentMethod === "cod") {
+        await cart.load();
+        await Swal.fire({
+          icon: "success",
+          title: t('codOrderPlaced') || "Order placed",
+          text: t('codOrderPlacedDesc') || "Pay when your order is delivered. Our driver will help you pay by cash or KHQR.",
+          confirmButtonColor: "#567D74",
+        });
+        nav("/orders");
+        return;
+      }
     } catch (e) {
       if (await tryHandleStockError(e)) {
         return;
@@ -253,7 +235,6 @@ export default function Checkout() {
     const pricing = getPriceMeta(item);
     return sum + pricing.linePaid;
   }, 0);
-  const selectedAddress = addresses.find((a) => String(a.id) === String(selectedAddressId));
   const deliveryQuote = selectedAddress
     ? resolveDeliveryFee(selectedAddress.province, deliveryRates)
     : { fee: 0, zone: null, label: "" };
@@ -532,52 +513,52 @@ export default function Checkout() {
                   </div>
                 </label>
 
-                {/* Card / VISA */}
-                <label className={`group flex gap-0 rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${paymentMethod === "card_visa"
+                {/* Pay on delivery (Phnom Penh only) */}
+                {codAvailable ? (
+                <label className={`group flex gap-0 rounded-2xl border-2 overflow-hidden cursor-pointer transition-all ${paymentMethod === "cod"
                   ? "border-[#567D74] shadow-md shadow-[#dce7e4] dark:shadow-[#2f433e]/30"
                   : "border-slate-200 dark:border-slate-600 hover:border-[#8fa9a2]"
                   }`}>
-                  <input type="radio" name="payment" value="card_visa"
-                    checked={paymentMethod === "card_visa"}
+                  <input type="radio" name="payment" value="cod"
+                    checked={paymentMethod === "cod"}
                     onChange={(e) => { setPaymentMethod(e.target.value); setMsg(""); }}
                     className="sr-only" />
-                  <div className={`w-1.5 flex-shrink-0 transition-colors ${paymentMethod === "card_visa" ? "bg-[#567D74]" : "bg-transparent group-hover:bg-[#c7d7d2]"}`} />
+                  <div className={`w-1.5 flex-shrink-0 transition-colors ${paymentMethod === "cod" ? "bg-[#567D74]" : "bg-transparent group-hover:bg-[#c7d7d2]"}`} />
 
                   <div className="flex-1 p-4 flex items-center gap-4">
-                    <RadioDot active={paymentMethod === "card_visa"} />
+                    <RadioDot active={paymentMethod === "cod"} />
 
-                    {/* credit card icon */}
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-[#567D74] to-[#6f948c]">
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-slate-900 dark:text-white">{t('paymentMethodCardVisa') || "Credit / Debit Card"}</span>
-                        <span className="text-xs leading-tight bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 font-semibold uppercase tracking-wide">Secure</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{t('paymentMethodCod') || "Pay on delivery"}</span>
+                        <span className="text-xs leading-tight bg-[#dce7e4] dark:bg-[#2f433e] text-[#45645d] dark:text-[#a7beb8] rounded-full px-2 py-0.5 font-semibold uppercase tracking-wide">Phnom Penh</span>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('paymentMethodCardDesc') || "Visa, Mastercard, Amex, UnionPay"}</p>
-                      <div className="flex items-center gap-1.5 mt-2.5">
-                        {/* Visa */}
-                        <span className="inline-flex items-center h-5 px-2 rounded text-xs leading-tight font-bold text-white" style={{ background: "#1A1F71" }}>VISA</span>
-                        {/* MC */}
-                        <span className="inline-flex items-center h-5 px-2 rounded text-xs leading-tight font-bold text-white" style={{ background: "#EB001B" }}>MC</span>
-                        {/* Amex */}
-                        <span className="inline-flex items-center h-5 px-2 rounded text-xs leading-tight font-bold text-white" style={{ background: "#2557D6" }}>AMEX</span>
-                        {/* UnionPay */}
-                        <span className="inline-flex items-center h-5 px-2 rounded text-xs leading-tight font-bold text-white" style={{ background: "#DE1F26" }}>UP</span>
-                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('paymentMethodCodDesc') || "Pay when your order arrives — cash or KHQR with our driver"}</p>
                     </div>
 
-                    {paymentMethod === "card_visa" && (
+                    {paymentMethod === "cod" && (
                       <svg className="w-5 h-5 text-[#567D74] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                     )}
                   </div>
                 </label>
+                ) : (
+                  <div className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-600 dark:bg-slate-800/50">
+                    <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      {t('codProvincePrepaidOnly') || "Delivery outside Phnom Penh requires KHQR payment before shipping."}
+                    </p>
+                  </div>
+                )}
 
                 {/* KHQR info note */}
                 {paymentMethod === "bakong_khqr" && (
@@ -595,23 +576,19 @@ export default function Checkout() {
                   </div>
                 )}
 
-                {/* Card form */}
-                {paymentMethod === "card_visa" && (
-                  <CheckoutPaymentCard
-                    t={t}
-                    value={cardDetails}
-                    errors={cardErrors}
-                    onChange={(next) => {
-                      setCardDetails(next);
-                      if (Object.keys(cardErrors).length) {
-                        setCardErrors((prev) => {
-                          const clone = { ...prev };
-                          Object.keys(prev).forEach((key) => { if (next[key]) delete clone[key]; });
-                          return clone;
-                        });
-                      }
-                    }}
-                  />
+                {/* COD info note */}
+                {paymentMethod === "cod" && (
+                  <div className="flex gap-3 rounded-2xl border border-[#567D74]/30 bg-[#eef3f1] px-4 py-3">
+                    <svg className="w-5 h-5 text-[#567D74] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold text-[#45645d]">{t('paymentMethodCod') || "Pay on delivery"}</p>
+                      <p className="text-xs text-[#567D74] mt-0.5">
+                        {t('paymentMethodCodNote') || "Our driver will collect payment when your order arrives — cash (USD/KHR) or KHQR scan."}
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -643,7 +620,9 @@ export default function Checkout() {
                   <><svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>{t('processing')}</>
                 ) : paymentMethod === "bakong_khqr"
                   ? <><svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" /><rect x="13" y="3" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" /><rect x="3" y="13" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="2" /><rect x="15" y="15" width="2" height="2" fill="currentColor" /><rect x="19" y="15" width="2" height="2" fill="currentColor" /><rect x="15" y="19" width="2" height="2" fill="currentColor" /><rect x="19" y="19" width="2" height="2" fill="currentColor" /></svg>{t('payWithKHQR') || "Pay with KHQR"}</>
-                  : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t('placeOrder')}</>
+                  : paymentMethod === "cod"
+                    ? <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t('placeCodOrder') || "Place order (pay on delivery)"}</>
+                    : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t('placeOrder')}</>
                 }
               </button>
               <Link to="/cart" className="mt-3 w-full rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 py-3.5 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2">

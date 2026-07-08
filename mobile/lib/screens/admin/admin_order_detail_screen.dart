@@ -9,6 +9,7 @@ import '../../models/user_model.dart';
 import '../../services/admin_service.dart';
 import '../../utils/admin_context.dart';
 import '../../widgets/admin/admin_ui_kit.dart';
+import '../../widgets/admin/order_cod_collection_panel.dart';
 
 class AdminOrderDetailScreen extends StatefulWidget {
   const AdminOrderDetailScreen({super.key, required this.user, required this.orderId});
@@ -59,7 +60,9 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     if (!AdminPermissions.has(widget.user, 'orders', 'edit')) return;
     setState(() => _saving = true);
     try {
-      final order = await AdminService(context.read<ApiClient>()).updateOrderStatus(widget.orderId, status);
+      final svc = AdminService(context.read<ApiClient>());
+      await svc.updateOrderStatus(widget.orderId, status);
+      final order = await svc.getOrder(widget.orderId);
       if (!mounted) return;
       setState(() {
         _order = order;
@@ -97,7 +100,7 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                             Text(_order!.orderNumber, style: Theme.of(context).textTheme.titleLarge),
                             const SizedBox(height: 8),
                             Text('Status: ${_order!.status}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                            Text('Payment: ${_order!.paymentStatus}'),
+                            Text('Payment: ${_order!.paymentStatus}${_order!.paymentMethod != null ? ' · ${_order!.paymentMethod}' : ''}'),
                             Text('Total: ${fmt.usd(_order!.total)}', style: const TextStyle(fontWeight: FontWeight.w800)),
                             if (_order!.customerName != null) ...[
                               const Divider(height: 24),
@@ -116,6 +119,16 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                           ],
                         ),
                       ),
+                      if (_order!.isCod) ...[
+                        const SizedBox(height: 16),
+                        OrderCodCollectionPanel(
+                          order: _order!,
+                          canEdit: canEdit,
+                          onCollected: (order) {
+                            setState(() => _order = order);
+                          },
+                        ),
+                      ],
                       if (canEdit) ...[
                         const SizedBox(height: 16),
                         const AdminSectionTitle(title: 'Update status'),

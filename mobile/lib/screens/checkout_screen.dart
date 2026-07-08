@@ -14,9 +14,12 @@ import '../screens/admin/admin_shell.dart';
 import '../services/order_service.dart';
 import '../services/profile_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/delivery_fee.dart';
 import '../widgets/common/fs_button.dart';
 import 'order_detail_screen.dart';
 import 'payment_screen.dart';
+
+enum _CheckoutPayMethod { khqr, cod }
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key, required this.cart});
@@ -41,6 +44,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _loading = false;
   String? _addressError;
   KhqrBankId _selectedBank = KhqrBankId.aba;
+  _CheckoutPayMethod _payMethod = _CheckoutPayMethod.khqr;
 
   ProfileService get _profileService => ProfileService(context.read<ApiClient>());
 
@@ -104,9 +108,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() {
       _selectedAddress = address;
       _useManualEntry = false;
+      if (!isPhnomPenhProvince(address.province) && _payMethod == _CheckoutPayMethod.cod) {
+        _payMethod = _CheckoutPayMethod.khqr;
+      }
     });
     _applyAddressToForm(address);
   }
+
+  String get _activeProvince {
+    if (!_useManualEntry && _selectedAddress != null) {
+      return _selectedAddress!.province ?? '';
+    }
+    return _provinceController.text.trim();
+  }
+
+  bool get _codAvailable => isPhnomPenhProvince(_activeProvince);
 
   Map<String, dynamic> _buildShippingAddress() {
     if (!_useManualEntry && _selectedAddress != null) {
@@ -134,13 +150,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
     if (_useManualEntry && !_formKey.currentState!.validate()) return;
 
+    final l10n = context.l10nRead;
+    if (_payMethod == _CheckoutPayMethod.cod && !_codAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.codPhnomPenhOnly)),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
     try {
+      final useCod = _payMethod == _CheckoutPayMethod.cod;
       final order = await context.read<OrderService>().checkout(
-            paymentMethod: 'bakong_khqr',
+            paymentMethod: useCod ? 'cod' : 'bakong_khqr',
             shippingAddress: _buildShippingAddress(),
           );
       if (!mounted) return;
+
+      if (useCod) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${l10n.codOrderPlaced}: ${l10n.codOrderPlacedDesc}')),
+        );
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => OrderDetailScreen(order: order),
+          ),
+        );
+        return;
+      }
+
       final paid = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => PaymentScreen(
@@ -312,6 +350,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             TextFormField(
                               controller: _provinceController,
                               decoration: InputDecoration(labelText: l10n.province),
+                              onChanged: (_) {
+                                setState(() {
+                                  if (!_codAvailable && _payMethod == _CheckoutPayMethod.cod) {
+                                    _payMethod = _CheckoutPayMethod.khqr;
+                                  }
+                                });
+                              },
                               validator: (v) =>
                                   v == null || v.trim().isEmpty ? l10n.fieldRequired : null,
                             ),
@@ -336,13 +381,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ),
                     ),
                     const SizedBox(height: 10),
-                    ...KhqrBankOption.all.map(
-                      (bank) => _CheckoutBankCard(
-                        bank: bank,
-                        selected: _selectedBank == bank.id,
-                        onTap: () => setState(() => _selectedBank = bank.id),
-                      ),
+                    _CheckoutPayOptionCard(
+                      title: l10n.payOnDelivery,
+                      subtitle: l10n.payOnDeliverySub,
+                      selected: _payMethod == _CheckoutPayMethod.cod,
+                      enabled: _codAvailable,
+                      accent: AppColors.storeHeader,
+                      onTap: _codAvailable
+                          ? () => setState(() => _payMethod = _CheckoutPayMethod.cod)
+                          : null,
                     ),
+                    if (!_codAvailable)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          l10n.codPhnomPenhOnly,
+                          style: TextStyle(color: onSurfaceVariant, fontSize: 12, height: 1.35),
+                        ),
+                      ),
+                    _CheckoutPayOptionCard(
+                      title: l10n.payWithKhqr,
+                      subtitle: l10n.payWithKhqrSub,
+                      selected: _payMethod == _CheckoutPayMethod.khqr,
+                      enabled: true,
+                      accent: AppColors.storeHeader,
+                      onTap: () => setState(() => _payMethod = _CheckoutPayMethod.khqr),
+                    ),
+                    if (_payMethod == _CheckoutPayMethod.khqr) ...[
+                      const SizedBox(height: 4),
+                      ...KhqrBankOption.all.map(
+                        (bank) => _CheckoutBankCard(
+                          bank: bank,
+                          selected: _selectedBank == bank.id,
+                          onTap: () => setState(() => _selectedBank = bank.id),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     FsButton(
                       label: l10n.placeOrder,
@@ -444,6 +518,74 @@ class _CheckoutAddressCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckoutPayOptionCard extends StatelessWidget {
+  const _CheckoutPayOptionCard({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.enabled,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool enabled;
+  final Color accent;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
+    final borderColor = !enabled
+        ? Theme.of(context).dividerColor
+        : (selected ? accent : Theme.of(context).dividerColor);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor, width: selected ? 2 : 1),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                    color: selected && enabled ? accent : onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: TextStyle(fontWeight: FontWeight.w700, color: onSurface)),
+                        const SizedBox(height: 2),
+                        Text(subtitle, style: TextStyle(color: onSurfaceVariant, fontSize: 13, height: 1.3)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

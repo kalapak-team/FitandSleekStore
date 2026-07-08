@@ -64,7 +64,13 @@ class OrderAdminController extends Controller
 
     public function show(Order $order)
     {
-        return $order->load(['user', 'items.product.category', 'items.inventoryLot', 'shipment.trackingEvents']);
+        return $order->load([
+            'user',
+            'items.product.category',
+            'items.inventoryLot',
+            'shipment.trackingEvents',
+            'payments' => fn ($q) => $q->latest('id'),
+        ]);
     }
 
     public function update(Request $request, Order $order)

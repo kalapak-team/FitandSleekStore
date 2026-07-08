@@ -108,93 +108,6 @@ class PaymentController extends Controller
     }
 
     /**
-     * Process card payment
-     */
-    public function processCard(Order $order, Request $request)
-    {
-        // Verify order belongs to user
-        if ($order->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        $validated = $request->validate([
-            'card_number' => 'required|string',
-            'card_name' => 'required|string',
-            'expiry_date' => 'required|string',
-            'cvv' => 'required|string',
-        ]);
-
-        // Find payment record
-        $payment = Payment::where('order_id', $order->id)
-            ->where('method', 'card_visa')
-            ->first();
-
-        if (!$payment) {
-            return response()->json(['message' => 'Payment record not found'], 404);
-        }
-
-        // Validate card format
-        $cardNumber = str_replace(' ', '', $validated['card_number']);
-        if (!preg_match('/^[0-9]{13,19}$/', $cardNumber)) {
-            return response()->json(['message' => 'Invalid card number'], 422);
-        }
-
-        // In production, you would process with Stripe or similar here
-        // For now, we'll simulate successful payment
-        
-        $shouldFail = false;
-
-        // Demo: Decline test card numbers
-        if (str_starts_with($cardNumber, '4000000000000002')) {
-            $shouldFail = true;
-        }
-
-        if ($shouldFail) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Card declined. Please try another card.',
-            ], 402);
-        }
-
-        DB::transaction(function () use ($payment, $order, $validated) {
-            $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
-
-            if ($order->payment_status === 'paid') {
-                $payment->update([
-                    'status' => 'paid',
-                    'paid_at' => now(),
-                    'reference_code' => 'CARD-' . strtoupper(substr($validated['card_number'], -4)) . '-' . now()->timestamp,
-                ]);
-
-                return;
-            }
-
-            $payment->update([
-                'status' => 'paid',
-                'paid_at' => now(),
-                'reference_code' => 'CARD-' . strtoupper(substr($validated['card_number'], -4)) . '-' . now()->timestamp,
-            ]);
-
-            $order->update([
-                'payment_status' => 'paid',
-                'status' => 'processing',
-            ]);
-
-            $order->load('items.product');
-            PaidOrderInventory::applyForOrder($order);
-        });
-
-        // Clear cart only after payment succeeds
-        $this->clearUserCart((int) $order->user_id);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment processed successfully',
-            'payment' => $payment,
-        ]);
-    }
-
-    /**
      * Get payment settings from database
      */
     private function getPaymentSettings()
@@ -207,10 +120,6 @@ class PaymentController extends Controller
                 'merchant_name' => $settings->get('bakong_merchant_name')?->value ?? 'Fitandsleek Clothes Store',
                 'merchant_city' => $settings->get('bakong_merchant_city')?->value ?? 'Phnom Penh',
                 'enabled' => (bool) ($settings->get('payment_method_bakong_khqr')?->value ?? true),
-            ],
-            'card' => [
-                'provider' => $settings->get('card_provider')?->value ?? 'demo',
-                'enabled' => (bool) ($settings->get('payment_method_card_visa')?->value ?? true),
             ],
         ];
     }

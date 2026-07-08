@@ -10,13 +10,14 @@ use App\Http\Controllers\Api\AuthSessionController;
 use App\Http\Controllers\Api\SecurityAuditController;
 use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\TwoFactorController;
-use App\Http\Controllers\Api\BakongPaymentController;
+use App\Http\Controllers\Api\CodCollectionController;
 // Storefront
 use App\Http\Controllers\Api\Storefront\CategoryController;
 use App\Http\Controllers\Api\Storefront\ProductController;
 use App\Http\Controllers\Api\Storefront\CartController;
 use App\Http\Controllers\Api\Storefront\OrderController;
 use App\Http\Controllers\Api\Storefront\PaymentController;
+use App\Http\Controllers\Api\Storefront\PublicReceiptController;
 use App\Http\Controllers\Api\Storefront\BannerController;
 use App\Http\Controllers\Api\Storefront\HomepageBootstrapController;
 use App\Http\Controllers\Api\Storefront\CollectionController as StorefrontCollectionController;
@@ -199,6 +200,10 @@ Route::get('/telegram/settings', [TelegramController::class, 'settings']);
 Route::post('/telegram/webhook/{secret}', [TelegramWebhookController::class, 'handle'])
     ->middleware('throttle:api-sensitive');
 
+Route::get('/receipt/{token}', [PublicReceiptController::class, 'show']);
+Route::get('/receipt/{token}/pdf', [PublicReceiptController::class, 'downloadPdf']);
+Route::get('/receipt/{token}/pay-qr', [PublicReceiptController::class, 'paymentQr']);
+
 // Contact Form (public)
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:api-sensitive');
 Route::get('/legal-content', [LegalContentController::class, 'index']);
@@ -243,10 +248,17 @@ Route::middleware(['auth:sanctum', 'device.bound'])->group(function () {
         ->middleware(['driver', 'throttle:30,1']);
     Route::get('/driver/receipt', [ShipmentDriverController::class, 'receipt'])
         ->middleware(['driver', 'throttle:30,1']);
+    Route::get('/driver/orders/{order}/cod', [CodCollectionController::class, 'quote'])
+        ->middleware('driver');
+    Route::post('/driver/orders/{order}/cod/cash', [CodCollectionController::class, 'collectCash'])
+        ->middleware('driver');
+    Route::post('/driver/orders/{order}/cod/khqr', [CodCollectionController::class, 'createKhqr'])
+        ->middleware('driver');
+    Route::get('/driver/orders/{order}/cod/khqr/status', [CodCollectionController::class, 'khqrStatus'])
+        ->middleware(['driver', 'throttle:20,1']);
 
     // Payment Processing
     Route::post('/payments/{order}/verify-bkash', [PaymentController::class, 'verifyBKash']);
-    Route::post('/payments/{order}/process-card', [PaymentController::class, 'processCard']);
 
     // KHQR Payments
     Route::post('/payments/khqr/create', [PaymentController::class, 'createKhqr']);
@@ -383,6 +395,10 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     Route::get('orders/{order}/invoice/pdf', [InvoiceAdminController::class, 'downloadPdf']);
     Route::patch('orders/{order}', [OrderAdminController::class, 'update']);
     Route::delete('orders/{order}', [OrderAdminController::class, 'destroy']);
+    Route::get('orders/{order}/cod', [CodCollectionController::class, 'quote']);
+    Route::post('orders/{order}/cod/cash', [CodCollectionController::class, 'collectCash']);
+    Route::post('orders/{order}/cod/khqr', [CodCollectionController::class, 'createKhqr']);
+    Route::get('orders/{order}/cod/khqr/status', [CodCollectionController::class, 'khqrStatus']);
 
     // Unified user profile (admin view)
     Route::get('users/{user}/profile', [UserProfileAdminController::class, 'show']);
