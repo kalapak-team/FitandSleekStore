@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuthSessionController;
+use App\Http\Controllers\Api\BakongPaymentController;
 use App\Http\Controllers\Api\SecurityAuditController;
 use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\TwoFactorController;
