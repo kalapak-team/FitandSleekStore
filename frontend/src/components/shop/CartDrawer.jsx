@@ -29,8 +29,10 @@ export default function CartDrawer({ open, onClose }) {
     };
   };
 
+  if (!open) return null;
+
   return (
-    <div className={open ? "fixed inset-0 z-50" : "hidden"} aria-hidden={!open}>
+    <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
       <div className="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300">
         <div className="h-16 px-6 border-b border-zinc-200 flex items-center justify-between">

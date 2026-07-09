@@ -22,16 +22,7 @@ class BakongPaymentController extends Controller
 
     public function create(Request $request): JsonResponse
     {
-        try {
-            return $this->createKhqrPayment($request);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return response()->json([
-                'message' => 'Unable to create KHQR payment. Please try again.',
-                'detail' => $e->getMessage(),
-            ], 500);
-        }
+        return $this->createKhqrPayment($request);
     }
 
     private function createKhqrPayment(Request $request): JsonResponse
@@ -41,7 +32,9 @@ class BakongPaymentController extends Controller
         ]);
 
         $order = Order::with('items.product')->findOrFail($data['order_id']);
-        $this->ensureOrderOwner($order, $request);
+        if ($response = $this->ensureOrderOwner($order, $request)) {
+            return $response;
+        }
 
         if ($order->payment_method !== 'bakong_khqr') {
             return response()->json(['message' => 'Order payment method is not Bakong KHQR.'], 422);
@@ -82,6 +75,7 @@ class BakongPaymentController extends Controller
         if ($payment) {
             $payment->update([
                 'status' => 'pending',
+                'method' => 'bakong_khqr',
                 'amount' => $order->total,
                 'currency' => config('services.rielpay.currency', 'KHR'),
                 'provider' => 'rielpay',
@@ -154,7 +148,9 @@ class BakongPaymentController extends Controller
             return response()->json(['message' => 'Payment order not found'], 404);
         }
 
-        $this->ensureOrderOwner($order, $request);
+        if ($response = $this->ensureOrderOwner($order, $request)) {
+            return $response;
+        }
 
         if ($payment->status === 'paid' || $order->payment_status === 'paid') {
             return response()->json(array_merge(
@@ -231,7 +227,9 @@ class BakongPaymentController extends Controller
             return response()->json(['message' => 'Payment order not found'], 404);
         }
 
-        $this->ensureOrderOwner($order, $request);
+        if ($response = $this->ensureOrderOwner($order, $request)) {
+            return $response;
+        }
 
         if ($order->payment_status === 'paid' || $payment->status === 'paid') {
             return response()->json(['message' => 'Order already paid.'], 409);
@@ -262,13 +260,15 @@ class BakongPaymentController extends Controller
         ]);
     }
 
-    private function ensureOrderOwner(Order $order, Request $request): void
+    private function ensureOrderOwner(Order $order, Request $request): ?JsonResponse
     {
         $userId = $request->user()?->id;
 
-        if ($order->user_id !== $userId) {
-            abort(403, 'Unauthorized');
+        if ($userId === null || (int) $order->user_id !== (int) $userId) {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
+
+        return null;
     }
 
     /**

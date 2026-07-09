@@ -820,7 +820,7 @@ export default function Checkout() {
         orderId={khqrOrder?.id}
         orderNumber={khqrOrder?.order_number}
         amount={khqrOrder?.total}
-        currency={"KHR"}
+        currency="USD"
         onClose={() => setKhqrOpen(false)}
         onPaid={() => {
           setKhqrOpen(false);

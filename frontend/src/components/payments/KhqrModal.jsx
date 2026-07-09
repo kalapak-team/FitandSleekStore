@@ -90,6 +90,14 @@ export default function KhqrModal({
     return `${m}:${s}`;
   }, [timeLeft]);
 
+  const formattedAmount = useMemo(() => {
+    if (amount == null || amount === "") return "--";
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return String(amount);
+    if (currency === "KHR") return n.toLocaleString();
+    return n.toFixed(2);
+  }, [amount, currency]);
+
   const handleCopy = useCallback(async (text, key) => {
     if (!text) return;
     try {
@@ -149,7 +157,7 @@ export default function KhqrModal({
           <div className="relative mt-4 flex items-center gap-3">
             <div className="flex-1 rounded-xl bg-black/20 backdrop-blur-sm px-4 py-2.5">
               <p className="text-xs leading-tight uppercase tracking-widest text-white/60">Amount</p>
-              <p className="text-lg font-black text-white">{amount ?? "--"} <span className="text-base font-semibold text-white/80">{currency}</span></p>
+              <p className="text-lg font-black text-white">{formattedAmount} <span className="text-base font-semibold text-white/80">{currency}</span></p>
             </div>
             <div className="rounded-xl bg-black/20 backdrop-blur-sm px-4 py-2.5">
               <p className="text-xs leading-tight uppercase tracking-widest text-white/60">Expires in</p>

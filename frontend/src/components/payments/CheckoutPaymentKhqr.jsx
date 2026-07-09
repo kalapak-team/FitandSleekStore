@@ -57,7 +57,9 @@ export default function CheckoutPaymentKhqr({
         handlePaid(nextPayment);
       }
     } catch (e) {
-      setError(e?.response?.data?.message || "Failed to create KHQR.");
+      const detail = e?.response?.data?.detail;
+      const message = e?.response?.data?.message || "Failed to create KHQR.";
+      setError(detail && detail !== message ? `${message} (${detail})` : message);
       setStatus("error");
     } finally {
       setLoading(false);
@@ -148,6 +150,9 @@ export default function CheckoutPaymentKhqr({
     }
   }, [open, stopPolling]);
 
+  const displayAmount = payment?.khr_amount ?? amount;
+  const displayCurrency = payment?.khr_amount != null ? "KHR" : currency;
+
   return (
     <KhqrModal
       open={open}
@@ -160,8 +165,8 @@ export default function CheckoutPaymentKhqr({
       status={status}
       loading={loading}
       error={error || verificationNote}
-      amount={amount}
-      currency={payment?.currency || currency}
+      amount={displayAmount}
+      currency={displayCurrency}
       onRegenerate={createKhqr}
     />
   );
