@@ -31,7 +31,13 @@ class TelegramWebhookController extends Controller
         $update = $request->all();
 
         if (isset($update['callback_query']) && is_array($update['callback_query'])) {
-            $this->handleCallbackQuery($update['callback_query']);
+            try {
+                $this->handleCallbackQuery($update['callback_query']);
+            } catch (\Throwable $e) {
+                Log::error('Telegram callback handler failed', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json(['ok' => true]);
         }
@@ -258,8 +264,10 @@ class TelegramWebhookController extends Controller
         $chatId = (int) $chat['id'];
         $telegramUser = $this->telegram->upsertTelegramUser($from, $chatId);
 
+        // Dismiss Telegram button spinner immediately (must happen within a few seconds).
+        $this->telegram->answerCallbackQuery($callbackId);
+
         if ($data === 'lang_menu') {
-            $this->telegram->answerCallbackQuery($callbackId);
             $this->telegram->sendLanguageMenu($chatId, $telegramUser);
 
             return;
@@ -268,10 +276,6 @@ class TelegramWebhookController extends Controller
         if ($data === 'lang_km' || $data === 'lang_en') {
             $locale = $data === 'lang_km' ? TelegramBotTexts::LOCALE_KM : TelegramBotTexts::LOCALE_EN;
             $telegramUser = $this->telegram->setPreferredLocale($telegramUser, $locale);
-            $this->telegram->answerCallbackQuery(
-                $callbackId,
-                TelegramBotTexts::get($locale, $locale === TelegramBotTexts::LOCALE_KM ? 'language_set_km' : 'language_set_en')
-            );
             $this->telegram->sendMessage(
                 (string) $chatId,
                 TelegramBotTexts::get($locale, $locale === TelegramBotTexts::LOCALE_KM ? 'language_set_km' : 'language_set_en')
@@ -291,8 +295,6 @@ class TelegramWebhookController extends Controller
 
             return;
         }
-
-        $this->telegram->answerCallbackQuery($callbackId);
     }
 
     private function handlePaymentQrCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
@@ -300,25 +302,24 @@ class TelegramWebhookController extends Controller
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
         $orderId = (int) substr($data, 6);
         if ($orderId <= 0) {
-            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'invalid_order'));
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invalid_order'));
 
             return;
         }
 
         $order = Order::find($orderId);
         if (! $order) {
-            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'order_not_found_short'));
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'order_not_found_short'));
 
             return;
         }
 
         if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
-            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'not_subscribed'));
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
 
             return;
         }
 
-        $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'generating_qr'));
         $this->telegram->sendPaymentQrToChat($chatId, $order, $locale);
     }
 
@@ -327,25 +328,24 @@ class TelegramWebhookController extends Controller
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
         $orderId = (int) substr($data, 8);
         if ($orderId <= 0) {
-            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'invalid_order'));
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invalid_order'));
 
             return;
         }
 
         $order = Order::find($orderId);
         if (! $order) {
-            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'order_not_found_short'));
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'order_not_found_short'));
 
             return;
         }
 
         if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
-            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'not_subscribed'));
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
 
             return;
         }
 
-        $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'loading_invoice'));
         $this->telegram->sendInvoiceToChat($chatId, $order, $locale);
     }
 }
