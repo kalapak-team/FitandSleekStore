@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
 import api from "../../lib/api";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
@@ -229,32 +228,6 @@ export default function AdminInvoicePage() {
  <p>Discount: <span className="font-semibold">{money(invoice.discount)}</span></p>
  <p>Shipping Fee: <span className="font-semibold">{money(invoice.shipping_fee)}</span></p>
  <p className="text-lg font-bold text-slate-900 dark:text-white">Grand Total: {money(invoice.grand_total)}</p>
- </div>
-
- <div className="mt-6 grid gap-4 md:grid-cols-2">
-  {invoice.driver_scan_url || invoice.qr_payload ? (
-   <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center">
-    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Driver scan QR</p>
-    <div className="mx-auto mt-3 inline-block rounded-xl bg-white p-3 shadow-inner">
-     <QRCodeSVG value={invoice.qr_payload || invoice.driver_scan_url} size={160} level="M" includeMargin />
-    </div>
-    {invoice.tracking_code ? (
-     <p className="mt-2 font-mono text-xs text-slate-600 dark:text-slate-300">{invoice.tracking_code}</p>
-    ) : null}
-   </div>
-  ) : null}
-
-  <div className="rounded-lg border border-dashed border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 p-4">
-   <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Delivered by / អ្នកដឹក</p>
-   {invoice.delivered_by_name ? (
-    <p className="mt-3 text-xl font-bold text-slate-900 dark:text-white">{invoice.delivered_by_name}</p>
-   ) : (
-    <>
-     <div className="mt-4 border-b-2 border-slate-400 dark:border-slate-500 pb-2 min-h-[2rem]" />
-     <p className="mt-2 text-xs text-slate-500">Driver signs or prints name when delivered</p>
-    </>
-   )}
-  </div>
  </div>
 
  <div className="mt-4 border-t-2 border-dashed border-slate-400 dark:border-slate-600 pt-2 text-center text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">

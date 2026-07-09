@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\TelegramUser;
 use App\Services\TelegramService;
+use App\Support\TelegramBotTexts;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -50,15 +52,18 @@ class TelegramWebhookController extends Controller
 
         try {
             $telegramUser = $this->telegram->upsertTelegramUser($from, (int) $chat['id']);
+            $chatId = (int) $chat['id'];
 
             if (str_starts_with($text, '/start')) {
-                $this->handleStart($telegramUser, $text, (int) $chat['id']);
+                $this->handleStart($telegramUser, $text, $chatId);
             } elseif (str_starts_with($text, '/track')) {
-                $this->handleTrack($telegramUser, $text, (int) $chat['id']);
+                $this->handleTrack($telegramUser, $text, $chatId);
             } elseif (str_starts_with($text, '/orders')) {
-                $this->handleOrders($telegramUser, (int) $chat['id']);
+                $this->handleOrders($telegramUser, $chatId);
+            } elseif (str_starts_with($text, '/language') || str_starts_with($text, '/lang')) {
+                $this->telegram->sendLanguageMenu($chatId, $telegramUser);
             } elseif (str_starts_with($text, '/help')) {
-                $this->sendHelp((int) $chat['id']);
+                $this->sendHelp($telegramUser, $chatId);
             }
         } catch (\Throwable $e) {
             Log::error('Telegram webhook handler failed', [
@@ -69,13 +74,14 @@ class TelegramWebhookController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    private function handleStart($telegramUser, string $text, int $chatId): void
+    private function handleStart(TelegramUser $telegramUser, string $text, int $chatId): void
     {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
         $parts = preg_split('/\s+/', $text, 2);
         $payload = isset($parts[1]) ? trim($parts[1]) : '';
 
         if ($payload === '') {
-            $this->sendWelcome($chatId);
+            $this->sendWelcome($telegramUser, $chatId);
 
             return;
         }
@@ -85,7 +91,10 @@ class TelegramWebhookController extends Controller
             $order = Order::findByPublicKey($orderKey)?->load('shipment');
 
             if (! $order) {
-                $this->telegram->sendMessage((string) $chatId, "❌ Order `{$orderKey}` was not found.");
+                $this->telegram->sendMessage(
+                    (string) $chatId,
+                    TelegramBotTexts::get($locale, 'order_not_found', ['key' => $orderKey])
+                );
 
                 return;
             }
@@ -94,9 +103,9 @@ class TelegramWebhookController extends Controller
             $label = $order->order_number ?: '#'.$order->id;
             $this->telegram->sendMessage(
                 (string) $chatId,
-                "✅ You are now subscribed to order `{$label}`.\n\nWe will notify you when it ships and delivers."
+                TelegramBotTexts::get($locale, 'order_subscribed', ['label' => $label])
             );
-            $this->telegram->sendOrderStatusReply($chatId, $order);
+            $this->telegram->sendOrderStatusReply($chatId, $order, $locale);
 
             return;
         }
@@ -104,7 +113,10 @@ class TelegramWebhookController extends Controller
         if (str_starts_with($payload, 'link_')) {
             $segments = explode('_', $payload);
             if (count($segments) !== 3) {
-                $this->telegram->sendMessage((string) $chatId, '❌ Invalid account link. Please open a fresh link from your profile or order page.');
+                $this->telegram->sendMessage(
+                    (string) $chatId,
+                    TelegramBotTexts::get($locale, 'invalid_account_link')
+                );
 
                 return;
             }
@@ -113,7 +125,10 @@ class TelegramWebhookController extends Controller
             $signature = $segments[2];
 
             if (! $this->telegram->verifyAccountLinkSignature($userId, $signature)) {
-                $this->telegram->sendMessage((string) $chatId, '❌ This account link has expired or is invalid.');
+                $this->telegram->sendMessage(
+                    (string) $chatId,
+                    TelegramBotTexts::get($locale, 'account_link_invalid')
+                );
 
                 return;
             }
@@ -121,24 +136,25 @@ class TelegramWebhookController extends Controller
             $this->telegram->linkTelegramToUser($telegramUser, $userId);
             $this->telegram->sendMessage(
                 (string) $chatId,
-                "✅ Your Telegram is now linked to your Fitandsleek account.\n\nYou will receive order updates here automatically."
+                TelegramBotTexts::get($locale, 'account_linked')
             );
 
             return;
         }
 
-        $this->sendWelcome($chatId);
+        $this->sendWelcome($telegramUser, $chatId);
     }
 
-    private function handleTrack($telegramUser, string $text, int $chatId): void
+    private function handleTrack(TelegramUser $telegramUser, string $text, int $chatId): void
     {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
         $parts = preg_split('/\s+/', $text, 2);
         $orderKey = isset($parts[1]) ? trim($parts[1]) : '';
 
         if ($orderKey === '') {
             $this->telegram->sendMessage(
                 (string) $chatId,
-                "Usage: `/track FS-123456`\n\nOr open the tracking link from your order confirmation."
+                TelegramBotTexts::get($locale, 'track_usage')
             );
 
             return;
@@ -147,27 +163,35 @@ class TelegramWebhookController extends Controller
         $order = Order::findByPublicKey($orderKey)?->load('shipment');
 
         if (! $order) {
-            $this->telegram->sendMessage((string) $chatId, "❌ Order `{$orderKey}` was not found.");
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'order_not_found', ['key' => $orderKey])
+            );
 
             return;
         }
 
         if ($telegramUser->user_id && (int) $telegramUser->user_id !== (int) $order->user_id) {
-            $this->telegram->sendMessage((string) $chatId, '❌ This order does not belong to your linked account.');
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'order_not_yours')
+            );
 
             return;
         }
 
         $this->telegram->subscribeChatToOrder($telegramUser, $order);
-        $this->telegram->sendOrderStatusReply($chatId, $order);
+        $this->telegram->sendOrderStatusReply($chatId, $order, $locale);
     }
 
-    private function handleOrders($telegramUser, int $chatId): void
+    private function handleOrders(TelegramUser $telegramUser, int $chatId): void
     {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+
         if (! $telegramUser->user_id) {
             $this->telegram->sendMessage(
                 (string) $chatId,
-                "Link your account first using the *Connect Telegram* button in Fitandsleek profile or order page."
+                TelegramBotTexts::get($locale, 'link_account_first')
             );
 
             return;
@@ -180,45 +204,43 @@ class TelegramWebhookController extends Controller
             ->get();
 
         if ($orders->isEmpty()) {
-            $this->telegram->sendMessage((string) $chatId, 'You have no orders yet.');
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'no_orders'));
 
             return;
         }
 
-        $lines = ["📋 *Your recent orders*", ''];
+        $lines = [TelegramBotTexts::get($locale, 'recent_orders_title'), ''];
         foreach ($orders as $order) {
             $label = $order->order_number ?: '#'.$order->id;
             $status = ucfirst(str_replace('_', ' ', (string) $order->status));
             $lines[] = "• `{$label}` — {$status}";
         }
         $lines[] = '';
-        $lines[] = 'Use `/track ORDER_NUMBER` for details.';
+        $lines[] = TelegramBotTexts::get($locale, 'track_hint');
 
         $this->telegram->sendMessage((string) $chatId, implode("\n", $lines));
     }
 
-    private function sendWelcome(int $chatId): void
+    private function sendWelcome(TelegramUser $telegramUser, int $chatId): void
     {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
         $this->telegram->sendMessage(
             (string) $chatId,
-            "👋 Welcome to *Fitandsleek* order updates.\n\n"
-            ."• Open a tracking link from your order page to subscribe\n"
-            ."• `/track ORDER_NUMBER` — check order status\n"
-            ."• `/orders` — recent orders (linked account)\n"
-            ."• `/help` — show commands"
+            TelegramBotTexts::get($locale, 'welcome'),
+            [
+                'inline_keyboard' => [
+                    [
+                        ['text' => TelegramBotTexts::get($locale, 'btn_language'), 'callback_data' => 'lang_menu'],
+                    ],
+                ],
+            ]
         );
     }
 
-    private function sendHelp(int $chatId): void
+    private function sendHelp(TelegramUser $telegramUser, int $chatId): void
     {
-        $this->telegram->sendMessage(
-            (string) $chatId,
-            "*Commands*\n\n"
-            ."/track ORDER\\_NUMBER — order status\n"
-            ."/orders — your recent orders\n"
-            ."/help — this message\n\n"
-            ."Tip: use *វិក័យបត្រ / Invoice* and *Payment QR* buttons on order updates."
-        );
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+        $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'help'));
     }
 
     private function handleCallbackQuery(array $callback): void
@@ -236,33 +258,94 @@ class TelegramWebhookController extends Controller
         $chatId = (int) $chat['id'];
         $telegramUser = $this->telegram->upsertTelegramUser($from, $chatId);
 
-        if (! str_starts_with($data, 'payqr_')) {
+        if ($data === 'lang_menu') {
             $this->telegram->answerCallbackQuery($callbackId);
+            $this->telegram->sendLanguageMenu($chatId, $telegramUser);
 
             return;
         }
 
+        if ($data === 'lang_km' || $data === 'lang_en') {
+            $locale = $data === 'lang_km' ? TelegramBotTexts::LOCALE_KM : TelegramBotTexts::LOCALE_EN;
+            $telegramUser = $this->telegram->setPreferredLocale($telegramUser, $locale);
+            $this->telegram->answerCallbackQuery(
+                $callbackId,
+                TelegramBotTexts::get($locale, $locale === TelegramBotTexts::LOCALE_KM ? 'language_set_km' : 'language_set_en')
+            );
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, $locale === TelegramBotTexts::LOCALE_KM ? 'language_set_km' : 'language_set_en')
+            );
+
+            return;
+        }
+
+        if (str_starts_with($data, 'payqr_')) {
+            $this->handlePaymentQrCallback($callbackId, $data, $chatId, $telegramUser);
+
+            return;
+        }
+
+        if (str_starts_with($data, 'invoice_')) {
+            $this->handleInvoiceCallback($callbackId, $data, $chatId, $telegramUser);
+
+            return;
+        }
+
+        $this->telegram->answerCallbackQuery($callbackId);
+    }
+
+    private function handlePaymentQrCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
+    {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
         $orderId = (int) substr($data, 6);
         if ($orderId <= 0) {
-            $this->telegram->answerCallbackQuery($callbackId, 'Invalid order.');
+            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'invalid_order'));
 
             return;
         }
 
         $order = Order::find($orderId);
         if (! $order) {
-            $this->telegram->answerCallbackQuery($callbackId, 'Order not found.');
+            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'order_not_found_short'));
 
             return;
         }
 
         if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
-            $this->telegram->answerCallbackQuery($callbackId, 'You are not subscribed to this order.');
+            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'not_subscribed'));
 
             return;
         }
 
-        $this->telegram->answerCallbackQuery($callbackId, 'Generating payment QR…');
-        $this->telegram->sendPaymentQrToChat($chatId, $order);
+        $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'generating_qr'));
+        $this->telegram->sendPaymentQrToChat($chatId, $order, $locale);
+    }
+
+    private function handleInvoiceCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
+    {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+        $orderId = (int) substr($data, 8);
+        if ($orderId <= 0) {
+            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'invalid_order'));
+
+            return;
+        }
+
+        $order = Order::find($orderId);
+        if (! $order) {
+            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'order_not_found_short'));
+
+            return;
+        }
+
+        if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
+            $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'not_subscribed'));
+
+            return;
+        }
+
+        $this->telegram->answerCallbackQuery($callbackId, TelegramBotTexts::get($locale, 'loading_invoice'));
+        $this->telegram->sendInvoiceToChat($chatId, $order, $locale);
     }
 }

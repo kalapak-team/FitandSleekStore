@@ -70,7 +70,6 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import HomepageSettingsTest from "./pages/HomepageSettingsTest.jsx";
 import PublicHomepageManager from "./pages/PublicHomepageManager.jsx";
 import ExtendedHomepageManager from "./pages/ExtendedHomepageManager.jsx";
-import DriverScanPage from "./pages/driver/Scan.jsx";
 import { useAuth, TOKEN_KEY } from "./state/auth.jsx";
 import { useTheme } from "./state/theme.jsx";
 import { canPlaceStorefrontOrder } from "./app/redirectAfterAuth.js";
@@ -262,7 +261,6 @@ export default function App() {
           <Route path="/homepage-manager-extended" element={<ExtendedHomepageManager />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/driver/scan" element={<DriverScanPage />} />
           <Route path="/receipt/:token" element={<PublicReceiptPage />} />
           <Route
             path="/profile"

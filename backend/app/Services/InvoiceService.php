@@ -14,7 +14,7 @@ class InvoiceService
 
     public function buildOrderInvoiceData(Order $order, string $audience = self::AUDIENCE_CUSTOMER): array
     {
-        $order->loadMissing(['user', 'items.product', 'shipment.deliveredByUser']);
+        $order->loadMissing(['user', 'items.product', 'shipment']);
 
         $shippingAddress = is_array($order->shipping_address) ? $order->shipping_address : [];
 
@@ -62,28 +62,7 @@ class InvoiceService
         }
 
         $trackingCode = $order->shipment?->tracking_code;
-        $shipmentId = $order->shipment?->id;
         $isInternalAudience = in_array($audience, [self::AUDIENCE_SHOP, self::AUDIENCE_DRIVER], true);
-
-        $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
-        $queryParts = [];
-        if ($shipmentId) {
-            $queryParts[] = 'shipment_id=' . urlencode((string) $shipmentId);
-        }
-        if ($trackingCode) {
-            $queryParts[] = 'tracking_code=' . urlencode((string) $trackingCode);
-        }
-        $scanUrl = ! empty($queryParts)
-            ? $frontendUrl . '/driver/scan?' . implode('&', $queryParts)
-            : null;
-
-        $qrPayload = $isInternalAudience && ! empty($queryParts)
-            ? json_encode([
-                'shipment_id' => $shipmentId ? (string) $shipmentId : null,
-                'tracking_code' => $trackingCode ?: null,
-                'scan_url' => $scanUrl,
-            ], JSON_UNESCAPED_SLASHES)
-            : null;
 
         $paymentStatusRaw = strtolower((string) ($order->payment_status ?: $order->status));
         $isPaid = in_array($paymentStatusRaw, ['paid', 'completed', 'success', 'succeeded'], true);
@@ -92,9 +71,6 @@ class InvoiceService
         $courierLabel = $provider && strtolower((string) $provider) !== 'internal'
             ? (string) $provider
             : null;
-
-        $deliveredByName = $order->shipment?->delivered_by_name
-            ?: $order->shipment?->deliveredByUser?->name;
 
         $invoice = [
             'order_id' => $order->id,
@@ -131,12 +107,7 @@ class InvoiceService
         ];
 
         if ($isInternalAudience) {
-            $invoice['shipment_id'] = $shipmentId;
             $invoice['courier_provider'] = $courierLabel;
-            $invoice['delivered_by_name'] = $deliveredByName ?: null;
-            $invoice['show_driver_signature_line'] = true;
-            $invoice['driver_scan_url'] = $scanUrl;
-            $invoice['qr_payload'] = $qrPayload;
         }
 
         return $invoice;

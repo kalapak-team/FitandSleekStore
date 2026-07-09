@@ -6,10 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\InvoiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Endroid\QrCode\Color\Color;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Http\Request;
 use App\Support\BrandLogo;
 
@@ -28,7 +24,6 @@ class InvoiceAdminController extends Controller
     public function downloadPdf(Order $order, InvoiceService $invoiceService)
     {
         $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
-        $invoice['qr_data_uri'] = $this->buildQrDataUri($invoice['qr_payload'] ?? $invoice['driver_scan_url'] ?? null);
         $invoice['logo_url'] = BrandLogo::url();
 
         $pdf = Pdf::loadView('invoices.bulk', [
@@ -77,7 +72,6 @@ class InvoiceAdminController extends Controller
 
         $invoices = $orders->map(function (Order $order) use ($invoiceService) {
             $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
-            $invoice['qr_data_uri'] = $this->buildQrDataUri($invoice['qr_payload'] ?? $invoice['driver_scan_url']);
             $invoice['logo_url'] = BrandLogo::url();
             return $invoice;
         })->values()->all();
@@ -107,24 +101,5 @@ class InvoiceAdminController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
-    }
-
-    private function buildQrDataUri(?string $url): ?string
-    {
-        if (empty($url)) {
-            return null;
-        }
-
-        $writer = new PngWriter();
-        $qrCode = QrCode::create($url)
-            ->setEncoding(new Encoding('UTF-8'))
-            ->setSize(260)
-            ->setMargin(10)
-            ->setForegroundColor(new Color(0, 0, 0))
-            ->setBackgroundColor(new Color(255, 255, 255));
-
-        $result = $writer->write($qrCode);
-
-        return 'data:' . $result->getMimeType() . ';base64,' . base64_encode($result->getString());
     }
 }

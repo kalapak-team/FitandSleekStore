@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\Shipment;
 use App\Models\TelegramOrderSubscription;
 use App\Models\TelegramUser;
+use App\Support\TelegramBotTexts;
 use Endroid\QrCode\Color\Color;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\QrCode;
@@ -23,6 +24,7 @@ class TelegramService
         private readonly OrderReceiptTokenService $receiptTokens,
         private readonly CodCollectionService $codCollection,
         private readonly RielpayPaymentService $rielpayPayments,
+        private readonly InvoiceService $invoices,
     ) {
     }
 
@@ -88,15 +90,14 @@ class TelegramService
         $label = $order->order_number ?: '#'.$order->id;
         $total = number_format((float) $order->total, 2);
 
-        $message = "✅ *Order confirmed*\n\n"
-            ."Order: `{$label}`\n"
-            ."Total: \${$total}\n"
-            ."Status: Preparing for shipment\n\n"
-            ."You will receive updates when your order ships.";
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $total) {
+            $message = TelegramBotTexts::get($locale, 'order_confirmed', [
+                'label' => $label,
+                'total' => $total,
+            ]);
 
-        $replyMarkup = $this->buildOrderActionKeyboard($order);
-
-        $this->notifyOrderRecipients($order, $message, $replyMarkup);
+            return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
+        });
     }
 
     public function buildReceiptUrl(Order $order): string
@@ -107,21 +108,23 @@ class TelegramService
     /**
      * @return array{inline_keyboard: list<list<array<string, string>>>}|null
      */
-    public function buildOrderActionKeyboard(Order $order, ?Shipment $shipment = null): ?array
+    public function buildOrderActionKeyboard(Order $order, ?Shipment $shipment = null, string $locale = TelegramBotTexts::LOCALE_EN): ?array
     {
         $order->loadMissing('shipment');
         $shipment ??= $order->shipment;
         $rows = [];
 
         $actionRow = [];
-        $receiptUrl = $this->buildReceiptUrl($order);
-        $actionRow[] = ['text' => '🧾 វិក័យបត្រ / Invoice', 'url' => $receiptUrl];
+        $actionRow[] = [
+            'text' => TelegramBotTexts::get($locale, 'btn_invoice'),
+            'callback_data' => 'invoice_'.$order->id,
+        ];
 
         if ($order->payment_status !== 'paid') {
             $actionRow[] = [
                 'text' => $order->payment_method === 'cod'
-                    ? '💳 Scan KHQR (COD)'
-                    : '💳 Payment QR',
+                    ? TelegramBotTexts::get($locale, 'btn_payment_qr_cod')
+                    : TelegramBotTexts::get($locale, 'btn_payment_qr'),
                 'callback_data' => 'payqr_'.$order->id,
             ];
         }
@@ -131,14 +134,163 @@ class TelegramService
         }
 
         if ($shipment && filled($shipment->external_tracking_url)) {
-            $provider = $shipment->provider ?: 'Courier';
+            $provider = $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback');
             $rows[] = [[
-                'text' => "Track on {$provider}",
+                'text' => TelegramBotTexts::get($locale, 'btn_track_on', ['provider' => $provider]),
                 'url' => $shipment->external_tracking_url,
             ]];
         }
 
         return $rows !== [] ? ['inline_keyboard' => $rows] : null;
+    }
+
+    public function resolveLocaleForChatId(int $chatId): string
+    {
+        $user = TelegramUser::where('chat_id', $chatId)->latest('id')->first();
+
+        return TelegramBotTexts::resolveLocale($user);
+    }
+
+    public function setPreferredLocale(TelegramUser $telegramUser, string $locale): TelegramUser
+    {
+        $locale = in_array($locale, [TelegramBotTexts::LOCALE_KM, TelegramBotTexts::LOCALE_EN], true)
+            ? $locale
+            : TelegramBotTexts::LOCALE_EN;
+
+        $telegramUser->update(['preferred_locale' => $locale]);
+
+        return $telegramUser->fresh();
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}
+     */
+    public function buildLanguageMenuKeyboard(): array
+    {
+        return [
+            'inline_keyboard' => [
+                [
+                    ['text' => '🇰🇭 ខ្មែរ', 'callback_data' => 'lang_km'],
+                    ['text' => '🇬🇧 English', 'callback_data' => 'lang_en'],
+                ],
+            ],
+        ];
+    }
+
+    public function sendLanguageMenu(int $chatId, ?TelegramUser $telegramUser = null): void
+    {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+        $this->sendMessage(
+            (string) $chatId,
+            TelegramBotTexts::get($locale, 'language_prompt'),
+            $this->buildLanguageMenuKeyboard()
+        );
+    }
+
+    public function sendInvoiceToChat(int $chatId, Order $order, ?string $locale = null): bool
+    {
+        $locale ??= $this->resolveLocaleForChatId($chatId);
+
+        try {
+            $message = $this->formatInvoiceTelegramMessage($order, $locale);
+
+            return $this->sendMessage((string) $chatId, $message, null, 'HTML');
+        } catch (\Throwable $e) {
+            Log::error('Telegram invoice failed', [
+                'order_id' => $order->id,
+                'chat_id' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+            $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invoice_failed'));
+
+            return false;
+        }
+    }
+
+    private function formatInvoiceTelegramMessage(Order $order, string $locale): string
+    {
+        $order->loadMissing(['user', 'items.product', 'shipment']);
+        $invoice = $this->invoices->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_CUSTOMER);
+        $customer = $invoice['customer'] ?? [];
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $lines = [
+            '🧾 <b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'invoice_title'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</b>',
+            '',
+            htmlspecialchars(TelegramBotTexts::get($locale, 'invoice_number'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': <code>'.$e((string) ($invoice['invoice_number'] ?? '')).'</code>',
+            htmlspecialchars(TelegramBotTexts::get($locale, 'invoice_date'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': '.$e((string) ($invoice['invoice_date'] ?? '')),
+            htmlspecialchars(TelegramBotTexts::get($locale, 'invoice_status'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': <b>'.$e((string) ($invoice['payment_status'] ?? '')).'</b>',
+            '',
+            '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'customer'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</b>',
+            $e((string) ($customer['name'] ?? TelegramBotTexts::get($locale, 'guest'))),
+        ];
+
+        $phone = trim((string) ($customer['phone'] ?? ''));
+        if ($phone !== '' && $phone !== '-') {
+            $lines[] = $e($phone);
+        }
+
+        $address = trim((string) ($customer['full_address'] ?? ''));
+        if ($address !== '' && $address !== '-') {
+            $lines[] = $e($address);
+        }
+
+        $lines[] = '';
+        $lines[] = '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'items'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</b>';
+
+        $items = $invoice['items'] ?? [];
+        $maxItems = 12;
+        $qtyLabel = TelegramBotTexts::get($locale, 'qty_label');
+        foreach (array_slice($items, 0, $maxItems) as $item) {
+            $name = $e((string) ($item['product_name'] ?? 'Item'));
+            $sku = $e((string) ($item['sku'] ?? '-'));
+            $qty = (int) ($item['quantity'] ?? 0);
+            $total = number_format((float) ($item['grand_total'] ?? 0), 2);
+            $lines[] = '• '.$name;
+            $lines[] = '  <code>'.$sku.'</code> · '.$qtyLabel.' '.$qty.' — $'.$total;
+        }
+
+        $remaining = count($items) - $maxItems;
+        if ($remaining > 0) {
+            $lines[] = '<i>'.htmlspecialchars(
+                TelegramBotTexts::get($locale, 'more_items', ['count' => $remaining, 'plural' => '']),
+                ENT_QUOTES | ENT_SUBSTITUTE,
+                'UTF-8'
+            ).'</i>';
+        }
+
+        $lines[] = '';
+        $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'subtotal'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': $'.number_format((float) ($invoice['subtotal'] ?? 0), 2);
+
+        if ((float) ($invoice['discount'] ?? 0) > 0) {
+            $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'discount'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': −$'.number_format((float) $invoice['discount'], 2);
+        }
+
+        $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'shipping'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': $'.number_format((float) ($invoice['shipping_fee'] ?? 0), 2);
+        $lines[] = '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'grand_total'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': $'.number_format((float) ($invoice['grand_total'] ?? 0), 2).'</b>';
+
+        $shipment = $order->shipment;
+        $provider = $shipment?->provider;
+        if ($provider && strtolower((string) $provider) !== 'internal') {
+            $lines[] = '';
+            $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'courier'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': '.$e((string) $provider);
+        }
+
+        if (! empty($invoice['tracking_code'])) {
+            $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'tracking_label'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': <code>'.$e((string) $invoice['tracking_code']).'</code>';
+        }
+
+        if (! empty($invoice['is_cod']) && ($invoice['payment_status'] ?? '') !== 'PAID') {
+            $lines[] = '';
+            $lines[] = '<i>'.htmlspecialchars(TelegramBotTexts::get($locale, 'payment_cod'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</i>';
+        }
+
+        $message = implode("\n", $lines);
+        if (strlen($message) > 4000) {
+            $message = substr($message, 0, 3990)."\n…";
+        }
+
+        return $message;
     }
 
     public function canChatAccessOrder(int $chatId, Order $order, ?TelegramUser $telegramUser = null): bool
@@ -154,10 +306,12 @@ class TelegramService
         return false;
     }
 
-    public function sendPaymentQrToChat(int $chatId, Order $order): bool
+    public function sendPaymentQrToChat(int $chatId, Order $order, ?string $locale = null): bool
     {
+        $locale ??= $this->resolveLocaleForChatId($chatId);
+
         if ($order->payment_status === 'paid') {
-            $this->sendMessage((string) $chatId, '✅ This order is already paid.');
+            $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'already_paid'));
 
             return false;
         }
@@ -166,7 +320,7 @@ class TelegramService
             $payment = $this->resolvePaymentQrForOrder($order);
             $qrString = (string) ($payment['qr_string'] ?? '');
             if ($qrString === '') {
-                $this->sendMessage((string) $chatId, '❌ Could not generate payment QR. Please try again later.');
+                $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'payment_qr_failed'));
 
                 return false;
             }
@@ -179,12 +333,12 @@ class TelegramService
 
             $label = $order->order_number ?: '#'.$order->id;
             $codNote = $order->payment_method === 'cod'
-                ? "\n\n_បង់ពេលដឹកដល់ — Scan with ABA / Bakong_"
-                : "\n\n_Scan with your banking app to pay_";
+                ? TelegramBotTexts::get($locale, 'payment_qr_cod_note')
+                : TelegramBotTexts::get($locale, 'payment_qr_scan_note');
 
-            $caption = "💳 *Payment QR*\n\n"
-                ."Order: `{$label}`\n"
-                ."Amount: *{$amountLabel}*"
+            $caption = TelegramBotTexts::get($locale, 'payment_qr_title')."\n\n"
+                .TelegramBotTexts::get($locale, 'order_label').": `{$label}`\n"
+                .TelegramBotTexts::get($locale, 'amount_label').": *{$amountLabel}*"
                 .$codNote;
 
             return $this->sendPhoto((string) $chatId, $this->buildQrPngBytes($qrString), $caption);
@@ -194,7 +348,7 @@ class TelegramService
                 'chat_id' => $chatId,
                 'error' => $e->getMessage(),
             ]);
-            $this->sendMessage((string) $chatId, '❌ Failed to generate payment QR. Please try again.');
+            $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'payment_qr_failed_gen'));
 
             return false;
         }
@@ -298,24 +452,24 @@ class TelegramService
         }
 
         $label = $order->order_number ?: '#'.$order->id;
-        $provider = $shipment->provider ?: 'Courier';
+        $provider = $shipment->provider ?: TelegramBotTexts::get(TelegramBotTexts::LOCALE_EN, 'courier_fallback');
         $trackingCode = $shipment->tracking_code ?: '—';
 
-        $message = "📦 *Order shipped*\n\n"
-            ."Order: `{$label}`\n"
-            ."Courier: {$provider}\n"
-            ."Tracking: `{$trackingCode}`";
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $provider, $trackingCode) {
+            $message = TelegramBotTexts::get($locale, 'order_shipped', [
+                'label' => $label,
+                'provider' => $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback'),
+                'tracking' => $trackingCode,
+            ]);
 
-        $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment);
-
+            return [$message, $this->buildOrderActionKeyboard($order, $shipment, $locale)];
+        });
         $this->createInAppNotification(
             $order,
             'order_shipped',
             'Order shipped',
             "Your order was handed to {$provider}. Tracking: {$trackingCode}"
         );
-
-        $this->notifyOrderRecipients($order, $message, $replyMarkup);
     }
 
     public function notifyOrderDelivered(Shipment $shipment): void
@@ -341,13 +495,7 @@ class TelegramService
 
         $order->loadMissing('user');
         $label = $order->order_number ?: '#'.$order->id;
-
-        $message = "🎉 *Order delivered*\n\n"
-            ."Order: `{$label}`\n"
-            .($order->payment_method === 'cod' && $order->payment_status !== 'paid'
-                ? "Pay on delivery — tap *Payment QR* below or pay cash to the driver.\n\n"
-                : '')
-            ."Thank you for shopping with Fitandsleek!";
+        $codPending = $order->payment_method === 'cod' && $order->payment_status !== 'paid';
 
         $this->createInAppNotification(
             $order,
@@ -356,8 +504,16 @@ class TelegramService
             'Your order has been delivered. Thank you for shopping with us!'
         );
 
-        $replyMarkup = $this->buildOrderActionKeyboard($order);
-        $this->notifyOrderRecipients($order, $message, $replyMarkup);
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $codPending) {
+            $message = TelegramBotTexts::get($locale, 'order_delivered', [
+                'label' => $label,
+                'cod_note' => $codPending
+                    ? TelegramBotTexts::get($locale, 'order_delivered_cod_note')
+                    : '',
+            ]);
+
+            return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
+        });
         $this->notifyAdminOrderDelivered($order);
     }
 
@@ -442,32 +598,33 @@ class TelegramService
         return TelegramUser::where('user_id', $userId)->exists();
     }
 
-    public function sendOrderStatusReply(int $chatId, Order $order): void
+    public function sendOrderStatusReply(int $chatId, Order $order, ?string $locale = null): void
     {
+        $locale ??= $this->resolveLocaleForChatId($chatId);
         $order->loadMissing('shipment');
         $label = $order->order_number ?: '#'.$order->id;
         $status = ucfirst(str_replace('_', ' ', (string) $order->status));
         $shipment = $order->shipment;
 
         $lines = [
-            "📋 *Order status*",
+            TelegramBotTexts::get($locale, 'order_status_title'),
             '',
-            "Order: `{$label}`",
-            "Status: {$status}",
+            TelegramBotTexts::get($locale, 'order_label').": `{$label}`",
+            TelegramBotTexts::get($locale, 'status_label').": {$status}",
         ];
 
         if ($shipment) {
-            $lines[] = 'Shipment: '.ucfirst(str_replace('_', ' ', (string) $shipment->status));
+            $lines[] = TelegramBotTexts::get($locale, 'shipment_label').': '.ucfirst(str_replace('_', ' ', (string) $shipment->status));
             if ($shipment->tracking_code) {
-                $lines[] = "Tracking: `{$shipment->tracking_code}`";
+                $lines[] = TelegramBotTexts::get($locale, 'tracking_label').": `{$shipment->tracking_code}`";
             }
         }
 
         if ($order->payment_status !== 'paid') {
-            $lines[] = 'Payment: Pending';
+            $lines[] = TelegramBotTexts::get($locale, 'payment_pending');
         }
 
-        $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment);
+        $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment, $locale);
 
         $this->sendMessage((string) $chatId, implode("\n", $lines), $replyMarkup);
     }
@@ -535,7 +692,7 @@ class TelegramService
         }
     }
 
-    public function sendMessage(string $chatId, string $text, ?array $replyMarkup = null): bool
+    public function sendMessage(string $chatId, string $text, ?array $replyMarkup = null, ?string $parseMode = 'Markdown'): bool
     {
         if (! $this->isEnabled()) {
             return false;
@@ -544,9 +701,12 @@ class TelegramService
         $payload = [
             'chat_id' => $chatId,
             'text' => $text,
-            'parse_mode' => 'Markdown',
             'disable_web_page_preview' => true,
         ];
+
+        if ($parseMode !== null) {
+            $payload['parse_mode'] = $parseMode;
+        }
 
         if ($replyMarkup !== null) {
             $payload['reply_markup'] = json_encode($replyMarkup);
@@ -599,9 +759,14 @@ class TelegramService
         return $chatIds->filter()->unique()->values();
     }
 
-    private function notifyOrderRecipients(Order $order, string $message, ?array $replyMarkup = null): void
+    /**
+     * @param  \Closure(string $locale): array{0: string, 1: ?array}  $buildForLocale
+     */
+    private function notifyOrderRecipients(Order $order, \Closure $buildForLocale): void
     {
         foreach ($this->resolveOrderChatIds($order) as $chatId) {
+            $locale = $this->resolveLocaleForChatId((int) $chatId);
+            [$message, $replyMarkup] = $buildForLocale($locale);
             $this->sendMessage((string) $chatId, $message, $replyMarkup);
         }
     }
