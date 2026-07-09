@@ -472,7 +472,7 @@ export default function Checkout() {
                   }`}>
                   <input type="radio" name="payment" value="bakong_khqr"
                     checked={paymentMethod === "bakong_khqr"}
-                    onChange={(e) => { setPaymentMethod(e.target.value); setCardErrors({}); setMsg(""); }}
+                    onChange={(e) => { setPaymentMethod(e.target.value); setMsg(""); }}
                     className="sr-only" />
 
                   {/* left accent bar */}

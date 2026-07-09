@@ -53,7 +53,7 @@ class TelegramController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        if (! $order->isPaymentSuccessful()) {
+        if (! $order->isEligibleForTelegramUpdates()) {
             return response()->json(['message' => 'Order not found'], 404);
         }
 

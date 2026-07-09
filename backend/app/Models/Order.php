@@ -101,6 +101,19 @@ class Order extends Model
         );
     }
 
+    public function isEligibleForTelegramUpdates(): bool
+    {
+        if (strtolower((string) ($this->status ?? '')) === 'cancelled') {
+            return false;
+        }
+
+        if ($this->isPaymentSuccessful()) {
+            return true;
+        }
+
+        return $this->payment_method === 'cod';
+    }
+
     public function scopePaymentSuccessful(Builder $query): Builder
     {
         $column = $query->getModel()->getTable().'.payment_status';
