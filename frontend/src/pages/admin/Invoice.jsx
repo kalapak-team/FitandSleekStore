@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import api from "../../lib/api";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
@@ -156,8 +157,8 @@ export default function AdminInvoicePage() {
  <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-[#f8fafc] dark:bg-slate-800/60 p-5">
  <div className="min-w-0">
  {logoUrl ? <Logo src={logoUrl} alt="Brand logo" className={`mb-3 ${paperSize === "thermal" ? "h-16 max-w-[250px]" : "h-20 max-w-[250px]"}`} /> : null}
- <h1 className="text-2xl font-bold text-[color:var(--admin-primary)]">Admin Invoice</h1>
- <p className="text-sm text-slate-600 dark:text-slate-300">Invoice #: {invoice.invoice_number}</p>
+ <h1 className="text-2xl font-bold text-[color:var(--admin-primary)]">{invoice.doc_title || "Shop Delivery Note"}</h1>
+ <p className="text-sm text-slate-600 dark:text-slate-300">{invoice.doc_title_km || "វិក័យបត្រ ហាង"} · Invoice #: {invoice.invoice_number}</p>
  <p className="text-sm text-slate-600 dark:text-slate-300">Date: {invoice.invoice_date}</p>
  </div>
  <span className={`rounded-full border px-4 py-1 text-sm font-bold ${isPaid ? "border-[rgba(var(--admin-primary-rgb),0.45)] bg-[rgba(var(--admin-primary-rgb),0.1)] dark:bg-[rgba(var(--admin-primary-rgb),0.18)] text-[color:var(--admin-primary)] dark:text-[color:var(--admin-primary)]" : "border-rose-400 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-200"}`}>
@@ -169,6 +170,15 @@ export default function AdminInvoicePage() {
  <p><span className="font-semibold">Customer:</span> {invoice.customer?.name}</p>
  <p><span className="font-semibold">Phone:</span> {invoice.customer?.phone || "-"}</p>
  <p><span className="font-semibold">Address:</span> {invoice.customer?.full_address || "-"}</p>
+ {invoice.courier_provider ? (
+  <p><span className="font-semibold">Courier:</span> {invoice.courier_provider}</p>
+ ) : null}
+ {invoice.is_cod ? (
+  <p><span className="font-semibold text-amber-700 dark:text-amber-300">Payment:</span> COD — collect on delivery</p>
+ ) : null}
+ {invoice.tracking_code ? (
+  <p><span className="font-semibold">Tracking:</span> <span className="font-mono">{invoice.tracking_code}</span></p>
+ ) : null}
  </div>
 
  <div className="overflow-x-auto">
@@ -219,6 +229,32 @@ export default function AdminInvoicePage() {
  <p>Discount: <span className="font-semibold">{money(invoice.discount)}</span></p>
  <p>Shipping Fee: <span className="font-semibold">{money(invoice.shipping_fee)}</span></p>
  <p className="text-lg font-bold text-slate-900 dark:text-white">Grand Total: {money(invoice.grand_total)}</p>
+ </div>
+
+ <div className="mt-6 grid gap-4 md:grid-cols-2">
+  {invoice.driver_scan_url || invoice.qr_payload ? (
+   <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-center">
+    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Driver scan QR</p>
+    <div className="mx-auto mt-3 inline-block rounded-xl bg-white p-3 shadow-inner">
+     <QRCodeSVG value={invoice.qr_payload || invoice.driver_scan_url} size={160} level="M" includeMargin />
+    </div>
+    {invoice.tracking_code ? (
+     <p className="mt-2 font-mono text-xs text-slate-600 dark:text-slate-300">{invoice.tracking_code}</p>
+    ) : null}
+   </div>
+  ) : null}
+
+  <div className="rounded-lg border border-dashed border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40 p-4">
+   <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Delivered by / អ្នកដឹក</p>
+   {invoice.delivered_by_name ? (
+    <p className="mt-3 text-xl font-bold text-slate-900 dark:text-white">{invoice.delivered_by_name}</p>
+   ) : (
+    <>
+     <div className="mt-4 border-b-2 border-slate-400 dark:border-slate-500 pb-2 min-h-[2rem]" />
+     <p className="mt-2 text-xs text-slate-500">Driver signs or prints name when delivered</p>
+    </>
+   )}
+  </div>
  </div>
 
  <div className="mt-4 border-t-2 border-dashed border-slate-400 dark:border-slate-600 pt-2 text-center text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">

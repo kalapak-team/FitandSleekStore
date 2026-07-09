@@ -12,12 +12,16 @@ class ShipmentAdminController extends BaseAdminController
 {
     private function transformShipment(Shipment $shipment): array
     {
-        $shipment->loadMissing(['order.user', 'trackingEvents.updatedBy']);
+        $shipment->loadMissing(['order.user', 'trackingEvents.updatedBy', 'deliveredByUser']);
 
         $data = $shipment->toArray();
         $data['tracking_number'] = $shipment->tracking_code;
         $data['external_tracking_url'] = $shipment->external_tracking_url;
         $data['internal_tracking_url'] = $shipment->tracking_url;
+        $data['courier_provider'] = $shipment->provider && strtolower((string) $shipment->provider) !== 'internal'
+            ? $shipment->provider
+            : null;
+        $data['delivered_by_name'] = $shipment->delivered_by_name ?: $shipment->deliveredByUser?->name;
         $data['tracking_events'] = $shipment->trackingEvents->map(function ($event) {
             return [
                 'id' => $event->id,
@@ -245,6 +249,40 @@ class ShipmentAdminController extends BaseAdminController
         return response()->json([
             'message' => 'Tracking event added successfully',
             'data' => $event,
+        ]);
+    }
+
+    /**
+     * Record who delivered the package (e.g. external courier driver name on paper).
+     */
+    public function updateDeliveryInfo(Request $request, Shipment $shipment): JsonResponse
+    {
+        $validated = $request->validate([
+            'delivered_by_name' => 'nullable|string|max:150',
+        ]);
+
+        $shipment->update([
+            'delivered_by_name' => $validated['delivered_by_name'] ?? null,
+        ]);
+
+        if ($shipment->status !== 'delivered') {
+            $shipment->update([
+                'status' => 'delivered',
+                'delivered_at' => $shipment->delivered_at ?? now(),
+            ]);
+
+            ShipmentTrackingEvent::create([
+                'shipment_id' => $shipment->id,
+                'status' => 'delivered',
+                'note' => 'Delivery confirmed by admin.',
+                'updated_by' => auth()->guard('sanctum')->id(),
+                'event_time' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Delivery info updated successfully',
+            'data' => $this->transformShipment($shipment->fresh()),
         ]);
     }
 

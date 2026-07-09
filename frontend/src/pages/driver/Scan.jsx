@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link, useSearchParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import { resolveImageUrl } from "../../lib/images";
 import Logo from "../../components/Logo.jsx";
 import OrderCodCollectionPanel from "../../components/admin/OrderCodCollectionPanel.jsx";
@@ -154,6 +155,7 @@ export default function DriverScanPage() {
     const [driverStep, setDriverStep] = useState("login");
     const [driverToken, setDriverToken] = useState("");
     const [driverName, setDriverName] = useState("");
+    const [deliveredByName, setDeliveredByName] = useState("");
     const [driverAvatar, setDriverAvatar] = useState("");
     const [authToken, setAuthToken] = useState("");
     const [loading, setLoading] = useState(false);
@@ -236,6 +238,7 @@ export default function DriverScanPage() {
                     tracking_code: tracking_code || fallbackTracking,
                     location: location || undefined,
                     note: note || undefined,
+                    delivered_by_name: deliveredByName.trim() || driverName.trim() || undefined,
                 },
                 { headers: { Authorization: `Bearer ${driverToken}` } }
             );
@@ -277,7 +280,7 @@ export default function DriverScanPage() {
             setLoading(false);
             scanProcessingRef.current = false;
         }
-    }, [api, driverToken, location, note]);
+    }, [api, driverToken, location, note, deliveredByName, driverName]);
 
     const startCameraScan = useCallback(async () => {
         if (cameraRunning) return;
@@ -375,6 +378,7 @@ export default function DriverScanPage() {
             });
             if (data?.name) {
                 setDriverName(data.name);
+                setDeliveredByName((prev) => prev || data.name);
             }
             setDriverAvatar(data?.profile_image_url || data?.profile_image_path || "");
         } catch {
@@ -442,6 +446,7 @@ export default function DriverScanPage() {
             }
 
             setDriverName(verifyResp?.data?.user?.name || "");
+            setDeliveredByName(verifyResp?.data?.user?.name || "");
             setDriverAvatar(verifyResp?.data?.user?.profile_image_url || verifyResp?.data?.user?.profile_image_path || "");
 
             setAuthToken(token);
@@ -463,6 +468,7 @@ export default function DriverScanPage() {
             saveDriverToken(newDriverToken);
             setDriverToken(newDriverToken);
             setDriverName(driverResp?.data?.user?.name || verifyResp?.data?.user?.name || "");
+            setDeliveredByName(driverResp?.data?.user?.name || verifyResp?.data?.user?.name || "");
             setDriverAvatar(
                 driverResp?.data?.user?.profile_image_url
                 || driverResp?.data?.user?.profile_image_path
@@ -542,6 +548,7 @@ export default function DriverScanPage() {
         localStorage.removeItem(DRIVER_TOKEN_KEY);
         setDriverToken("");
         setDriverName("");
+        setDeliveredByName("");
         setDriverAvatar("");
         setAuthToken("");
         setDriverOtp("");
@@ -707,6 +714,18 @@ export default function DriverScanPage() {
                                 placeholder="Location (optional)"
                                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
                             />
+                            <div>
+                                <label className="mb-1 block text-sm font-medium text-slate-700">
+                                    Your name / ឈ្មោះអ្នកដឹក (required when delivering)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={deliveredByName}
+                                    onChange={(e) => setDeliveredByName(e.target.value)}
+                                    placeholder="Print or confirm your name on delivery"
+                                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                                />
+                            </div>
                             <textarea
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
@@ -723,6 +742,11 @@ export default function DriverScanPage() {
                                 <p>
                                     Status updated: <span className="font-semibold">{result.from_status}</span> → <span className="font-semibold">{result.status}</span>
                                 </p>
+                                {result.delivered_by_name ? (
+                                    <p className="mt-1">
+                                        Delivered by: <span className="font-semibold">{result.delivered_by_name}</span>
+                                    </p>
+                                ) : null}
                                 {result.needs_cod_collection ? (
                                     <p className="mt-1 text-amber-800">
                                         COD pending — collect payment below (${Number(result.order_total || 0).toFixed(2)}).
@@ -782,17 +806,17 @@ export default function DriverScanPage() {
 
             {showReceipt && receiptData ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+                    <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
                         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                            <h3 className="text-base font-semibold text-slate-900">Driver Digital Receipt</h3>
+                            <h3 className="text-base font-semibold text-slate-900">{receiptData.doc_title || "Driver Delivery Note"}</h3>
                             <button type="button" onClick={() => setShowReceipt(false)} className="rounded p-1 text-slate-600 hover:bg-slate-100">✕</button>
                         </div>
                         <div className="space-y-3 px-4 py-4 text-sm">
-                            <div className="rounded-lg border border-slate-200 bg-[#f8fafc] p-5 border-b border-b-[#e2e8f0]">
+                            <div className="rounded-lg border border-slate-200 bg-[#f8fafc] p-5">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
                                         <Logo src={logoUrl} alt="Brand logo" className="mb-3 h-16 max-w-[250px]" />
-                                        <h4 className="text-lg font-bold text-[#497869]">Admin Invoice</h4>
+                                        <h4 className="text-lg font-bold text-[#497869]">{receiptData.doc_title_km || "វិក័យបត្រ អ្នកដឹក"}</h4>
                                         <p className="text-slate-600">Invoice: <span className="font-semibold text-slate-900">{receiptData.invoice_number}</span></p>
                                         <p className="text-slate-500">Date: {receiptData.invoice_date}</p>
                                     </div>
@@ -800,6 +824,18 @@ export default function DriverScanPage() {
                                         {receiptData.payment_status}
                                     </span>
                                 </div>
+                            </div>
+
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-slate-700">
+                                <p><span className="font-semibold">Customer:</span> {receiptData.customer?.name}</p>
+                                <p><span className="font-semibold">Phone:</span> {receiptData.customer?.phone || "-"}</p>
+                                <p><span className="font-semibold">Address:</span> {receiptData.customer?.full_address || "-"}</p>
+                                {receiptData.courier_provider ? (
+                                    <p><span className="font-semibold">Courier:</span> {receiptData.courier_provider}</p>
+                                ) : null}
+                                {receiptData.is_cod ? (
+                                    <p className="font-semibold text-amber-700">COD — collect on delivery</p>
+                                ) : null}
                             </div>
 
                             <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -818,13 +854,31 @@ export default function DriverScanPage() {
                                                 <td className="px-2 py-2">{item.product_name}</td>
                                                 <td className="px-2 py-2 text-right">{item.quantity}</td>
                                                 <td className="px-2 py-2 text-right">${Number(item.price || 0).toFixed(2)}</td>
-                                                <td className="px-2 py-2 text-right font-semibold">${Number(item.line_total || 0).toFixed(2)}</td>
+                                                <td className="px-2 py-2 text-right font-semibold">${Number(item.grand_total || item.line_total || 0).toFixed(2)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
                             <p className="text-right text-sm font-bold text-slate-900">Grand Total: ${Number(receiptData.grand_total || 0).toFixed(2)}</p>
+
+                            <div className="rounded-lg border border-dashed border-slate-400 bg-slate-50 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Delivered by / អ្នកដឹក</p>
+                                {receiptData.delivered_by_name ? (
+                                    <p className="mt-2 text-lg font-bold text-slate-900">{receiptData.delivered_by_name}</p>
+                                ) : (
+                                    <>
+                                        <div className="mt-3 border-b-2 border-slate-400 pb-1 min-h-[1.5rem]" />
+                                        <p className="mt-2 text-xs text-slate-500">Sign or print your name when delivered</p>
+                                    </>
+                                )}
+                            </div>
+
+                            {receiptData.qr_payload || receiptData.driver_scan_url ? (
+                                <div className="text-center">
+                                    <QRCodeSVG value={receiptData.qr_payload || receiptData.driver_scan_url} size={140} level="M" includeMargin />
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                 </div>

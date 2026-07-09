@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../config/app_config.dart';
 import '../../core/admin_permissions.dart';
 import '../../core/api_client.dart';
 import '../../models/user_model.dart';
@@ -10,6 +11,7 @@ import '../../services/admin_service.dart';
 import '../../utils/admin_context.dart';
 import '../../widgets/admin/admin_ui_kit.dart';
 import '../../widgets/admin/order_cod_collection_panel.dart';
+import '../../widgets/admin/order_delivery_panel.dart';
 
 class AdminOrderDetailScreen extends StatefulWidget {
   const AdminOrderDetailScreen({super.key, required this.user, required this.orderId});
@@ -76,6 +78,27 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     }
   }
 
+  Future<void> _openShopInvoice() async {
+    final uri = Uri.parse('${AppConfig.storefrontUrl}/admin/orders/${widget.orderId}/invoice');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open invoice')));
+    }
+  }
+
+  Future<void> _saveDeliveredByName(String? name) async {
+    final shipmentId = _order?.shipmentId;
+    if (shipmentId == null) return;
+    final order = await AdminService(context.read<ApiClient>()).saveDeliveredByName(
+      orderId: widget.orderId,
+      shipmentId: shipmentId,
+      deliveredByName: name,
+    );
+    if (!mounted) return;
+    setState(() => _order = order);
+  }
+
   @override
   Widget build(BuildContext context) {
     final fmt = AdminFmt.of(context);
@@ -118,6 +141,14 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                             ],
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      OrderDeliveryPanel(
+                        order: _order!,
+                        canEdit: canEdit && AdminPermissions.has(widget.user, 'shipments', 'edit'),
+                        onSaved: _load,
+                        onOpenShopInvoice: _openShopInvoice,
+                        onSaveDeliveredBy: _saveDeliveredByName,
                       ),
                       if (_order!.isCod) ...[
                         const SizedBox(height: 16),

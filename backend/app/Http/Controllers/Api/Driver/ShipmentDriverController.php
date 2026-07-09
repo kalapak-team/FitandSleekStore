@@ -25,6 +25,7 @@ class ShipmentDriverController extends Controller
             'code' => 'nullable|string',
             'location' => 'nullable|string|max:255',
             'note' => 'nullable|string',
+            'delivered_by_name' => 'nullable|string|max:150',
         ]);
 
         $trackingCode = $validated['tracking_code'] ?? $validated['code'] ?? null;
@@ -63,6 +64,14 @@ class ShipmentDriverController extends Controller
             if (! $shipment->delivered_at) {
                 $shipment->delivered_at = now();
             }
+            $driverName = trim((string) ($validated['delivered_by_name'] ?? ''));
+            if ($driverName === '') {
+                $driverName = trim((string) ($user->name ?? ''));
+            }
+            if ($driverName !== '') {
+                $shipment->delivered_by_name = $driverName;
+                $shipment->delivered_by_user_id = $user->id;
+            }
         } else {
             return response()->json([
                 'message' => 'Shipment already delivered.',
@@ -95,6 +104,8 @@ class ShipmentDriverController extends Controller
                 'status' => $shipment->status,
                 'tracking_code' => $shipment->tracking_code,
                 'tracking_url' => $shipment->tracking_url,
+                'delivered_by_name' => $shipment->delivered_by_name,
+                'courier_provider' => $shipment->provider,
             ], $this->orderCodPayload($shipment)),
         ]);
     }
@@ -166,25 +177,11 @@ class ShipmentDriverController extends Controller
             return response()->json(['message' => 'Order not found for shipment.'], 404);
         }
 
-        $invoice = $invoiceService->buildOrderInvoiceData($shipment->order);
+        $invoice = $invoiceService->buildOrderInvoiceData($shipment->order, InvoiceService::AUDIENCE_DRIVER);
 
         return response()->json([
-            'message' => 'Driver receipt retrieved successfully.',
-            'data' => [
-                'invoice_number' => $invoice['invoice_number'],
-                'invoice_date' => $invoice['invoice_date'],
-                'payment_status' => $invoice['payment_status'],
-                'items' => array_map(function ($item) {
-                    return [
-                        'product_name' => $item['product_name'],
-                        'quantity' => $item['quantity'],
-                        'price' => $item['price'],
-                        'line_total' => $item['line_total'],
-                    ];
-                }, $invoice['items']),
-                'grand_total' => $invoice['grand_total'],
-                'tracking_code' => $invoice['tracking_code'],
-            ],
+            'message' => 'Driver delivery note retrieved successfully.',
+            'data' => $invoice,
         ]);
     }
 
@@ -201,6 +198,7 @@ class ShipmentDriverController extends Controller
             'status' => 'required|in:shipped,delivered',
             'location' => 'nullable|string|max:255',
             'note' => 'nullable|string',
+            'delivered_by_name' => 'nullable|string|max:150',
         ]);
 
         $shipment = Shipment::with('order')->findOrFail($validated['shipment_id']);
@@ -211,6 +209,16 @@ class ShipmentDriverController extends Controller
         }
         if ($status === 'delivered' && ! $shipment->delivered_at) {
             $shipment->delivered_at = now();
+        }
+        if ($status === 'delivered') {
+            $driverName = trim((string) ($validated['delivered_by_name'] ?? ''));
+            if ($driverName === '') {
+                $driverName = trim((string) ($user->name ?? ''));
+            }
+            if ($driverName !== '') {
+                $shipment->delivered_by_name = $driverName;
+                $shipment->delivered_by_user_id = $user->id;
+            }
         }
 
         $shipment->status = $status;

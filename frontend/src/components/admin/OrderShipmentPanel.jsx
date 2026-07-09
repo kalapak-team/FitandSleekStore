@@ -34,14 +34,18 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
   const [externalUrl, setExternalUrl] = useState("");
   const [presetId, setPresetId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deliverySaving, setDeliverySaving] = useState(false);
+  const [deliveredByName, setDeliveredByName] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deliverySuccess, setDeliverySuccess] = useState("");
 
   useEffect(() => {
     if (!shipment) return;
     setProvider(shipment.provider && shipment.provider !== "Internal" ? shipment.provider : "J&T Express");
     setTrackingCode(shipment.tracking_code || shipment.tracking_number || "");
     setExternalUrl(shipment.external_tracking_url || "");
+    setDeliveredByName(shipment.delivered_by_name || "");
   }, [shipment, orderId]);
 
   const applyPreset = (presetKey) => {
@@ -95,6 +99,24 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
     }
   };
 
+  const saveDeliveryInfo = async () => {
+    if (!canEdit || !shipment?.id) return;
+    setDeliverySaving(true);
+    setError("");
+    setDeliverySuccess("");
+    try {
+      const { data } = await api.patch(`/admin/shipments/${shipment.id}/delivery`, {
+        delivered_by_name: deliveredByName.trim() || null,
+      });
+      setDeliverySuccess("Delivery info saved.");
+      onSaved?.(data?.data);
+    } catch (e) {
+      setError(e?.response?.data?.message || "Failed to save delivery info.");
+    } finally {
+      setDeliverySaving(false);
+    }
+  };
+
   if (!orderId) return null;
 
   return (
@@ -109,6 +131,12 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
           Shipment status: <span className="font-semibold capitalize">{shipment.status}</span>
           {shipment.tracking_code ? (
             <span className="ml-2 font-mono text-[11px]">{shipment.tracking_code}</span>
+          ) : null}
+          {shipment.courier_provider || (shipment.provider && shipment.provider !== "Internal") ? (
+            <span className="ml-2">· Courier: <span className="font-semibold">{shipment.courier_provider || shipment.provider}</span></span>
+          ) : null}
+          {shipment.delivered_by_name ? (
+            <span className="ml-2">· Delivered by: <span className="font-semibold">{shipment.delivered_by_name}</span></span>
           ) : null}
         </p>
       ) : null}
@@ -190,6 +218,32 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
       ) : (
         <p className="text-xs text-slate-500 dark:text-slate-400">No external courier link yet.</p>
       )}
+
+      {shipment?.id && canEdit ? (
+        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+            Delivered by / អ្នកដឹក (name on delivery note)
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="text"
+              value={deliveredByName}
+              onChange={(e) => setDeliveredByName(e.target.value)}
+              placeholder="Driver name when package delivered"
+              className="h-11 min-w-[200px] flex-1 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            <button
+              type="button"
+              onClick={saveDeliveryInfo}
+              disabled={deliverySaving}
+              className="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+            >
+              {deliverySaving ? "Saving…" : "Save driver name"}
+            </button>
+          </div>
+          {deliverySuccess ? <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">{deliverySuccess}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

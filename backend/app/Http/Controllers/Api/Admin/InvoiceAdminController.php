@@ -17,7 +17,7 @@ class InvoiceAdminController extends Controller
 {
     public function show(Order $order, InvoiceService $invoiceService)
     {
-        $invoice = $invoiceService->buildOrderInvoiceData($order);
+        $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
 
         return response()->json([
             'message' => 'Invoice retrieved successfully',
@@ -27,8 +27,8 @@ class InvoiceAdminController extends Controller
 
     public function downloadPdf(Order $order, InvoiceService $invoiceService)
     {
-        $invoice = $invoiceService->buildOrderInvoiceData($order);
-        $invoice['qr_data_uri'] = $this->buildQrDataUri($invoice['qr_payload'] ?? $invoice['driver_scan_url']);
+        $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+        $invoice['qr_data_uri'] = $this->buildQrDataUri($invoice['qr_payload'] ?? $invoice['driver_scan_url'] ?? null);
         $invoice['logo_url'] = BrandLogo::url();
 
         $pdf = Pdf::loadView('invoices.bulk', [
@@ -76,7 +76,7 @@ class InvoiceAdminController extends Controller
             ->get();
 
         $invoices = $orders->map(function (Order $order) use ($invoiceService) {
-            $invoice = $invoiceService->buildOrderInvoiceData($order);
+            $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
             $invoice['qr_data_uri'] = $this->buildQrDataUri($invoice['qr_payload'] ?? $invoice['driver_scan_url']);
             $invoice['logo_url'] = BrandLogo::url();
             return $invoice;

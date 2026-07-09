@@ -69,6 +69,7 @@ class OrderAdminController extends Controller
             'items.product.category',
             'items.inventoryLot',
             'shipment.trackingEvents',
+            'shipment.deliveredByUser',
             'payments' => fn ($q) => $q->latest('id'),
         ]);
     }

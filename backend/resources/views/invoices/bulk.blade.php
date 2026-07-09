@@ -337,6 +337,10 @@
         $orderRef     = $invoice['order_number'] ?: $invoice['order_id'];
         $customer     = $invoice['customer'] ?? [];
         $items        = $invoice['items'] ?? [];
+        $audience     = $invoice['invoice_audience'] ?? 'customer';
+        $isInternal   = in_array($audience, ['shop', 'driver'], true);
+        $docTitle     = $invoice['doc_title'] ?? 'Invoice';
+        $docTitleKm   = $invoice['doc_title_km'] ?? 'វិក័យបត្រ';
     @endphp
     <section class="invoice-page {{ $pageBreak ? 'page-break' : '' }}">
 
@@ -347,8 +351,8 @@
                 <tr>
                     <td class="logo-cell"><img src="{{ $invoice['logo_url'] ?? $logoUrl }}" alt="{{ $brandName }}"></td>
                     <td class="text-cell">
-                        <p class="doc-title-h">Invoice</p>
-                        <p class="doc-subtitle-h">#{{ $invoice['invoice_number'] }} &nbsp;·&nbsp; {{ $invoice['invoice_date'] }}</p>
+                        <p class="doc-title-h">{{ $docTitle }}</p>
+                        <p class="doc-subtitle-h">{{ $docTitleKm }} · #{{ $invoice['invoice_number'] }} &nbsp;·&nbsp; {{ $invoice['invoice_date'] }}</p>
                     </td>
                     <td class="right-cell">
                         <span class="pill-doc {{ $statusClass }}">{{ $invoice['payment_status'] ?? '—' }}</span>
@@ -400,6 +404,18 @@
                                         <td class="v">{{ $invoice['tracking_code'] }}</td>
                                     </tr>
                                 @endif
+                                @if ($isInternal && !empty($invoice['courier_provider']))
+                                    <tr>
+                                        <td class="k">Courier</td>
+                                        <td class="v">{{ $invoice['courier_provider'] }}</td>
+                                    </tr>
+                                @endif
+                                @if ($isInternal && !empty($invoice['is_cod']))
+                                    <tr>
+                                        <td class="k">Payment</td>
+                                        <td class="v">COD — Cash on delivery</td>
+                                    </tr>
+                                @endif
                             </table>
                         </div>
                     </td>
@@ -444,6 +460,7 @@
             {{-- ── Totals + QR footer ──────────────────────────────────────── --}}
             <table class="footer-grid">
                 <tr>
+                    @if ($isInternal)
                     <td class="qr-cell">
                         <div class="qr-card">
                             @if (!empty($invoice['qr_data_uri']))
@@ -457,7 +474,8 @@
                             @endif
                         </div>
                     </td>
-                    <td>
+                    @endif
+                    <td @if(!$isInternal) colspan="2" @endif>
                         <table class="totals">
                             <tr>
                                 <td class="k">Subtotal</td>
@@ -479,6 +497,20 @@
                     </td>
                 </tr>
             </table>
+
+            @if (!empty($invoice['show_driver_signature_line']))
+                <div style="margin-top: 18px; padding: 14px 16px; border: 1px dashed #94a3b8; border-radius: 8px;">
+                    <p style="margin: 0 0 8px 0; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b;">
+                        Delivered by / អ្នកដឹក
+                    </p>
+                    @if (!empty($invoice['delivered_by_name']))
+                        <p style="margin: 0; font-size: 16px; font-weight: 800; color: #0f172a;">{{ $invoice['delivered_by_name'] }}</p>
+                    @else
+                        <p style="margin: 0; font-size: 14px; color: #0f172a; border-bottom: 1px solid #cbd5e1; min-height: 28px;">&nbsp;</p>
+                        <p style="margin: 6px 0 0 0; font-size: 9px; color: #94a3b8;">Sign or print name when delivered</p>
+                    @endif
+                </div>
+            @endif
 
             <div class="footnote">
                 <span class="brand">{{ $brandName }}</span>

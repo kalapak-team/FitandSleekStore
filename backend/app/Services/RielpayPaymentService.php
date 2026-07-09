@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Setting;
 use App\Services\PaidOrderInventory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -23,10 +24,7 @@ class RielpayPaymentService
     public function generate(Order $order, Payment $payment): array
     {
         $currency = strtoupper($payment->currency ?: (string) config('services.rielpay.currency', 'KHR'));
-        $rawAmount = (float) ($payment->amount ?: $order->total ?: 0);
-        $amount = $currency === 'KHR'
-            ? max(0, (int) round($rawAmount))
-            : round($rawAmount, 2);
+        $amount = $this->resolveAmount($order, $payment, $currency);
 
         if ($amount <= 0) {
             throw new RuntimeException('Payment amount must be greater than zero.');
@@ -193,5 +191,18 @@ class RielpayPaymentService
         if ($cart) {
             $cart->items()->delete();
         }
+    }
+
+    private function resolveAmount(Order $order, Payment $payment, string $currency): float|int
+    {
+        $rawAmount = (float) ($payment->amount ?: $order->total ?: 0);
+
+        if ($currency === 'KHR') {
+            $rate = max(1, (int) (Setting::where('key', 'usd_khr_exchange_rate')->value('value') ?? 4100));
+
+            return max(0, (int) round($rawAmount * $rate));
+        }
+
+        return round($rawAmount, 2);
     }
 }

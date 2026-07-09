@@ -118,6 +118,14 @@ class BakongPaymentController extends Controller
             $payment->update(['bill_number' => null]);
             $result = $this->rielpayPayments->generate($order, $payment->fresh());
             $this->persistKhqrResult($payment, $result);
+        } catch (\Throwable $e) {
+            report($e);
+            $payment->update(['status' => 'failed']);
+
+            return response()->json([
+                'message' => 'KHQR was generated but could not be saved. Check database migrations on the server.',
+                'detail' => $e->getMessage(),
+            ], 500);
         }
 
         return response()->json($this->formatPaymentResponse($payment->fresh()));

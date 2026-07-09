@@ -17,6 +17,8 @@ class Shipment extends Model
         'status',
         'shipped_at',
         'delivered_at',
+        'delivered_by_name',
+        'delivered_by_user_id',
     ];
 
     protected function casts(): array
@@ -36,6 +38,11 @@ class Shipment extends Model
     public function trackingEvents()
     {
         return $this->hasMany(ShipmentTrackingEvent::class);
+    }
+
+    public function deliveredByUser()
+    {
+        return $this->belongsTo(User::class, 'delivered_by_user_id');
     }
 
     public function getTrackingUrlAttribute(): string

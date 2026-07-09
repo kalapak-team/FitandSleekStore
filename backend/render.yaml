@@ -87,5 +87,6 @@ services:
       # QDRANT_COLLECTION, IMAGE_SEARCH_TIMEOUT=90. One-time: php artisan qdrant:setup &&
       # php artisan qdrant:index-products
       # Secrets (Render dashboard only): APP_KEY, DATABASE_URL, RESEND_API_KEY,
+      # RIELPAY_API_KEY (from merchant-norng-rielpay.fitandsleek.online),
       # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET,
       # R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY (or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)

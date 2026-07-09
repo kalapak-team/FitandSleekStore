@@ -498,6 +498,7 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     Route::get('/shipments/order/{orderId}', [ShipmentAdminController::class, 'byOrder']);
     Route::post('/shipments', [ShipmentAdminController::class, 'store']);
     Route::patch('/shipments/{shipment}/status', [ShipmentAdminController::class, 'updateStatus']);
+    Route::patch('/shipments/{shipment}/delivery', [ShipmentAdminController::class, 'updateDeliveryInfo']);
     Route::post('/shipments/{shipment}/tracking-events', [ShipmentAdminController::class, 'addTrackingEvent']);
     Route::get('/shipments/providers', [ShipmentAdminController::class, 'providers']);
 

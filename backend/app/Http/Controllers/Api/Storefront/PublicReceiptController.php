@@ -37,7 +37,10 @@ class PublicReceiptController extends Controller
             return response()->json(['message' => 'Receipt link is invalid or expired.'], 404);
         }
 
-        $invoice = $this->invoices->buildOrderInvoiceData($order->loadMissing(['user', 'items.product', 'shipment']));
+        $invoice = $this->invoices->buildOrderInvoiceData(
+            $order->loadMissing(['user', 'items.product', 'shipment']),
+            InvoiceService::AUDIENCE_CUSTOMER
+        );
         $invoice['brand_name'] = config('app.name', 'Fitandsleek');
         $invoice['logo_url'] = BrandLogo::url();
         $invoice['payment_method'] = $order->payment_method;
@@ -57,8 +60,10 @@ class PublicReceiptController extends Controller
             return response('Receipt link is invalid or expired.', 404);
         }
 
-        $invoice = $this->invoices->buildOrderInvoiceData($order->loadMissing(['user', 'items.product', 'shipment']));
-        $invoice['qr_data_uri'] = $this->buildQrDataUri($invoice['qr_payload'] ?? $invoice['driver_scan_url'] ?? null);
+        $invoice = $this->invoices->buildOrderInvoiceData(
+            $order->loadMissing(['user', 'items.product', 'shipment']),
+            InvoiceService::AUDIENCE_CUSTOMER
+        );
         $invoice['logo_url'] = BrandLogo::url();
 
         $pdf = Pdf::loadView('invoices.bulk', [

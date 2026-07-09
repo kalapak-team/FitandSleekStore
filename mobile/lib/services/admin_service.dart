@@ -322,6 +322,18 @@ class AdminService {
     return AdminOrderDetail.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
+  Future<AdminOrderDetail> saveDeliveredByName({
+    required int orderId,
+    required int shipmentId,
+    String? deliveredByName,
+  }) async {
+    final name = deliveredByName?.trim();
+    await _api.dio.patch('/admin/shipments/$shipmentId/delivery', data: {
+      'delivered_by_name': (name == null || name.isEmpty) ? null : name,
+    });
+    return getOrder(orderId);
+  }
+
   Future<CodQuote> getCodQuote(int orderId) async {
     final res = await _api.dio.get('/admin/orders/$orderId/cod');
     final body = res.data as Map;
@@ -1036,7 +1048,10 @@ class AdminOrderDetail {
     this.customerEmail,
     this.customerPhone,
     this.shippingAddress,
+    this.shipmentId,
+    this.shipmentStatus,
     this.shipmentProvider,
+    this.deliveredByName,
     this.items = const [],
     this.payments = const [],
   });
@@ -1052,18 +1067,28 @@ class AdminOrderDetail {
   final String? customerEmail;
   final String? customerPhone;
   final String? shippingAddress;
+  final int? shipmentId;
+  final String? shipmentStatus;
   final String? shipmentProvider;
+  final String? deliveredByName;
   final List<AdminOrderItemLine> items;
   final List<AdminPaymentSnippet> payments;
 
   bool get isCod => paymentMethod == 'cod';
   bool get isCodPending => isCod && paymentStatus != 'paid';
 
+  String? get courierLabel {
+    final raw = shipmentProvider?.trim();
+    if (raw == null || raw.isEmpty || raw.toLowerCase() == 'internal') return null;
+    return raw;
+  }
+
   factory AdminOrderDetail.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map?;
     final itemsRaw = json['items'];
     final paymentsRaw = json['payments'];
     final shipment = json['shipment'] as Map?;
+    final provider = shipment?['courier_provider']?.toString() ?? shipment?['provider']?.toString();
     String? shipTo;
     final addr = json['shipping_address'];
     if (addr is Map) {
@@ -1092,7 +1117,13 @@ class AdminOrderDetail {
       customerEmail: user?['email']?.toString(),
       customerPhone: user?['phone']?.toString(),
       shippingAddress: shipTo,
-      shipmentProvider: shipment?['provider']?.toString(),
+      shipmentId: shipment?['id'] is int
+          ? shipment!['id'] as int
+          : int.tryParse(shipment?['id']?.toString() ?? ''),
+      shipmentStatus: shipment?['status']?.toString(),
+      shipmentProvider: provider,
+      deliveredByName: shipment?['delivered_by_name']?.toString() ??
+          (shipment?['delivered_by_user'] as Map?)?['name']?.toString(),
       items: itemsRaw is List
           ? itemsRaw.whereType<Map>().map((e) => AdminOrderItemLine.fromJson(Map<String, dynamic>.from(e))).toList()
           : [],

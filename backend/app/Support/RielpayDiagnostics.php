@@ -12,17 +12,25 @@ final class RielpayDiagnostics
     public static function summary(): array
     {
         $apiUrl = rtrim((string) config('services.rielpay.api_url'), '/');
-        $hasKey = trim((string) config('services.rielpay.api_key')) !== '';
+        $apiKey = trim((string) config('services.rielpay.api_key'));
+        $hasKey = $apiKey !== '';
         $issues = self::issues($apiUrl, $hasKey);
-        $probe = self::probe($apiUrl);
+        $probe = self::probe($apiUrl, $apiKey);
+        $auth = self::authCheck($apiUrl, $apiKey);
+
+        if ($hasKey && ! ($auth['valid'] ?? false)) {
+            $issues[] = $auth['error'] ?? 'RIELPAY_API_KEY is set but rejected by Rielpay (401).';
+        }
 
         return [
             'api_url' => $apiUrl,
             'currency' => config('services.rielpay.currency', 'KHR'),
             'api_key_configured' => $hasKey,
-            'configured' => $issues === [] && ($probe['ok'] ?? false),
+            'api_key_valid' => $auth['valid'] ?? null,
+            'configured' => $issues === [] && ($probe['ok'] ?? false) && ($auth['valid'] ?? false),
             'issues' => $issues,
             'probe' => $probe,
+            'auth' => $auth,
         ];
     }
 
@@ -49,7 +57,7 @@ final class RielpayDiagnostics
     /**
      * @return array{ok: bool, status?: int, body?: string, error?: string}
      */
-    public static function probe(?string $apiUrl = null): array
+    public static function probe(?string $apiUrl = null, ?string $apiKey = null): array
     {
         $apiUrl = $apiUrl ?? rtrim((string) config('services.rielpay.api_url'), '/');
         if ($apiUrl === '') {
@@ -64,19 +72,7 @@ final class RielpayDiagnostics
                 return [
                     'ok' => true,
                     'status' => $response->status(),
-                    'body' => $body,
-                ];
-            }
-
-            $apiPing = Http::timeout(10)
-                ->acceptJson()
-                ->post($apiUrl.'/api/v1/payments/check', ['md5' => '']);
-
-            if (in_array($apiPing->status(), [401, 422], true)) {
-                return [
-                    'ok' => true,
-                    'status' => $apiPing->status(),
-                    'body' => 'Rielpay API reachable',
+                    'body' => 'Application up',
                 ];
             }
 
@@ -90,6 +86,63 @@ final class RielpayDiagnostics
             return [
                 'ok' => false,
                 'error' => 'Could not reach Rielpay gateway: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @return array{valid: bool, status?: int, error?: string}
+     */
+    public static function authCheck(?string $apiUrl = null, ?string $apiKey = null): array
+    {
+        $apiUrl = $apiUrl ?? rtrim((string) config('services.rielpay.api_url'), '/');
+        $apiKey = $apiKey ?? trim((string) config('services.rielpay.api_key'));
+
+        if ($apiUrl === '') {
+            return ['valid' => false, 'error' => 'RIELPAY_API_URL is not configured.'];
+        }
+
+        if ($apiKey === '') {
+            return ['valid' => false, 'error' => 'RIELPAY_API_KEY is missing on the server.'];
+        }
+
+        try {
+            $response = Http::timeout(10)
+                ->acceptJson()
+                ->withHeaders([
+                    'Authorization' => 'Bearer '.$apiKey,
+                    'X-API-Key' => $apiKey,
+                ])
+                ->post($apiUrl.'/api/v1/payments/check', ['md5' => '']);
+
+            if ($response->status() === 401) {
+                $message = is_string(data_get($response->json(), 'message'))
+                    ? (string) data_get($response->json(), 'message')
+                    : 'Invalid or revoked API key.';
+
+                return [
+                    'valid' => false,
+                    'status' => 401,
+                    'error' => $message,
+                ];
+            }
+
+            if (in_array($response->status(), [422, 404], true)) {
+                return [
+                    'valid' => true,
+                    'status' => $response->status(),
+                ];
+            }
+
+            return [
+                'valid' => false,
+                'status' => $response->status(),
+                'error' => 'Unexpected Rielpay auth response (HTTP '.$response->status().').',
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'valid' => false,
+                'error' => 'Could not verify Rielpay API key: '.$e->getMessage(),
             ];
         }
     }
