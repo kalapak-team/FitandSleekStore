@@ -22,6 +22,20 @@ class BakongPaymentController extends Controller
 
     public function create(Request $request): JsonResponse
     {
+        try {
+            return $this->createKhqrPayment($request);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to create KHQR payment. Please try again.',
+                'detail' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function createKhqrPayment(Request $request): JsonResponse
+    {
         $data = $request->validate([
             'order_id' => ['required', 'integer', 'exists:orders,id'],
         ]);
@@ -96,16 +110,16 @@ class BakongPaymentController extends Controller
             report($e);
             $payment->update(['status' => 'failed']);
 
-            $response = [
+            Log::warning('Bakong KHQR create failed', [
+                'order_id' => $order->id,
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
                 'message' => $e->getMessage() ?: 'Unable to create KHQR payment. Please try again.',
                 'detail' => $e->getMessage(),
-            ];
-
-            if (config('app.debug')) {
-                $response['exception'] = $e::class;
-            }
-
-            return response()->json($response, 500);
+            ], 500);
         }
 
         try {
@@ -128,7 +142,7 @@ class BakongPaymentController extends Controller
             ], 500);
         }
 
-        return response()->json($this->formatPaymentResponse($payment->fresh()));
+        return response()->json($this->formatPaymentResponse($payment->fresh(), $result));
     }
 
     public function status(Payment $payment, Request $request): JsonResponse
@@ -274,7 +288,7 @@ class BakongPaymentController extends Controller
         ]);
     }
 
-    private function formatPaymentResponse(Payment $payment): array
+    private function formatPaymentResponse(Payment $payment, ?array $generated = null): array
     {
         return [
             'payment_id' => $payment->id,
@@ -285,6 +299,8 @@ class BakongPaymentController extends Controller
             'expires_at' => optional($payment->expires_at)->toIso8601String(),
             'amount' => $payment->amount,
             'currency' => $payment->currency,
+            'usd_amount' => $generated['usd_amount'] ?? $payment->amount,
+            'khr_amount' => $generated['khr_amount'] ?? null,
         ];
     }
 }

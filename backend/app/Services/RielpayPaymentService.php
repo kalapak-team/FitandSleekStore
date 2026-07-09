@@ -30,7 +30,7 @@ class RielpayPaymentService
             throw new RuntimeException('Payment amount must be greater than zero.');
         }
 
-        $billNumber = $payment->bill_number ?: $this->makeBillNumber($order);
+        $billNumber = $payment->bill_number ?: $this->makeBillNumber($order, $payment);
         $billNumber = $this->ensureUniqueBillNumber($billNumber, $payment->id);
 
         $payload = [
@@ -41,6 +41,7 @@ class RielpayPaymentService
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'payment_id' => $payment->id,
+                'usd_amount' => round((float) ($payment->amount ?: $order->total ?: 0), 2),
             ],
         ];
 
@@ -62,7 +63,21 @@ class RielpayPaymentService
             'qr_string' => $qrString,
             'expires_at' => $expiresAt,
             'payload' => $response,
+            'khr_amount' => $currency === 'KHR' ? (int) $amount : null,
+            'usd_amount' => round((float) ($payment->amount ?: $order->total ?: 0), 2),
         ];
+    }
+
+    public function getExchangeRate(): int
+    {
+        $rate = (int) (Setting::where('key', 'usd_khr_exchange_rate')->value('value') ?? 4100);
+
+        return max(1, $rate);
+    }
+
+    public function khrAmountForOrder(Order $order): int
+    {
+        return (int) round((float) $order->total * $this->getExchangeRate());
     }
 
     public function refreshStatus(Payment $payment, Order $order): Payment
@@ -161,13 +176,16 @@ class RielpayPaymentService
         }
     }
 
-    private function makeBillNumber(Order $order): string
+    private function makeBillNumber(Order $order, ?Payment $payment = null): string
     {
-        if ($order->order_number) {
-            return $order->order_number;
+        $base = $order->order_number
+            ?: 'FS-' . now()->format('Ymd') . '-' . Str::upper(Str::random(6));
+
+        if ($payment?->id) {
+            $base .= '-P' . $payment->id;
         }
 
-        return 'FS-' . now()->format('Ymd') . '-' . Str::upper(Str::random(6));
+        return Str::limit($base, 45, '');
     }
 
     private function ensureUniqueBillNumber(string $base, ?int $paymentId = null): string
@@ -198,7 +216,7 @@ class RielpayPaymentService
         $rawAmount = (float) ($payment->amount ?: $order->total ?: 0);
 
         if ($currency === 'KHR') {
-            $rate = max(1, (int) (Setting::where('key', 'usd_khr_exchange_rate')->value('value') ?? 4100));
+            $rate = $this->getExchangeRate();
 
             return max(0, (int) round($rawAmount * $rate));
         }

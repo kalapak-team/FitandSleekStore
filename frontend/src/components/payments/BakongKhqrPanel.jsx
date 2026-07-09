@@ -42,7 +42,7 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
       setStatus(nextStatus);
       notify(nextStatus);
     } catch (err) {
-      setError(err.response?.data?.message || "Unable to create Bakong payment.");
+      setError(err.response?.data?.detail || err.response?.data?.message || "Unable to create Bakong payment.");
       setStatus("error");
       notify("error");
     } finally {
@@ -148,6 +148,8 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
     );
   }
 
+  const displayAmount = payment?.khr_amount ?? amount;
+  const displayCurrency = payment?.khr_amount != null ? "KHR" : currency;
   const expired = status === "expired";
   const paid = status === "paid";
 
@@ -158,7 +160,7 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Amount due</p>
             <p className="text-3xl font-bold text-slate-900 dark:text-white">
-              {currency} {Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {displayCurrency} {Number(displayAmount || 0).toLocaleString(undefined, { minimumFractionDigits: displayCurrency === "KHR" ? 0 : 2 })}
             </p>
           </div>
           <div className={`px-4 py-1 rounded-full text-sm font-semibold ${paid ? "bg-emerald-100 text-emerald-700" : expired ? "bg-rose-100 text-rose-700" : "bg-slate-900 text-white"}`}>
@@ -201,7 +203,7 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
             </div>
             <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
               <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">2. Confirm amount & pay</p>
-              <p className="text-slate-500 dark:text-slate-400">Approve {currency} {Number(amount).toLocaleString()} then wait for auto confirmation.</p>
+              <p className="text-slate-500 dark:text-slate-400">Approve {displayCurrency} {Number(displayAmount || 0).toLocaleString()} then wait for auto confirmation.</p>
             </div>
           </div>
         </div>
