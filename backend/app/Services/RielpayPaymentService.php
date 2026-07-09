@@ -27,11 +27,16 @@ class RielpayPaymentService
         $amount = $this->resolveAmount($order, $payment, $currency);
 
         if ($amount <= 0) {
-            throw new RuntimeException('Payment amount must be greater than zero.');
+            throw new RuntimeException(
+                'Payment amount must be greater than zero. Order total: $'
+                . number_format((float) ($payment->amount ?: $order->total ?: 0), 2)
+                . ' USD.'
+            );
         }
 
         $billNumber = $payment->bill_number ?: $this->makeBillNumber($order, $payment);
         $billNumber = $this->ensureUniqueBillNumber($billNumber, $payment->id);
+        $billNumber = Str::limit($billNumber, 35, '');
 
         $payload = [
             'amount' => $amount,
@@ -45,7 +50,7 @@ class RielpayPaymentService
             ],
         ];
 
-        $response = $this->rielpay->createPayment($payload);
+        $response = $this->createPaymentWithBillRetry($payload, $order, $payment);
 
         $qrString = (string) ($response['qr_string'] ?? '');
         $md5 = (string) ($response['md5'] ?? '');
@@ -176,7 +181,7 @@ class RielpayPaymentService
         }
     }
 
-    private function makeBillNumber(Order $order, ?Payment $payment = null): string
+    private function makeBillNumber(Order $order, ?Payment $payment = null, bool $fresh = false): string
     {
         $base = $order->order_number
             ?: 'FS-' . now()->format('Ymd') . '-' . Str::upper(Str::random(6));
@@ -185,7 +190,11 @@ class RielpayPaymentService
             $base .= '-P' . $payment->id;
         }
 
-        return Str::limit($base, 45, '');
+        if ($fresh) {
+            $base .= '-' . Str::upper(Str::random(4));
+        }
+
+        return Str::limit($base, 31, '');
     }
 
     private function ensureUniqueBillNumber(string $base, ?int $paymentId = null): string
@@ -197,10 +206,10 @@ class RielpayPaymentService
                 ->when($paymentId, fn ($q) => $q->where('id', '!=', $paymentId))
                 ->exists()
         ) {
-            $candidate = $base . '-' . Str::upper(Str::random(3));
+            $candidate = Str::limit($base . '-' . Str::upper(Str::random(3)), 35, '');
         }
 
-        return $candidate;
+        return Str::limit($candidate, 35, '');
     }
 
     private function clearUserCart(int $userId): void
@@ -222,5 +231,40 @@ class RielpayPaymentService
         }
 
         return round($rawAmount, 2);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function createPaymentWithBillRetry(array $payload, Order $order, Payment $payment): array
+    {
+        try {
+            return $this->rielpay->createPayment($payload);
+        } catch (RuntimeException $e) {
+            if (! $this->isDuplicateBillError($e)) {
+                throw $e;
+            }
+
+            $billNumber = $this->makeBillNumber($order, $payment, true);
+            $billNumber = $this->ensureUniqueBillNumber($billNumber, $payment->id);
+            $billNumber = Str::limit($billNumber, 35, '');
+            $payload['bill_number'] = $billNumber;
+
+            return $this->rielpay->createPayment($payload);
+        }
+    }
+
+    private function isDuplicateBillError(RuntimeException $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'bill')
+            && (
+                str_contains($message, 'taken')
+                || str_contains($message, 'duplicate')
+                || str_contains($message, 'already')
+                || str_contains($message, 'exists')
+            );
     }
 }

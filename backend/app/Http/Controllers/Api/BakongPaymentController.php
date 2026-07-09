@@ -10,6 +10,7 @@ use App\Services\RielpayPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class BakongPaymentController extends Controller
@@ -26,6 +27,20 @@ class BakongPaymentController extends Controller
     }
 
     private function createKhqrPayment(Request $request): JsonResponse
+    {
+        try {
+            return $this->processKhqrCreate($request);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Unable to create KHQR payment. Please try again.',
+                'detail' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function processKhqrCreate(Request $request): JsonResponse
     {
         $data = $request->validate([
             'order_id' => ['required', 'integer', 'exists:orders,id'],
@@ -44,6 +59,19 @@ class BakongPaymentController extends Controller
             return response()->json(['message' => 'Order already paid.'], 409);
         }
 
+        $lock = Cache::lock('bakong:create:order:'.$order->id, 30);
+
+        try {
+            return $lock->block(10, fn () => $this->createKhqrPaymentForOrder($order));
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+            return response()->json([
+                'message' => 'Payment is being prepared. Please wait a moment and try again.',
+            ], 409);
+        }
+    }
+
+    private function createKhqrPaymentForOrder(Order $order): JsonResponse
+    {
         Payment::where('order_id', $order->id)
             ->khqrProvider()
             ->where('status', 'pending')
@@ -63,7 +91,7 @@ class BakongPaymentController extends Controller
             ->first();
 
         if ($activePayment) {
-            return response()->json($this->formatPaymentResponse($activePayment));
+            return response()->json($this->formatPaymentResponse($activePayment, null, $order));
         }
 
         $payment = Payment::where('order_id', $order->id)
@@ -110,10 +138,15 @@ class BakongPaymentController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
+            $status = $e instanceof \RuntimeException
+                && str_contains($e->getMessage(), 'greater than zero')
+                ? 422
+                : 500;
+
             return response()->json([
                 'message' => $e->getMessage() ?: 'Unable to create KHQR payment. Please try again.',
                 'detail' => $e->getMessage(),
-            ], 500);
+            ], $status);
         }
 
         try {
@@ -125,7 +158,17 @@ class BakongPaymentController extends Controller
 
             $payment->update(['bill_number' => null]);
             $result = $this->rielpayPayments->generate($order, $payment->fresh());
-            $this->persistKhqrResult($payment, $result);
+            try {
+                $this->persistKhqrResult($payment, $result);
+            } catch (\Throwable $retryError) {
+                report($retryError);
+                $payment->update(['status' => 'failed']);
+
+                return response()->json([
+                    'message' => 'KHQR was generated but could not be saved after retry.',
+                    'detail' => $retryError->getMessage(),
+                ], 500);
+            }
         } catch (\Throwable $e) {
             report($e);
             $payment->update(['status' => 'failed']);
@@ -136,7 +179,7 @@ class BakongPaymentController extends Controller
             ], 500);
         }
 
-        return response()->json($this->formatPaymentResponse($payment->fresh(), $result));
+        return response()->json($this->formatPaymentResponse($payment->fresh(), $result, $order));
     }
 
     public function status(Payment $payment, Request $request): JsonResponse
@@ -154,7 +197,7 @@ class BakongPaymentController extends Controller
 
         if ($payment->status === 'paid' || $order->payment_status === 'paid') {
             return response()->json(array_merge(
-                $this->formatPaymentResponse($payment),
+                $this->formatPaymentResponse($payment, null, $order),
                 ['status' => 'paid']
             ));
         }
@@ -164,7 +207,7 @@ class BakongPaymentController extends Controller
                 $result = $this->rielpayPayments->generate($order, $payment);
                 $this->persistKhqrResult($payment, $result);
 
-                return response()->json($this->formatPaymentResponse($payment->fresh()));
+                return response()->json($this->formatPaymentResponse($payment->fresh(), null, $order));
             } catch (\Throwable $e) {
                 report($e);
 
@@ -189,13 +232,13 @@ class BakongPaymentController extends Controller
 
             if ($payment->status === 'paid' || $order->payment_status === 'paid') {
                 return response()->json(array_merge(
-                    $this->formatPaymentResponse($payment),
+                    $this->formatPaymentResponse($payment, null, $order),
                     ['status' => 'paid']
                 ));
             }
 
             return response()->json(array_merge(
-                $this->formatPaymentResponse($payment),
+                $this->formatPaymentResponse($payment, null, $order),
                 [
                     'status' => 'pending',
                     'message' => 'Waiting for payment confirmation. Keep this screen open after you pay in your banking app.',
@@ -207,13 +250,13 @@ class BakongPaymentController extends Controller
 
         if ($payment->status === 'paid' || $order->payment_status === 'paid') {
             return response()->json(array_merge(
-                $this->formatPaymentResponse($payment),
+                $this->formatPaymentResponse($payment, null, $order),
                 ['status' => 'paid']
             ));
         }
 
         return response()->json(array_merge(
-            $this->formatPaymentResponse($payment),
+            $this->formatPaymentResponse($payment, null, $order),
             ['status' => $payment->status]
         ));
     }
@@ -288,8 +331,11 @@ class BakongPaymentController extends Controller
         ]);
     }
 
-    private function formatPaymentResponse(Payment $payment, ?array $generated = null): array
+    private function formatPaymentResponse(Payment $payment, ?array $generated = null, ?Order $order = null): array
     {
+        $order ??= $payment->relationLoaded('order') ? $payment->order : null;
+        $khrAmount = $generated['khr_amount'] ?? ($order ? $this->rielpayPayments->khrAmountForOrder($order) : null);
+
         return [
             'payment_id' => $payment->id,
             'status' => $payment->status,
@@ -300,7 +346,7 @@ class BakongPaymentController extends Controller
             'amount' => $payment->amount,
             'currency' => $payment->currency,
             'usd_amount' => $generated['usd_amount'] ?? $payment->amount,
-            'khr_amount' => $generated['khr_amount'] ?? null,
+            'khr_amount' => $khrAmount,
         ];
     }
 }

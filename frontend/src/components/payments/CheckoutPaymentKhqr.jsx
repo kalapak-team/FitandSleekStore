@@ -20,6 +20,7 @@ export default function CheckoutPaymentKhqr({
   const pollRef = useRef(null);
   const pollFailuresRef = useRef(0);
   const paidNotifiedRef = useRef(false);
+  const creatingRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -41,7 +42,8 @@ export default function CheckoutPaymentKhqr({
   );
 
   const createKhqr = useCallback(async () => {
-    if (!orderId) return;
+    if (!orderId || creatingRef.current) return;
+    creatingRef.current = true;
     setLoading(true);
     setError("");
     paidNotifiedRef.current = false;
@@ -62,6 +64,7 @@ export default function CheckoutPaymentKhqr({
       setError(detail && detail !== message ? `${message} (${detail})` : message);
       setStatus("error");
     } finally {
+      creatingRef.current = false;
       setLoading(false);
     }
   }, [handlePaid, orderId]);
@@ -145,6 +148,7 @@ export default function CheckoutPaymentKhqr({
       setError("");
       pollFailuresRef.current = 0;
       paidNotifiedRef.current = false;
+      creatingRef.current = false;
       setVerificationNote("");
       stopPolling();
     }
