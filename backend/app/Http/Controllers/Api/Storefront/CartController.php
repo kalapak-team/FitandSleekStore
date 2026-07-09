@@ -48,6 +48,27 @@ class CartController extends Controller
         return (int) $q->sum('quantity');
     }
 
+    private function findCartLineItem(int $cartId, int $productId, ?string $size, ?string $color): ?CartItem
+    {
+        $q = CartItem::where('cart_id', $cartId)->where('product_id', $productId);
+        if ($size !== null && $size !== '') {
+            $q->whereRaw('LOWER(TRIM(size)) = ?', [mb_strtolower(trim($size))]);
+        } else {
+            $q->where(function ($w) {
+                $w->whereNull('size')->orWhere('size', '');
+            });
+        }
+        if ($color !== null && $color !== '') {
+            $q->whereRaw('LOWER(TRIM(color)) = ?', [mb_strtolower(trim($color))]);
+        } else {
+            $q->where(function ($w) {
+                $w->whereNull('color')->orWhere('color', '');
+            });
+        }
+
+        return $q->first();
+    }
+
     private function userCartId(int $userId): int
     {
         $cart = Cart::firstOrCreate(
@@ -96,12 +117,18 @@ class CartController extends Controller
         $size = $data['size'] ?? null;
         $color = $data['color'] ?? null;
 
+        $resolved = ProductVariantInventory::resolveVariantSelection($product, $color, $size);
+        $size = $resolved['size'] !== '' ? $resolved['size'] : null;
+        $color = $resolved['color'] !== '' ? $resolved['color'] : null;
+
         if (is_numeric($product->stock)) {
             $stock = ProductVariantInventory::effectiveCapForCartLine($product, $color, $size);
             $existingTotal = $this->existingVariantQuantity($cartId, $product->id, $size, $color);
             if ($existingTotal + $qty > $stock) {
                 return response()->json([
                     'message' => 'Stock limit reached for this product.',
+                    'stock' => $stock,
+                    'available' => max(0, $stock - $existingTotal),
                 ], 422);
             }
         }
@@ -110,13 +137,7 @@ class CartController extends Controller
             $unitPrice = $this->resolveUnitPrice($product, $size, $color);
 
             /** @var \App\Models\CartItem|null $item */
-            $item = CartItem::where('cart_id', $cartId)
-                ->where('product_id', $product->id)
-                ->when($size !== null, fn ($q) => $q->where('size', $size))
-                ->when($size === null, fn ($q) => $q->whereNull('size'))
-                ->when($color !== null, fn ($q) => $q->where('color', $color))
-                ->when($color === null, fn ($q) => $q->whereNull('color'))
-                ->first();
+            $item = $this->findCartLineItem($cartId, $product->id, $size, $color);
 
             if ($item) {
                 $item->quantity += $qty;
@@ -182,6 +203,8 @@ class CartController extends Controller
             if ($otherQty + $newQty > $stock) {
                 return response()->json([
                     'message' => 'Stock limit reached for this product.',
+                    'stock' => $stock,
+                    'available' => max(0, $stock - $otherQty),
                 ], 422);
             }
         }

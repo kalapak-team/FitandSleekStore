@@ -137,6 +137,12 @@ export function CartProvider({ children }) {
       if (err.response?.status === 401 || err.response?.status === 403) {
         throw new Error("LOGIN_REQUIRED");
       }
+      if (err.response?.status === 422) {
+        const stock = err.response?.data?.available ?? err.response?.data?.stock;
+        if (stock != null) {
+          throw new Error(`STOCK_LIMIT:${stock}`);
+        }
+      }
       throw new Error(err.response?.data?.message || "Failed to add to cart");
     }
   };

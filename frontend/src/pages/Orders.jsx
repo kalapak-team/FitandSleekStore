@@ -9,6 +9,7 @@ import Swal, { closeSwal, errorAlert, loadingAlert, toastSuccess } from "../lib/
 import ReplacementRequestModal from "../components/ReplacementRequestModal.jsx";
 import ExternalCourierTrackButton from "../components/ExternalCourierTrackButton.jsx";
 import TelegramConnectButton from "../components/TelegramConnectButton.jsx";
+import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 
 function Money({ value }) {
   const n = Number(value || 0);
@@ -59,10 +60,20 @@ export default function Orders() {
       for (const item of items) {
         if (item.product?.id) {
           try {
-            await addItem(item.product.id, item.quantity || 1);
+            await addItem(
+              item.product?.id ?? item.product_id,
+              item.quantity || 1,
+              item.size || null,
+              item.color || null
+            );
             addedCount++;
           } catch (e) {
             console.error(`Failed to add ${item.product.name}:`, e);
+            const msg = String(e?.message || "");
+            if (msg.includes("STOCK_LIMIT")) {
+              const stock = Number(msg.split(":")[1]);
+              await showStockLimitAlert({ stock: Number.isFinite(stock) ? stock : 0 });
+            }
             failedItems.push(item.product.name || "Unknown item");
           }
         }

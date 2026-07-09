@@ -93,6 +93,32 @@ class ProductVariantInventory
     }
 
     /**
+     * When only one variant row has stock, use it if the client omitted size/color (e.g. reorder).
+     *
+     * @return array{color: string, size: string}
+     */
+    public static function resolveVariantSelection(Product $product, ?string $color, ?string $size): array
+    {
+        $color = trim((string) ($color ?? ''));
+        $size = trim((string) ($size ?? ''));
+
+        if (self::usesMatrix($product) && ($color === '' || $size === '')) {
+            $inStock = array_values(array_filter(
+                self::matrixRows($product),
+                fn (array $row) => (int) ($row['qty'] ?? 0) > 0
+            ));
+            if (count($inStock) === 1) {
+                return [
+                    'color' => (string) $inStock[0]['color'],
+                    'size' => (string) $inStock[0]['size'],
+                ];
+            }
+        }
+
+        return ['color' => $color, 'size' => $size];
+    }
+
+    /**
      * Max units sellable for one cart/order line (variant row × product/label cap).
      */
     public static function effectiveCapForCartLine(Product $product, ?string $color, ?string $size): int
@@ -105,6 +131,10 @@ class ProductVariantInventory
                 $size,
             );
         }
+
+        $resolved = self::resolveVariantSelection($product, $color, $size);
+        $color = $resolved['color'];
+        $size = $resolved['size'];
 
         $variantQty = self::qtyForVariant($product, $color, $size);
         if ($variantQty === null) {

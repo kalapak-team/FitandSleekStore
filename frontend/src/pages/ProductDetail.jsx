@@ -390,7 +390,12 @@ export default function ProductDetail() {
         await showStockLimitAlert({ stock: 0, requestedQuantity: reorderQty });
         return;
       }
-      await cart.add(p, reorderQty, null, null);
+      await cart.add(
+        p,
+        reorderQty,
+        orderItem?.size || null,
+        orderItem?.color || null
+      );
       await Swal.fire({
         icon: "success",
         text: t('reorderedSuccess') || `Added ${reorderQty} item(s) to cart as before!`,

@@ -73,6 +73,21 @@ function capWithInventoryLots(product, cap, color, size) {
   return Math.min(cap, lotCap);
 }
 
+/** Resolve color/size; auto-pick when matrix has a single in-stock variant. */
+export function resolveVariantSelection(product, color, size) {
+  const rows = parseVariantMatrix(product?.variant_matrix);
+  let c = String(color ?? "").trim();
+  let s = String(size ?? "").trim();
+  if (rows.length > 0 && (!c || !s)) {
+    const inStock = rows.filter((r) => r.qty > 0);
+    if (inStock.length === 1) {
+      c = inStock[0].color;
+      s = inStock[0].size;
+    }
+  }
+  return { color: c, size: s };
+}
+
 /**
  * Max units available for one color × size (ignores cart contents).
  */
@@ -80,8 +95,9 @@ export function sellableQtyForVariantLine(product, color, size) {
   if (!product) return 0;
   const rows = parseVariantMatrix(product.variant_matrix);
   if (rows.length > 0) {
-    const c = String(color ?? "").trim();
-    const s = String(size ?? "").trim();
+    const resolved = resolveVariantSelection(product, color, size);
+    const c = resolved.color;
+    const s = resolved.size;
     if (!c || !s) return 0;
     const mq = matrixQtyForCombo(rows, color, size);
     if (mq === null) return 0;
