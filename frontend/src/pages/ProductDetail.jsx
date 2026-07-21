@@ -31,6 +31,7 @@ import {
 } from "../lib/variantMatrix.js";
 import { hasStorefrontAdminDiscount, resolveStorefrontPriceDisplay } from "../lib/storefrontLotPrice.js";
 import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
+import { readProductDetailCache, writeProductDetailCache } from "../lib/storefrontListCache.js";
 
 function Money({ value }) {
   const n = Number(value || 0);
@@ -172,8 +173,8 @@ export default function ProductDetail() {
   const { t } = useLanguage();
 
   // All state hooks at the top - always called in same order
-  const [p, setP] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [p, setP] = useState(() => readProductDetailCache(slug));
+  const [loading, setLoading] = useState(() => !readProductDetailCache(slug));
   const [qty, setQty] = useState(1);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
@@ -198,12 +199,19 @@ export default function ProductDetail() {
     (async () => {
       setLoading(true);
       setSimilarProducts([]);
-      let product = null;
+      let product = readProductDetailCache(slug);
+      if (product && active) {
+        setP(product);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       try {
         const { data } = await api.get(`/products/${slug}`);
         product = data;
         if (!active) return;
         setP(data);
+        writeProductDetailCache(slug, data);
         setActiveImage(0);
 
         const vm = parseVariantMatrix(data.variant_matrix);

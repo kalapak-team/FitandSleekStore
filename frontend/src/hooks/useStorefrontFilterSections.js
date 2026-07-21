@@ -6,42 +6,91 @@ import {
   sortSizes,
 } from "../lib/storefrontProductFilters.js";
 import { useHomepageSettings } from "../state/homepageSettings.jsx";
+import { useStorefrontBootstrap } from "../state/storefrontBootstrap.jsx";
+import { readPageCache, writePageCache } from "../lib/pageContentCache.js";
+
+const FILTER_OPTIONS_CACHE_KEY = "product-filter-options";
 
 export function useStorefrontFilterSections() {
   const { settings: homepageSettings } = useHomepageSettings();
-  const [categories, setCategories] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [attributeOptions, setAttributeOptions] = useState({
-    colors: [],
-    sizes: [],
-    price_min: null,
-    price_max: null,
-  });
+  const { categories: bootstrapCategories, brands: bootstrapBrands } = useStorefrontBootstrap();
+  const [categories, setCategories] = useState(() => bootstrapCategories || []);
+  const [brands, setBrands] = useState(() => bootstrapBrands || []);
+  const [attributeOptions, setAttributeOptions] = useState(() =>
+    readPageCache(FILTER_OPTIONS_CACHE_KEY) || {
+      colors: [],
+      sizes: [],
+      price_min: null,
+      price_max: null,
+    }
+  );
 
   useEffect(() => {
+    if (bootstrapCategories?.length) setCategories(bootstrapCategories);
+    if (bootstrapBrands?.length) setBrands(bootstrapBrands);
+  }, [bootstrapCategories, bootstrapBrands]);
+
+  useEffect(() => {
+    if (bootstrapCategories?.length && bootstrapBrands?.length) return;
+
+    let cancelled = false;
     (async () => {
       try {
-        const [catRes, brandRes, optRes] = await Promise.all([
-          api.get("/categories"),
-          api.get("/brands"),
-          api.get("/products/filter-options"),
-        ]);
-        const catList = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
-        const brandList = brandRes.data?.data || brandRes.data || [];
-        setCategories(Array.isArray(catList) ? catList : []);
-        setBrands(Array.isArray(brandList) ? brandList : []);
-        setAttributeOptions({
-          colors: optRes.data?.colors || [],
-          sizes: sortSizes(optRes.data?.sizes || []),
-          price_min: optRes.data?.price_min ?? null,
-          price_max: optRes.data?.price_max ?? null,
-        });
+        const tasks = [];
+        if (!bootstrapCategories?.length) tasks.push(api.get("/categories"));
+        if (!bootstrapBrands?.length) tasks.push(api.get("/brands"));
+        if (!tasks.length) return;
+
+        const results = await Promise.all(tasks);
+        if (cancelled) return;
+
+        let index = 0;
+        if (!bootstrapCategories?.length) {
+          const catRes = results[index++];
+          const catList = Array.isArray(catRes.data) ? catRes.data : catRes.data?.data || [];
+          setCategories(Array.isArray(catList) ? catList : []);
+        }
+        if (!bootstrapBrands?.length) {
+          const brandRes = results[index];
+          const brandList = brandRes.data?.data || brandRes.data || [];
+          setBrands(Array.isArray(brandList) ? brandList : []);
+        }
       } catch {
-        setCategories([]);
-        setBrands([]);
-        setAttributeOptions({ colors: [], sizes: [], price_min: null, price_max: null });
+        if (!cancelled) {
+          if (!bootstrapCategories?.length) setCategories([]);
+          if (!bootstrapBrands?.length) setBrands([]);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrapCategories, bootstrapBrands]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const { data } = await api.get("/products/filter-options");
+        if (cancelled) return;
+        const next = {
+          colors: data?.colors || [],
+          sizes: sortSizes(data?.sizes || []),
+          price_min: data?.price_min ?? null,
+          price_max: data?.price_max ?? null,
+        };
+        setAttributeOptions(next);
+        writePageCache(FILTER_OPTIONS_CACHE_KEY, next);
+      } catch {
+        /* keep cached / empty defaults */
+      }
+    }, 800);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const priceBounds = useMemo(() => {

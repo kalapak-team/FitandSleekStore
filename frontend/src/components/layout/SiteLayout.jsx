@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Topbar from "./Topbar.jsx";
 import Header from "./Header.jsx";
 import Footer from "./Footer.jsx";
@@ -10,6 +10,7 @@ import NotificationDrawer from "./NotificationDrawer.jsx";
 import ApiDegradedBanner from "./ApiDegradedBanner.jsx";
 import api from "../../lib/api.js";
 import { useAuth } from "../../state/auth.jsx";
+import { wakeBackend } from "../../lib/wakeBackend.js";
 
 export default function SiteLayout() {
   const [cartOpen, setCartOpen] = useState(false);
@@ -18,6 +19,11 @@ export default function SiteLayout() {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsUnread, setNotificationsUnread] = useState(0);
   const { user } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    wakeBackend();
+  }, [location.pathname, location.search]);
 
   /** Storefront must never keep dashboard dark-mode marker on `<html>` (Tailwind `dark:` scope). */
   useEffect(() => {

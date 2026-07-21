@@ -92,28 +92,37 @@ class ProductController extends Controller
      */
     public function filterOptions()
     {
-        $rows = Product::query()
-            ->where('is_active', true)
-            ->get(['colors', 'sizes', 'price']);
+        $payload = StorefrontCacheService::remember(
+            'products',
+            StorefrontCacheService::TTL_CATEGORIES,
+            'filter-options',
+            function () {
+                $rows = Product::query()
+                    ->where('is_active', true)
+                    ->get(['colors', 'sizes', 'price']);
 
-        $colors = [];
-        $sizes = [];
-        foreach ($rows as $row) {
-            $this->collectFilterTokens((array) ($row->colors ?? []), $colors);
-            $this->collectFilterTokens((array) ($row->sizes ?? []), $sizes);
-        }
+                $colors = [];
+                $sizes = [];
+                foreach ($rows as $row) {
+                    $this->collectFilterTokens((array) ($row->colors ?? []), $colors);
+                    $this->collectFilterTokens((array) ($row->sizes ?? []), $sizes);
+                }
 
-        $priceBounds = Product::query()
-            ->where('is_active', true)
-            ->selectRaw('MIN(price) as price_min, MAX(price) as price_max')
-            ->first();
+                $priceBounds = Product::query()
+                    ->where('is_active', true)
+                    ->selectRaw('MIN(price) as price_min, MAX(price) as price_max')
+                    ->first();
 
-        return response()->json([
-            'colors' => collect(array_keys($colors))->sort()->values()->all(),
-            'sizes' => $this->sortSizeList(array_keys($sizes)),
-            'price_min' => $priceBounds?->price_min !== null ? (float) $priceBounds->price_min : null,
-            'price_max' => $priceBounds?->price_max !== null ? (float) $priceBounds->price_max : null,
-        ]);
+                return [
+                    'colors' => collect(array_keys($colors))->sort()->values()->all(),
+                    'sizes' => $this->sortSizeList(array_keys($sizes)),
+                    'price_min' => $priceBounds?->price_min !== null ? (float) $priceBounds->price_min : null,
+                    'price_max' => $priceBounds?->price_max !== null ? (float) $priceBounds->price_max : null,
+                ];
+            }
+        );
+
+        return response()->json($payload);
     }
 
     /**
@@ -538,6 +547,33 @@ class ProductController extends Controller
 
     public function show(string $slug)
     {
+        $payload = StorefrontCacheService::remember(
+            'products',
+            StorefrontCacheService::TTL_PRODUCTS,
+            'detail:'.$slug,
+            fn () => $this->buildStorefrontProductPayload($slug)
+        );
+
+        $user = Auth::guard('sanctum')->user();
+        $sessionId = request()->header('X-Session-Id') ?: request()->query('session_id');
+        $productId = (int) ($payload['id'] ?? 0);
+        if ($productId > 0) {
+            $this->eventService->track(
+                'product_view',
+                $user?->id ? (int) $user->id : null,
+                $sessionId ? (string) $sessionId : null,
+                $productId
+            );
+        }
+
+        return response()->json($payload);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildStorefrontProductPayload(string $slug): array
+    {
         $product = Product::with(['category', 'brand', 'activeDiscount'])->where('slug', $slug)->firstOrFail();
         if ($product->activeDiscount) {
             $product->discount = $this->formatStorefrontDiscount($product);
@@ -549,15 +585,6 @@ class ProductController extends Controller
                 $product->stock = $matrixTotal;
             }
         }
-
-        $user = Auth::guard('sanctum')->user();
-        $sessionId = request()->header('X-Session-Id') ?: request()->query('session_id');
-        $this->eventService->track(
-            'product_view',
-            $user?->id ? (int) $user->id : null,
-            $sessionId ? (string) $sessionId : null,
-            (int) $product->id
-        );
 
         $payload = $this->enrichStorefrontPricing($product->toArray(), $product);
         if (ProductVariantInventory::usesMatrix($product)) {
@@ -586,7 +613,7 @@ class ProductController extends Controller
             );
         }
 
-        return response()->json($payload);
+        return $payload;
     }
 
     public function recommendations(Request $request)

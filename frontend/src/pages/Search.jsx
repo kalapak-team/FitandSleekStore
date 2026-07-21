@@ -22,6 +22,7 @@ import { useStorefrontBrowseDraft } from "../hooks/useStorefrontBrowseDraft.js";
 import { useProductListingFacets } from "../hooks/useProductListingFacets.js";
 import { Sparkles } from "lucide-react";
 import { useLanguage } from "../lib/i18n.jsx";
+import { readProductListCache, writeProductListCache } from "../lib/storefrontListCache.js";
 
 function useQuery() {
   const { search } = useLocation();
@@ -39,9 +40,34 @@ export default function Search() {
   const appliedFilters = useMemo(() => filtersFromSearchParams(qs), [qs]);
   const listFilters = useStorefrontFilterDrawer(appliedFilters);
   const browse = useStorefrontBrowseDraft(qs, appliedFilters, priceBounds);
-  const [loading, setLoading] = useState(qs.get("tab") !== "wishlist");
+  const [loading, setLoading] = useState(() => {
+    if (qs.get("tab") === "wishlist") return false;
+    const params = buildProductApiParams({
+      page: Number(qs.get("page") || 1),
+      q: qs.get("q") || "",
+      tab: qs.get("tab") || "",
+      parentCategory: qs.get("parent_category") || "",
+      categorySlug: qs.get("category") || "",
+      applied: filtersFromSearchParams(qs),
+      browse: browseFromSearchParams(qs),
+      imageColors: null,
+    });
+    return !readProductListCache(params);
+  });
   const [page, setPage] = useState(Number(qs.get("page") || 1));
-  const [data, setData] = useState({ data: [], meta: null });
+  const [data, setData] = useState(() => {
+    const params = buildProductApiParams({
+      page: Number(qs.get("page") || 1),
+      q: qs.get("q") || "",
+      tab: qs.get("tab") || "",
+      parentCategory: qs.get("parent_category") || "",
+      categorySlug: qs.get("category") || "",
+      applied: filtersFromSearchParams(qs),
+      browse: browseFromSearchParams(qs),
+      imageColors: null,
+    });
+    return readProductListCache(params) || { data: [], meta: null };
+  });
   const [showImageSearch, setShowImageSearch] = useState(false);
   const [imageSearchResults, setImageSearchResults] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
@@ -163,6 +189,8 @@ export default function Search() {
       return;
     }
 
+    let cancelled = false;
+
     (async () => {
       if (imageSearchResults?.items && Array.isArray(imageSearchResults.items)) {
         setData({ data: imageSearchResults.items, meta: null });
@@ -170,24 +198,40 @@ export default function Search() {
         return;
       }
 
-      setLoading(true);
-      try {
-        const params = buildProductApiParams({
-          page,
-          q,
-          tab,
-          parentCategory,
-          categorySlug,
-          applied: appliedFilters,
-          browse: browse.browseFromUrl,
-          imageColors: imageSearchResults?.colors || null,
-        });
-        const res = await api.get("/products", { params });
-        setData(res.data || { data: [] });
-      } finally {
+      const params = buildProductApiParams({
+        page,
+        q,
+        tab,
+        parentCategory,
+        categorySlug,
+        applied: appliedFilters,
+        browse: browse.browseFromUrl,
+        imageColors: imageSearchResults?.colors || null,
+      });
+
+      const cached = readProductListCache(params);
+      if (cached && !cancelled) {
+        setData(cached);
         setLoading(false);
+      } else if (!cancelled) {
+        setLoading(true);
+      }
+
+      try {
+        const res = await api.get("/products", { params });
+        if (!cancelled) {
+          const payload = res.data || { data: [] };
+          setData(payload);
+          writeProductListCache(params, payload);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [tab, q, parentCategory, categorySlug, page, imageSearchResults, appliedFilters, browse.browseFromUrl]);
 
   const parentCollectionLabel = useMemo(() => {
@@ -324,7 +368,7 @@ export default function Search() {
 
   const meta = data?.meta || null;
   const lastPage = data?.last_page || meta?.last_page || 1;
-  const totalItems = data?.total ?? meta?.total ?? products.length;
+  const totalItems = loading ? null : (data?.total ?? meta?.total ?? products.length);
 
   const showPlpToolbar = tab !== "wishlist" && !imageSearchResults;
 
@@ -341,7 +385,10 @@ export default function Search() {
     [q, tab, parentCategory, categorySlug, appliedFilters, browse.browseFromUrl],
   );
 
-  const { brandFacets, facetsLoading } = useProductListingFacets(facetsParams, showPlpToolbar);
+  const { brandFacets, facetsLoading } = useProductListingFacets(
+    facetsParams,
+    showPlpToolbar && !loading,
+  );
 
   const handleSortChange = (sort) => {
     change({ sort: sort === "recommend" ? "" : sort });

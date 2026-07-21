@@ -9,6 +9,7 @@ const TOKEN_KEY = import.meta.env.VITE_TOKEN_KEY || "fs_token";
 
 const api = axios.create({
   baseURL,
+  timeout: 25000,
   headers: {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -152,6 +153,21 @@ api.interceptors.response.use(
       (noResponse ||
         error.code === "ECONNABORTED" ||
         (typeof status === "number" && status >= 500 && status < 600));
+
+    if (
+      infrastructureDown &&
+      originalRequest &&
+      !originalRequest._infraRetry
+    ) {
+      originalRequest._infraRetry = true;
+      try {
+        return await api.request(originalRequest);
+      } catch (retryError) {
+        notifyApiInfrastructureDegraded();
+        return Promise.reject(retryError);
+      }
+    }
+
     if (infrastructureDown) {
       notifyApiInfrastructureDegraded();
     }
