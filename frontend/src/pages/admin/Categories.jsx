@@ -9,6 +9,9 @@ import { closeSwal, errorAlert, loadingAlert, toastSuccess } from "../../lib/swa
 import AdminModal, { AdminConfirmDialog } from "../../components/admin/AdminModal.jsx";
 import { AdminContentSkeleton, AdminDashboardLoader } from "@/components/admin/AdminLoading";
 import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+import { adminCacheKey, hydrateAdminListCache, writeAdminCache } from "../../lib/adminPageCache.js";
+
+const CATEGORIES_CACHE_KEY = adminCacheKey("categories", "v1");
 
 const CATEGORY_GENDER_OPTIONS = [
   { value: "", label: "All Genders" },
@@ -60,8 +63,9 @@ export default function AdminCategories() {
  fontWeight: 500,
  fontSize: "0.85rem",
  };
- const [rows, setRows] = useState([]);
- const [loading, setLoading] = useState(true);
+ const categoryCache = hydrateAdminListCache(CATEGORIES_CACHE_KEY);
+ const [rows, setRows] = useState(categoryCache.initialRows);
+ const [loading, setLoading] = useState(categoryCache.initialLoading);
  const [form, setForm] = useState({ name: "", gender: "", type: "", is_active: true });
  const [editing, setEditing] = useState(null);
  const [err, setErr] = useState("");
@@ -120,10 +124,18 @@ export default function AdminCategories() {
  setLoading(false);
  return;
  }
+ const cached = hydrateAdminListCache(CATEGORIES_CACHE_KEY);
+ if (cached.initialRows.length) {
+ setRows(cached.initialRows);
+ setLoading(false);
+ } else {
  setLoading(true);
+ }
  try {
  const { data } = await api.get("/admin/categories");
- setRows((data?.data || []).filter(isCatalogCategory));
+ const next = (data?.data || []).filter(isCatalogCategory);
+ setRows(next);
+ writeAdminCache(CATEGORIES_CACHE_KEY, next);
  } catch (e2) {
  setErr(extractErr(e2));
  } finally {
@@ -140,7 +152,8 @@ export default function AdminCategories() {
  setSelectedIds((prev) => prev.filter((id) => rows.some((c) => c.id === id)));
  }, [rows]);
 
- if (!permissionsReady || loading) return <AdminContentSkeleton lines={3} imageHeight={220} />;
+ if (!permissionsReady) return <AdminContentSkeleton lines={3} imageHeight={220} />;
+ if (loading && rows.length === 0) return <AdminContentSkeleton lines={3} imageHeight={220} />;
 
  if (!canViewCategories) {
  return <Navigate to={getFirstAccessibleAdminPath(user)} replace />;

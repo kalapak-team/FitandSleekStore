@@ -36,6 +36,7 @@ import {
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
 import RevenueDashboard from "../../components/admin/RevenueDashboard.jsx";
 import StockDashboard from "../../components/admin/StockDashboard.jsx";
 import PlanDashboard from "../../components/admin/PlanDashboard.jsx";
@@ -354,7 +355,30 @@ export default function Reports() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+
+    const cacheKey = adminCacheKey("reports", period, chartFrom, chartTo);
+    const cached = readAdminCache(cacheKey);
+    if (cached) {
+      setDashboard(cached.dashboard ?? null);
+      setSales(cached.sales ?? []);
+      setTopProducts(cached.topProducts ?? []);
+      setProductAnalytics(cached.productAnalytics ?? { by_category: [], by_country: [], total_products: 0 });
+      setCategorySales(cached.categorySales ?? {
+        revenue_by_category: [],
+        top_categories: [],
+        total_revenue: 0,
+        total_units: 0,
+      });
+      setOrderAnalytics(cached.orderAnalytics ?? {
+        total_orders: 0,
+        by_status: [],
+        by_category: [],
+      });
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     try {
       const periodParams = buildSalesParams(period, chartFrom, chartTo);
 
@@ -372,30 +396,45 @@ export default function Reports() {
       ]);
 
       const dashData = dashRes.data;
-      setDashboard({
+      const nextDashboard = {
         revenue: dashData.revenue || { total: 0, month: 0, today: 0 },
         orders: dashData.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
         products: dashData.products || { total: 0, active: 0, low_stock: 0 },
         customers: dashData.customers || { total: 0, new_this_month: 0 },
-      });
+      };
 
-      setSales(salesRes.data?.sales || salesRes.data?.data || []);
-      setTopProducts(productsRes.data?.data || []);
-      setProductAnalytics({
+      const nextSales = salesRes.data?.sales || salesRes.data?.data || [];
+      const nextTopProducts = productsRes.data?.data || [];
+      const nextProductAnalytics = {
         by_category: productAnalyticsRes.data?.by_category || [],
         by_country: productAnalyticsRes.data?.by_country || [],
         total_products: productAnalyticsRes.data?.total_products || 0,
-      });
-      setCategorySales({
+      };
+      const nextCategorySales = {
         revenue_by_category: categorySalesRes.data?.revenue_by_category || [],
         top_categories: categorySalesRes.data?.top_categories || [],
         total_revenue: categorySalesRes.data?.total_revenue || 0,
         total_units: categorySalesRes.data?.total_units || 0,
-      });
-      setOrderAnalytics({
+      };
+      const nextOrderAnalytics = {
         total_orders: orderAnalyticsRes.data?.total_orders || 0,
         by_status: orderAnalyticsRes.data?.by_status || [],
         by_category: orderAnalyticsRes.data?.by_category || [],
+      };
+
+      setDashboard(nextDashboard);
+      setSales(nextSales);
+      setTopProducts(nextTopProducts);
+      setProductAnalytics(nextProductAnalytics);
+      setCategorySales(nextCategorySales);
+      setOrderAnalytics(nextOrderAnalytics);
+      writeAdminCache(cacheKey, {
+        dashboard: nextDashboard,
+        sales: nextSales,
+        topProducts: nextTopProducts,
+        productAnalytics: nextProductAnalytics,
+        categorySales: nextCategorySales,
+        orderAnalytics: nextOrderAnalytics,
       });
     } catch (e) {
       console.error("Failed to load reports", e);

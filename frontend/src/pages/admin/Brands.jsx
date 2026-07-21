@@ -8,6 +8,9 @@ import { useTheme } from "../../state/theme.jsx";
 import { closeSwal, errorAlert, loadingAlert, toastSuccess, warningConfirm } from "../../lib/swal";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import AdminModal from "../../components/admin/AdminModal.jsx";
+import { adminCacheKey, hydrateAdminListCache, writeAdminCache } from "../../lib/adminPageCache.js";
+
+const BRANDS_CACHE_KEY = adminCacheKey("brands", "v1");
 
 const emptyForm = {
   name: "",
@@ -64,8 +67,9 @@ export default function AdminBrands() {
     fontWeight: 500,
     fontSize: "0.85rem",
   };
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const brandCache = hydrateAdminListCache(BRANDS_CACHE_KEY);
+  const [rows, setRows] = useState(brandCache.initialRows);
+  const [loading, setLoading] = useState(brandCache.initialLoading);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(null);
   const [err, setErr] = useState("");
@@ -104,11 +108,19 @@ export default function AdminBrands() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cached = hydrateAdminListCache(BRANDS_CACHE_KEY);
+    if (cached.initialRows.length) {
+      setRows(cached.initialRows);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setErr("");
     try {
       const { data } = await api.get("/admin/brands");
-      setRows(data?.data || []);
+      const next = data?.data || [];
+      setRows(next);
+      writeAdminCache(BRANDS_CACHE_KEY, next);
     } catch (e) {
       setErr(e?.response?.data?.message || "Failed to load brands");
     } finally {
@@ -311,7 +323,8 @@ export default function AdminBrands() {
     setOrderedRows(applyFilter(fullSortedRows));
   }, [fullSortedRows, search]);
 
-  if (!permissionsReady || loading) return <AdminContentSkeleton lines={3} imageHeight={200} className="mt-4" />;
+  if (!permissionsReady) return <AdminContentSkeleton lines={3} imageHeight={200} className="mt-4" />;
+  if (loading && rows.length === 0) return <AdminContentSkeleton lines={3} imageHeight={200} className="mt-4" />;
 
   if (!canViewBrands) {
     return <Navigate to={getFirstAccessibleAdminPath(user)} replace />;

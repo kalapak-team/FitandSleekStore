@@ -1,6 +1,7 @@
 import { lazy } from "react";
 
-export const AdminHome = lazy(() => import("./AdminHome.jsx"));
+/** Default admin landing — eager so dashboard paints without an extra chunk round-trip. */
+export { default as AdminHome } from "./AdminHome.jsx";
 export const Reports = lazy(() => import("./Reports.jsx"));
 export const AdminProducts = lazy(() => import("./Products.jsx"));
 export const AdminCategories = lazy(() => import("./Categories.jsx"));

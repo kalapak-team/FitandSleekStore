@@ -27,6 +27,19 @@ import {
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
+
+const DEFAULT_STATS = {
+  revenue: { total: 0, month: 0, today: 0 },
+  ordersHead: { total: 0, pending: 0, processing: 0, completed: 0 },
+  ordersByStatus: [],
+  products: { total: 0, active: 0, low_stock: 0 },
+  customers: { total: 0, new_this_month: 0 },
+};
+
+function readDashboardSnapshot(periodDays) {
+  return readAdminCache(adminCacheKey("dashboard", periodDays));
+}
 
 const pad = (n) => String(n).padStart(2, "0");
 const fmtYmd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -264,6 +277,8 @@ export default function AdminDashboard() {
   const { t } = useLanguage();
   const gid = useId().replace(/:/g, "");
 
+  const initialSnapshot = readDashboardSnapshot(30);
+
   const [periodDays, setPeriodDays] = useState(30);
   const [numberFormat] = useAdminUiPreference("dashboard.numberFormat", ADMIN_NUMBER_FORMAT.COMPACT);
 
@@ -271,16 +286,10 @@ export default function AdminDashboard() {
   const [revenueSpan, setRevenueSpan] = useAdminUiPreference("charts.dashboard.revenueSpan", 2);
   const [statusSpan, setStatusSpan] = useAdminUiPreference("charts.dashboard.statusSpan", 1);
 
-  const [stats, setStats] = useState({
-    revenue: { total: 0, month: 0, today: 0 },
-    ordersHead: { total: 0, pending: 0, processing: 0, completed: 0 },
-    ordersByStatus: [],
-    products: { total: 0, active: 0, low_stock: 0 },
-    customers: { total: 0, new_this_month: 0 },
-  });
-  const [salesSeriesRaw, setSalesSeriesRaw] = useState([]);
-  const [recentOrders, setRecentOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(initialSnapshot?.stats ?? DEFAULT_STATS);
+  const [salesSeriesRaw, setSalesSeriesRaw] = useState(initialSnapshot?.salesSeriesRaw ?? []);
+  const [recentOrders, setRecentOrders] = useState(initialSnapshot?.recentOrders ?? []);
+  const [loading, setLoading] = useState(() => !initialSnapshot);
   /** After first successful load, period changes refetch in-place (no full-page skeleton flash). */
   const hasLoadedOnceRef = useRef(false);
   /** First paint only: Recharts enter animation. Later updates swap data without re-animating from zero. */
@@ -295,8 +304,17 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    const skipFullScreenLoad = hasLoadedOnceRef.current;
-    if (!skipFullScreenLoad) setLoading(true);
+    const cached = readDashboardSnapshot(periodDays);
+    const skipFullScreenLoad = hasLoadedOnceRef.current || Boolean(cached);
+
+    if (cached) {
+      setStats(cached.stats ?? DEFAULT_STATS);
+      setSalesSeriesRaw(cached.salesSeriesRaw ?? []);
+      setRecentOrders(cached.recentOrders ?? []);
+      setLoading(false);
+    } else if (!skipFullScreenLoad) {
+      setLoading(true);
+    }
 
     if (!permissionsReady) {
       return () => {
@@ -317,30 +335,49 @@ export default function AdminDashboard() {
 
     (async () => {
       try {
-        const [dashRes, salesRes] = await Promise.all([
+        const requests = [
           api.get("/admin/reports/dashboard", { params: { period: periodDays } }),
           api.get("/admin/reports/sales", { params: { period: periodDays } }),
-        ]);
+        ];
+        if (canViewOrders) {
+          requests.push(api.get("/admin/orders", { params: { per_page: 8, compact: 1 } }));
+        }
+
+        const results = await Promise.all(requests);
+        const dashRes = results[0];
+        const salesRes = results[1];
+        const ordersRes = canViewOrders ? results[2] : null;
+
         const d = dashRes.data || {};
         const ordersByStatus = Array.isArray(d.orders_by_status) ? d.orders_by_status : [];
 
         const salesPayload = salesRes.data?.sales || salesRes.data?.data?.rows || salesRes.data?.data || [];
         const salesArr = Array.isArray(salesPayload) ? salesPayload : [];
+        const nextRecentOrders = ordersRes?.data?.data?.slice(0, 8) || [];
+
+        const nextStats = {
+          revenue: d.revenue || { total: 0, month: 0, today: 0 },
+          ordersHead: d.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
+          ordersByStatus,
+          products: d.products || { total: 0, active: 0, low_stock: 0 },
+          customers: d.customers || { total: 0, new_this_month: 0 },
+        };
 
         if (!cancelled) {
-          setStats({
-            revenue: d.revenue || { total: 0, month: 0, today: 0 },
-            ordersHead: d.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
-            ordersByStatus,
-            products: d.products || { total: 0, active: 0, low_stock: 0 },
-            customers: d.customers || { total: 0, new_this_month: 0 },
-          });
+          setStats(nextStats);
           setSalesSeriesRaw(salesArr);
+          setRecentOrders(nextRecentOrders);
+          writeAdminCache(adminCacheKey("dashboard", periodDays), {
+            stats: nextStats,
+            salesSeriesRaw: salesArr,
+            recentOrders: nextRecentOrders,
+          });
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && !cached) {
           setSalesSeriesRaw([]);
           setStats((prev) => ({ ...prev, ordersByStatus: [] }));
+          setRecentOrders([]);
         }
       } finally {
         if (!cancelled) {
@@ -348,21 +385,11 @@ export default function AdminDashboard() {
           hasLoadedOnceRef.current = true;
         }
       }
-
-      if (cancelled) return;
-      try {
-        const ordersRes = await api.get("/admin/orders", { params: { per_page: 8, compact: 1 } });
-        if (!cancelled) {
-          setRecentOrders(ordersRes.data?.data?.slice(0, 8) || []);
-        }
-      } catch {
-        if (!cancelled) setRecentOrders([]);
-      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [periodDays, permissionsReady, canViewReports]);
+  }, [periodDays, permissionsReady, canViewReports, canViewOrders]);
 
   useEffect(() => {
     if (loading) return undefined;
@@ -399,7 +426,9 @@ export default function AdminDashboard() {
     return <Navigate to={getFirstAccessibleAdminPath(user)} replace />;
   }
 
-  if (loading) return <AdminContentSkeleton lines={3} imageHeight={220} />;
+  if (loading && !hasLoadedOnceRef.current && !readDashboardSnapshot(periodDays)) {
+    return <AdminContentSkeleton lines={3} imageHeight={220} />;
+  }
 
   const pctActive =
     stats.products.total > 0 ? Math.round((stats.products.active / stats.products.total) * 100) : null;

@@ -21,6 +21,7 @@ import { listingStatusLabel, lotTierLabel } from "../../lib/inventoryLotHelpers.
 import OrderShipmentPanel from "../../components/admin/OrderShipmentPanel.jsx";
 import OrderCodCollectionPanel from "../../components/admin/OrderCodCollectionPanel.jsx";
 import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
+import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
 
 const ORDER_STATUS_OPTIONS = [
   { value: "pending_payment", label: "Awaiting payment" },
@@ -241,11 +242,12 @@ export default function AdminOrders() {
  const canEditOrders = can("orders", "edit");
  const canEditShipments = can("shipments", "edit") || can("shipments", "create");
  const canDeleteOrders = can("orders", "delete");
- const [rows, setRows] = useState([]);
+ const defaultOrdersCache = readAdminCache(adminCacheKey("orders", JSON.stringify({ page: 1, refresh: 0 })));
+ const [rows, setRows] = useState(() => defaultOrdersCache?.rows ?? []);
  const [currentPage, setCurrentPage] = useState(1);
- const [totalPages, setTotalPages] = useState(1);
- const [orderTotal, setOrderTotal] = useState(0);
- const [loading, setLoading] = useState(true);
+ const [totalPages, setTotalPages] = useState(() => defaultOrdersCache?.totalPages ?? 1);
+ const [orderTotal, setOrderTotal] = useState(() => defaultOrdersCache?.orderTotal ?? 0);
+ const [loading, setLoading] = useState(() => !defaultOrdersCache?.rows?.length);
  const [selected, setSelected] = useState(null);
  const [status, setStatus] = useState("");
  const [err, setErr] = useState("");
@@ -320,7 +322,17 @@ export default function AdminOrders() {
  fetchAbortRef.current = ac;
 
  const parsed = JSON.parse(ordersQueryKey);
- if (!hasLoadedOnceRef.current) setLoading(true);
+ const cacheKey = adminCacheKey("orders", ordersQueryKey);
+ const cached = readAdminCache(cacheKey);
+ if (cached?.rows) {
+  setRows(cached.rows);
+  setTotalPages(cached.totalPages ?? 1);
+  setOrderTotal(cached.orderTotal ?? cached.rows.length);
+  if (cached.summary) setSummary(cached.summary);
+  setLoading(false);
+ } else if (!hasLoadedOnceRef.current) {
+  setLoading(true);
+ }
 
  (async () => {
  try {
@@ -335,16 +347,22 @@ export default function AdminOrders() {
  if (ac.signal.aborted) return;
 
  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
- setRows(list);
- setTotalPages(Math.max(1, Number(data?.last_page) || 1));
- setOrderTotal(Number(data?.total) || list.length);
- setSummary(
+ const nextSummary =
  data?.summary ?? {
  order_count: Number(data?.total) || list.length,
  total_items: list.reduce((acc, o) => acc + (Number(o.items_count) || 0), 0),
  total_revenue: list.reduce((acc, o) => acc + (Number(o.total) || 0), 0),
- },
- );
+ };
+ setRows(list);
+ setTotalPages(Math.max(1, Number(data?.last_page) || 1));
+ setOrderTotal(Number(data?.total) || list.length);
+ setSummary(nextSummary);
+ writeAdminCache(cacheKey, {
+ rows: list,
+ totalPages: Math.max(1, Number(data?.last_page) || 1),
+ orderTotal: Number(data?.total) || list.length,
+ summary: nextSummary,
+ });
  setErr("");
  } catch (error) {
  if (ac.signal.aborted || error?.code === "ERR_CANCELED") return;

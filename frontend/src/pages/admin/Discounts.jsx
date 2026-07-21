@@ -6,7 +6,10 @@ import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 import { useTheme } from "../../state/theme.jsx";
 import AdminModal, { AdminConfirmDialog } from "../../components/admin/AdminModal.jsx";
+import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
+
+const DISCOUNTS_CACHE_KEY = adminCacheKey("discounts", "v1");
 import { resolveImageUrl } from "../../lib/images";
 import {
   buildAllColumnsVisibility,
@@ -59,9 +62,10 @@ export default function AdminDiscounts() {
     justifyContent: "center",
     transition: "all 150ms ease",
   };
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [products, setProducts] = useState([]);
+  const discountsCache = readAdminCache(DISCOUNTS_CACHE_KEY);
+  const [rows, setRows] = useState(() => discountsCache?.rows ?? []);
+  const [loading, setLoading] = useState(() => !discountsCache?.rows?.length);
+  const [products, setProducts] = useState(() => discountsCache?.products ?? []);
   const [form, setForm] = useState({
     product_id: "",
     discount_type: "percentage",
@@ -136,12 +140,22 @@ export default function AdminDiscounts() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const cached = readAdminCache(DISCOUNTS_CACHE_KEY);
+    if (cached?.rows?.length) {
+      setRows(cached.rows);
+      setProducts(cached.products ?? []);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
       const { data: discountsData } = await api.get("/admin/discounts");
       const { data: productsData } = await api.get("/admin/products", { params: { per_page: 500 } });
-      setRows(discountsData?.data || []);
-      setProducts(productsData?.data || []);
+      const nextRows = discountsData?.data || [];
+      const nextProducts = productsData?.data || [];
+      setRows(nextRows);
+      setProducts(nextProducts);
+      writeAdminCache(DISCOUNTS_CACHE_KEY, { rows: nextRows, products: nextProducts });
     } catch (e) {
       setErr(extractErr(e));
     } finally {
@@ -355,7 +369,8 @@ export default function AdminDiscounts() {
     if (page > lastPage) setPage(lastPage);
   }, [page, lastPage]);
 
-  if (!permissionsReady || loading) return <AdminContentSkeleton lines={3} imageHeight={220} />;
+  if (!permissionsReady) return <AdminContentSkeleton lines={3} imageHeight={220} />;
+  if (loading && rows.length === 0) return <AdminContentSkeleton lines={3} imageHeight={220} />;
 
   if (!canViewDiscounts) {
     return <Navigate to={getFirstAccessibleAdminPath(user)} replace />;

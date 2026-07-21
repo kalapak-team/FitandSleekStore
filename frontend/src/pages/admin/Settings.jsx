@@ -7,6 +7,9 @@ import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import AdminSaveToast, { AdminFormErrorBanner, flashAdminMessage } from "../../components/admin/AdminFormToast.jsx";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
+import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
+
+const SETTINGS_CACHE_KEY = adminCacheKey("settings", "v1");
 
 const THEME_MODE_OPTIONS = [
   { value: "light", label: "Light Mode" },
@@ -24,15 +27,16 @@ export default function Settings() {
  const { user, can, permissionsReady } = useAdminPermissions();
  const canViewGeneralSettings = can("general_settings", "view");
  const canEditGeneralSettings = can("general_settings", "edit");
- const [settings, setSettings] = useState({});
- const [loading, setLoading] = useState(true);
+ const settingsCache = readAdminCache(SETTINGS_CACHE_KEY);
+ const [settings, setSettings] = useState(() => settingsCache?.settings ?? {});
+ const [loading, setLoading] = useState(() => !settingsCache?.form);
  const [saving, setSaving] = useState(false);
  const [success, setSuccess] = useState("");
  const [error, setError] = useState("");
  const { mode, primaryColor, setMode, setPrimaryColor, saveTheme, normalizeHexColor } = useTheme();
 
  // Form state
- const [form, setForm] = useState({
+ const [form, setForm] = useState(() => settingsCache?.form ?? {
  site_name: "Fit&Sleek",
  site_description: "",
  contact_email: "",
@@ -61,7 +65,14 @@ export default function Settings() {
  setLoading(false);
  return;
  }
+ const cached = readAdminCache(SETTINGS_CACHE_KEY);
+ if (cached?.form) {
+ setForm(cached.form);
+ setSettings(cached.settings ?? {});
+ setLoading(false);
+ } else {
  setLoading(true);
+ }
  try {
  const res = await api.get("/admin/settings");
  const grouped = res.data || {};
@@ -81,6 +92,7 @@ export default function Settings() {
 
  setForm(flatForm);
  setSettings(grouped);
+ writeAdminCache(SETTINGS_CACHE_KEY, { form: flatForm, settings: grouped });
  } catch (e) {
  console.error("Failed to load settings", e);
  } finally {
@@ -142,7 +154,10 @@ export default function Settings() {
  handleChange("admin_primary_color", colorValue);
  };
 
- if (!permissionsReady || loading) return <AdminContentSkeleton lines={3} imageHeight={180} />;
+ if (!permissionsReady) return <AdminContentSkeleton lines={3} imageHeight={180} />;
+ if (loading && !settingsCache?.form && Object.keys(settings).length === 0) {
+ return <AdminContentSkeleton lines={3} imageHeight={180} />;
+ }
 
  if (!canViewGeneralSettings) {
  return <Navigate to={getFirstAccessibleAdminPath(user)} replace />;

@@ -8,7 +8,9 @@ import AdminTopbar from "../../components/admin/AdminTopbar";
 import Logo from "../../components/Logo.jsx";
 import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import api from "../../lib/api";
-import { fetchAdminNavBadges } from "../../lib/adminNavBadges.js";
+import { fetchAdminNavBadges, readCachedAdminNavBadges } from "../../lib/adminNavBadges.js";
+import { prefetchAdminChunks } from "../../lib/prefetchAdminChunks.js";
+import { wakeBackend } from "../../lib/wakeBackend.js";
 import { resolveImageUrl } from "../../lib/images";
 import { errorAlert, toastSuccess } from "../../lib/swal";
 import { useTheme } from "../../state/theme.jsx";
@@ -279,7 +281,7 @@ export default function AdminLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState(closedAccordionState);
   const [railGroupFlyout, setRailGroupFlyout] = useState(null);
-  const [navBadges, setNavBadges] = useState({ orders: 0, messages: 0 });
+  const [navBadges, setNavBadges] = useState(() => readCachedAdminNavBadges() || { orders: 0, messages: 0 });
   const [logoUploading, setLogoUploading] = useState(false);
   const logoFileInputRef = useRef(null);
   const logoSrc = resolveBundledLogoUrl(settings?.header?.logo_url);
@@ -625,11 +627,16 @@ export default function AdminLayout() {
   }, [accordionNavGroups, location.pathname]);
 
   useEffect(() => {
+    wakeBackend();
+    prefetchAdminChunks();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     let intervalId = 0;
 
     const loadBadges = async () => {
-      const badges = await fetchAdminNavBadges();
+      const badges = await fetchAdminNavBadges({ force: true });
       if (cancelled || !badges) return;
       setNavBadges(badges);
     };
