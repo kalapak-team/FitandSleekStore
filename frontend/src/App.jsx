@@ -63,7 +63,8 @@ import {
   UserProfileDetail,
 } from "./pages/admin/adminLazy.js";
 import { CatalogAvailabilityProvider } from "./state/catalogAvailability.jsx";
-import { HomepageSettingsProvider, useHomepageSettings } from "./state/homepageSettings.jsx";
+import { HomepageSettingsProvider, useHomepageSettings, HomepageSettingsSync } from "./state/homepageSettings.jsx";
+import { StorefrontBootstrapProvider, useStorefrontBootstrap } from "./state/storefrontBootstrap.jsx";
 import { useLanguage } from "./lib/i18n.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
@@ -225,7 +226,9 @@ function ShopToSearchRedirect() {
 export default function App() {
   return (
     <CatalogAvailabilityProvider>
+      <StorefrontBootstrapProvider>
       <HomepageSettingsProvider>
+        <HomepageSettingsBridge />
         <FontSettingsSync />
         <AdminHtmlThemeSync />
         <StorefrontHtmlThemeSync />
@@ -359,8 +362,14 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HomepageSettingsProvider>
+      </StorefrontBootstrapProvider>
     </CatalogAvailabilityProvider>
   );
+}
+
+function HomepageSettingsBridge() {
+  const { settings } = useStorefrontBootstrap();
+  return <HomepageSettingsSync settings={settings} />;
 }
 
 function FontSettingsSync() {

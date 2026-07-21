@@ -47,7 +47,8 @@ export function AuthProvider({ children }) {
   });
   const [booted, setBooted] = useState(() => {
     if (typeof window === "undefined") return false;
-    return !localStorage.getItem(TOKEN_KEY);
+    if (!localStorage.getItem(TOKEN_KEY)) return true;
+    return Boolean(readCachedUser());
   });
   const [token, setToken] = useState(() => {
     if (typeof window === "undefined") return null;

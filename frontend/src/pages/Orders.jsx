@@ -138,7 +138,15 @@ export default function Orders() {
 
       <div className="mt-6 grid gap-4">
         {loading ? (
-          <div className="fs-card p-8 text-sm text-zinc-600">{t('loading')}</div>
+          <div className="grid gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="fs-card p-5 animate-pulse space-y-3">
+                <div className="h-4 w-40 bg-zinc-100 rounded" />
+                <div className="h-4 w-24 bg-zinc-100 rounded" />
+                <div className="h-12 w-full bg-zinc-100 rounded-xl" />
+              </div>
+            ))}
+          </div>
         ) : rows.length === 0 ? (
           <div className="fs-card p-10 text-center text-sm text-zinc-600">{t('noOrders')}</div>
         ) : (

@@ -5,11 +5,12 @@ import ProductCard from "../components/shop/ProductCard.jsx";
 import DiscountsPageBanner from "../components/shop/DiscountsPageBanner.jsx";
 import DiscountsToolbarMenu from "../components/shop/DiscountsToolbarMenu.jsx";
 import { useLanguage } from "../lib/i18n.jsx";
+import { useStorefrontBootstrap } from "../state/storefrontBootstrap.jsx";
 
 export default function Discounts() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { t } = useLanguage();
+  const { categories: bootstrapCategories } = useStorefrontBootstrap();
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -34,7 +35,16 @@ export default function Discounts() {
     setDraftMax(maxPrice);
   }, [searchQuery, minPrice, maxPrice]);
 
+  const { t } = useLanguage();
+
   useEffect(() => {
+    if (bootstrapCategories?.length) {
+      setCategories(bootstrapCategories);
+    }
+  }, [bootstrapCategories]);
+
+  useEffect(() => {
+    if (bootstrapCategories?.length) return;
     const fetchCategories = async () => {
       try {
         const res = await api.get("/categories");
@@ -46,7 +56,7 @@ export default function Discounts() {
       }
     };
     fetchCategories();
-  }, []);
+  }, [bootstrapCategories]);
 
   useEffect(() => {
     const fetchProducts = async () => {

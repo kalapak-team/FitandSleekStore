@@ -9,6 +9,7 @@ import {
   orderContactInfoCards,
   orderContactSubjects,
 } from "../lib/contactPageContent.js";
+import { fetchWithPageCache, readPageCache } from "../lib/pageContentCache.js";
 
 function InfoCardIcon({ cardKey }) {
   if (cardKey === "email") {
@@ -49,8 +50,7 @@ function cardIconClass(cardKey) {
 
 export default function ContactPage() {
   const { t, language } = useLanguage();
-  const [pageContent, setPageContent] = useState(null);
-  const [contentLoading, setContentLoading] = useState(true);
+  const [pageContent, setPageContent] = useState(() => readPageCache("contact"));
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -64,18 +64,14 @@ export default function ContactPage() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get("/contact-page");
-        if (!cancelled && data?.contact_page) {
-          setPageContent(normalizeContactPagePayload(data.contact_page));
-        }
-      } catch {
-        if (!cancelled) setPageContent(null);
-      } finally {
-        if (!cancelled) setContentLoading(false);
-      }
-    })();
+    fetchWithPageCache("contact", async () => {
+      const { data } = await api.get("/contact-page");
+      return data?.contact_page ? normalizeContactPagePayload(data.contact_page) : null;
+    })
+      .then((payload) => {
+        if (!cancelled && payload) setPageContent(payload);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -154,9 +150,6 @@ export default function ContactPage() {
         )}
 
         <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl p-8">
-          {contentLoading ? (
-            <div className="py-10 text-center text-slate-500 dark:text-slate-400">{t('loading')}</div>
-          ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
@@ -244,7 +237,6 @@ export default function ContactPage() {
                 )}
               </button>
             </form>
-          )}
         </div>
 
         <div className="mt-12 grid md:grid-cols-3 gap-6">

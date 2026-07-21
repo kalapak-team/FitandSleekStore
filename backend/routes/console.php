@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -12,3 +13,12 @@ Artisan::command('inspire', function () {
 Schedule::command('qdrant:index-products --only-missing --limit=10')
     ->everyTenMinutes()
     ->withoutOverlapping(25);
+
+Schedule::call(function () {
+    $base = rtrim((string) config('app.url'), '/');
+    if ($base === '') {
+        return;
+    }
+
+    Http::timeout(15)->get("{$base}/api/health");
+})->everyFiveMinutes()->name('storefront-keep-warm');

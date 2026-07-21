@@ -9,8 +9,10 @@ import { WishlistProvider } from "./state/wishlist.jsx";
 import { LanguageProvider } from "./lib/i18n.jsx";
 import { ThemeProvider } from "./state/theme.jsx";
 import { ensureDocumentBrandAssets } from "./lib/siteLogo.js";
+import { wakeBackend } from "./lib/wakeBackend.js";
 
 ensureDocumentBrandAssets();
+wakeBackend();
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

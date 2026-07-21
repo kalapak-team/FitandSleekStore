@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Storefront\CategoryController;
 use App\Http\Controllers\Api\Storefront\CollectionController;
 use App\Http\Controllers\Api\Storefront\ProductController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Concurrency;
 
 class HomepageBootstrapService
 {
@@ -35,32 +36,56 @@ class HomepageBootstrapService
         $categoryList = is_array($categories) ? $categories : [];
 
         $sectionsConfig = $this->enabledSections($settings);
-        $sectionProducts = [];
+        $sectionProducts = $this->loadAllSectionProducts($sectionsConfig, $categoryList);
 
+        [$heroBanners, $promoBanners, $collections, $brands, $recommendedPayload] = Concurrency::run([
+            fn () => $this->bannerPayload('hero'),
+            fn () => $this->bannerPayload('promo'),
+            fn () => $this->decodeJson(app(CollectionController::class)->index())['data'] ?? [],
+            fn () => $this->decodeJson(app(BrandController::class)->index())['data'] ?? [],
+            fn () => $this->recommendations->recommendations(null, null, 8)->toArray(),
+        ]);
+
+        return [
+            'settings' => $settings,
+            'categories' => $categoryList,
+            'hero_banners' => $heroBanners,
+            'promo_banners' => $promoBanners,
+            'collections' => $collections,
+            'brands' => $brands,
+            'sections' => $sectionProducts,
+            'recommended' => $recommendedPayload['data'] ?? [],
+            'segment' => $segment,
+        ];
+    }
+
+    /**
+     * @param  list<array{key: string, title: string, enabled: bool, order: int}>  $sectionsConfig
+     * @param  list<array<string, mixed>>  $categoryList
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function loadAllSectionProducts(array $sectionsConfig, array $categoryList): array
+    {
+        if ($sectionsConfig === []) {
+            return [];
+        }
+
+        $tasks = [];
         foreach ($sectionsConfig as $section) {
-            $key = $section['key'];
-            $sectionProducts[$key] = $this->loadSectionProducts(
-                $key,
+            $tasks[] = fn () => $this->loadSectionProducts(
+                $section['key'],
                 $section['title'],
                 $categoryList
             );
         }
 
-        $recommended = $this->recommendations
-            ->recommendations(null, null, 8)
-            ->toArray();
+        $results = Concurrency::run($tasks);
+        $sectionProducts = [];
+        foreach ($sectionsConfig as $index => $section) {
+            $sectionProducts[$section['key']] = $results[$index] ?? [];
+        }
 
-        return [
-            'settings' => $settings,
-            'categories' => $categoryList,
-            'hero_banners' => $this->bannerPayload('hero'),
-            'promo_banners' => $this->bannerPayload('promo'),
-            'collections' => $this->decodeJson(app(CollectionController::class)->index())['data'] ?? [],
-            'brands' => $this->decodeJson(app(BrandController::class)->index())['data'] ?? [],
-            'sections' => $sectionProducts,
-            'recommended' => $recommended['data'] ?? [],
-            'segment' => $segment,
-        ];
+        return $sectionProducts;
     }
 
     /**

@@ -27,9 +27,20 @@ function writeCachedSettings(data) {
 
 export { writeCachedSettings };
 
+/** Sync homepage settings from bootstrap without a separate round-trip. */
+export function HomepageSettingsSync({ settings }) {
+  const { setSettings } = useHomepageSettings();
+  useEffect(() => {
+    if (!settings) return;
+    setSettings(settings);
+    writeCachedSettings(settings);
+  }, [settings, setSettings]);
+  return null;
+}
+
 export function HomepageSettingsProvider({ children }) {
   const [settings, setSettings] = useState(() => readCachedSettings());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !readCachedSettings());
 
   const reloadSettings = useCallback(async () => {
     try {
@@ -42,17 +53,18 @@ export function HomepageSettingsProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        await reloadSettings();
-      } finally {
-        setLoading(false);
-      }
-    })();
+    if (readCachedSettings()) {
+      reloadSettings().finally(() => setLoading(false));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      reloadSettings().finally(() => setLoading(false));
+    }, 1500);
+    return () => window.clearTimeout(timer);
   }, [reloadSettings]);
 
   return (
-    <HomepageSettingsContext.Provider value={{ settings, loading, reloadSettings }}>
+    <HomepageSettingsContext.Provider value={{ settings, loading, reloadSettings, setSettings }}>
       {children}
     </HomepageSettingsContext.Provider>
   );

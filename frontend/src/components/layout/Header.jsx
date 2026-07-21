@@ -5,7 +5,6 @@ import { useCart } from "../../state/cart.jsx";
 import { useWishlist } from "../../state/wishlist.jsx";
 import { useLanguage } from "../../lib/i18n.jsx";
 import { useHomepageSettings } from "../../state/homepageSettings.jsx";
-import api from "../../lib/api.js";
 import { resolveImageUrl } from "../../lib/images.js";
 import { Camera, X, Bell, Menu, Search, User, Heart, ShoppingBag, Moon, Sun } from "lucide-react";
 import { useTheme } from "../../state/theme.jsx";
@@ -19,6 +18,7 @@ import { storefrontSearchUrl as navSearch } from "../../lib/storefrontNavLinks.j
 import { mergeTopNavDropdowns } from "../../lib/defaultTopNavDropdowns.js";
 import { mergeHeaderSettings } from "../../lib/defaultHeaderSettings.js";
 import { resolveHeaderChromeStyle } from "../../lib/storefrontChrome.js";
+import { useStorefrontBootstrap } from "../../state/storefrontBootstrap.jsx";
 
 function cn(...xs) {
   return xs.filter(Boolean).join(" ");
@@ -382,18 +382,13 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
   const wishlist = useWishlist();
   const { t, language, toggleLanguage } = useLanguage();
   const { settings } = useHomepageSettings();
+  const { headerMenu: autoLeftMenu } = useStorefrontBootstrap();
   const { storefrontMode, toggleStorefrontMode } = useTheme();
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
   const [showLeftMenu, setShowLeftMenu] = useState(false);
   const [activeLeftSection, setActiveLeftSection] = useState(0);
-  const [autoLeftMenu, setAutoLeftMenu] = useState({
-    newProduct: [],
-    trending: [],
-    discounts: [],
-    brands: [],
-  });
 
   useEffect(() => {
     const openLogin = () => {
@@ -496,70 +491,6 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
   const leftMenu = (leftMenuSource || []).filter(
     (s) => String(s?.title || "").toLowerCase() !== "menu visibility",
   );
-
-  useEffect(() => {
-    let mounted = true;
-    const loadAutoMenu = async () => {
-      try {
-        const [productsRes, discountsRes, brandsRes] = await Promise.all([
-          api.get("/products"),
-          api.get("/products/discounts"),
-          api.get("/brands"),
-        ]);
-
-        const products = productsRes?.data?.data || [];
-        const discounts = discountsRes?.data?.data || [];
-        const brands = brandsRes?.data?.data || [];
-
-        const newProductItems = products.slice(0, 6).map((p) => ({
-          label: p.name,
-          to: p.slug ? `/p/${p.slug}` : "/search",
-          image: resolveImageUrl(p.image_url),
-        }));
-
-        const trendingItems = products.slice(6, 12).map((p) => ({
-          label: p.name,
-          to: p.slug ? `/p/${p.slug}` : "/search",
-          image: resolveImageUrl(p.image_url),
-        }));
-
-        const discountItems = discounts.slice(0, 6).map((p) => ({
-          label: p.name,
-          to: p.slug ? `/p/${p.slug}` : "/search",
-          image: resolveImageUrl(p.image_url),
-        }));
-
-        const brandItems = brands.map((b) => ({
-          label: b.name,
-          to: b.slug ? `/brands/${b.slug}` : `/search?q=${encodeURIComponent(b.name)}`,
-          image: b.logo_url || null,
-        }));
-
-        if (mounted) {
-          setAutoLeftMenu({
-            newProduct: newProductItems,
-            trending: trendingItems.length ? trendingItems : newProductItems,
-            discounts: discountItems,
-            brands: brandItems,
-          });
-        }
-      } catch {
-        if (mounted) {
-          setAutoLeftMenu({
-            newProduct: [],
-            trending: [],
-            discounts: [],
-            brands: [],
-          });
-        }
-      }
-    };
-
-    loadAutoMenu();
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const mergeUniqueItems = (baseItems = [], extraItems = []) => {
     const seen = new Set();

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { useLanguage } from "../lib/i18n.jsx";
 import { faqToPageSections, normalizeFaqPayload, resolveFaqLocale } from "../lib/faqContent.js";
+import { fetchWithPageCache, readPageCache } from "../lib/pageContentCache.js";
 
 function buildFallbackSections(t) {
   return [
@@ -41,23 +42,18 @@ function buildFallbackSections(t) {
 
 export default function FAQPage() {
   const { t, language } = useLanguage();
-  const [faqData, setFaqData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [faqData, setFaqData] = useState(() => readPageCache("faq"));
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get("/faq");
-        if (!cancelled && data?.faq) {
-          setFaqData(normalizeFaqPayload(data.faq));
-        }
-      } catch {
-        if (!cancelled) setFaqData(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+    fetchWithPageCache("faq", async () => {
+      const { data } = await api.get("/faq");
+      return data?.faq ? normalizeFaqPayload(data.faq) : null;
+    })
+      .then((payload) => {
+        if (!cancelled && payload) setFaqData(payload);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -90,13 +86,8 @@ export default function FAQPage() {
           <p className="text-lg text-slate-500 dark:text-slate-400">{pageSubtitle}</p>
         </div>
 
-        {loading ? (
-          <div className="rounded-2xl bg-white dark:bg-slate-800 p-8 text-center text-slate-500 dark:text-slate-400 shadow-xl">
-            {t('loading')}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {sections.map((section, idx) => (
+        <div className="space-y-6">
+        {sections.map((section, idx) => (
               <div key={`${section.title}-${idx}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
                 <div className="px-6 py-4 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-700 dark:to-slate-800 border-b border-slate-100 dark:border-slate-700">
                   <h2 className="text-lg font-bold text-slate-800 dark:text-white">{section.title}</h2>
@@ -118,8 +109,7 @@ export default function FAQPage() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ class StorefrontCacheService
 
     public const TTL_RECOMMENDATIONS = 180;
 
-    public const TTL_BOOTSTRAP = 180;
+    public const TTL_BOOTSTRAP = 600;
 
     private const VERSION_PREFIX = 'storefront:v1:ver:';
 

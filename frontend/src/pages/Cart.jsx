@@ -105,7 +105,17 @@ export default function CartPage() {
       <div className="mt-6 grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 fs-card p-5">
           {loading ? (
-            <div className="text-sm text-zinc-600">{t('loading')}</div>
+            <div className="space-y-3 animate-pulse">
+              {[1, 2].map((i) => (
+                <div key={i} className="flex gap-3 rounded-xl border border-zinc-200 p-3">
+                  <div className="h-16 w-16 rounded-lg bg-zinc-100" />
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="h-3 w-2/3 bg-zinc-100 rounded" />
+                    <div className="h-3 w-1/3 bg-zinc-100 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : items.length === 0 ? (
             <div className="text-sm text-zinc-600">
               {t('cartEmpty')} <Link to="/search" className="underline">{t('shopProducts')}</Link>

@@ -194,14 +194,18 @@ export default function ProductDetail() {
 
   // useEffect hook
   useEffect(() => {
+    let active = true;
     (async () => {
       setLoading(true);
+      setSimilarProducts([]);
+      let product = null;
       try {
         const { data } = await api.get(`/products/${slug}`);
+        product = data;
+        if (!active) return;
         setP(data);
         setActiveImage(0);
 
-        // Set default selections after data is loaded (matrix inventory takes precedence)
         const vm = parseVariantMatrix(data.variant_matrix);
         if (vm.length > 0) {
           const inStock = vm.filter((r) => r.qty > 0);
@@ -209,33 +213,34 @@ export default function ProductDetail() {
           setSelectedColor(pick.color);
           setSelectedSize(pick.size);
         } else {
-          if (data && data.colors) {
+          if (data?.colors) {
             const cv = parseColorVariants(data.colors);
-            if (cv.length > 0) {
-              setSelectedColor(cv[0].name);
-            }
+            if (cv.length > 0) setSelectedColor(cv[0].name);
           }
-
-          if (data && data.sizes) {
+          if (data?.sizes) {
             const sz = parseSizes(data.sizes);
-            if (sz.length > 0) {
-              setSelectedSize(sz[0]);
-            }
+            if (sz.length > 0) setSelectedSize(sz[0]);
           }
-        }
-
-        // Load similar products
-        if (data && data.category_id) {
-          const { data: similar } = await api.get("/products", {
-            params: { category_id: data.category_id, limit: 4 }
-          });
-          const filtered = (similar?.data || []).filter(item => item.id !== data.id).slice(0, 4);
-          setSimilarProducts(filtered);
         }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
+      }
+
+      if (!active || !product?.category_id) return;
+      try {
+        const { data: similar } = await api.get("/products", {
+          params: { category_id: product.category_id, limit: 4 },
+        });
+        if (!active) return;
+        const filtered = (similar?.data || []).filter((item) => item.id !== product.id).slice(0, 4);
+        setSimilarProducts(filtered);
+      } catch {
+        /* similar products are optional */
       }
     })();
+    return () => {
+      active = false;
+    };
   }, [slug]);
 
   // All useMemo hooks - always called in same order

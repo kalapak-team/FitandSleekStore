@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../lib/api";
 import ProductCard from "../components/shop/ProductCard.jsx";
+import ProductGridSkeleton from "../components/shop/ProductGridSkeleton.jsx";
 import { useLanguage } from "../lib/i18n.jsx";
 import { resolveImageUrl } from "../lib/images";
 
@@ -26,27 +27,19 @@ export default function BrandDetail() {
   useEffect(() => {
     let active = true;
     (async () => {
-      try {
-        const { data: brandData } = await api.get(`/brands/${slug}`);
-        if (active) setBrand(brandData);
-      } catch {
-        if (active) setBrand(null);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [slug]);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
       setLoading(true);
       try {
-        const res = await api.get("/products", {
-          params: { brand_slug: slug, page },
-        });
-        if (active) setData(res.data || { data: [] });
+        const [brandRes, productsRes] = await Promise.all([
+          api.get(`/brands/${slug}`),
+          api.get("/products", { params: { brand_slug: slug, page } }),
+        ]);
+        if (!active) return;
+        setBrand(brandRes.data);
+        setData(productsRes.data || { data: [] });
+      } catch {
+        if (!active) return;
+        setBrand(null);
+        setData({ data: [] });
       } finally {
         if (active) setLoading(false);
       }
@@ -89,7 +82,7 @@ export default function BrandDetail() {
 
       <div className="mt-6">
         {loading ? (
-          <div className="text-zinc-500">Loading...</div>
+          <ProductGridSkeleton />
         ) : products.length === 0 ? (
           <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center text-zinc-500">
             {t("noProductsFound")}
@@ -103,23 +96,24 @@ export default function BrandDetail() {
         )}
       </div>
 
-      {lastPage > 1 && (
+      {!loading && lastPage > 1 && (
         <div className="mt-8 flex items-center justify-center gap-2">
           <button
+            type="button"
             disabled={page <= 1}
             onClick={() => changePage(page - 1)}
-            className="h-10 px-4 rounded-full border border-zinc-200 disabled:opacity-40"
+            className="fs-pill disabled:opacity-40"
           >
             {t("prev")}
           </button>
-          <div className="text-sm text-zinc-700">
-            {t("page")} <span className="font-semibold">{page}</span> /{" "}
-            <span className="font-semibold">{lastPage}</span>
-          </div>
+          <span className="text-sm text-zinc-600">
+            {page} / {lastPage}
+          </span>
           <button
+            type="button"
             disabled={page >= lastPage}
             onClick={() => changePage(page + 1)}
-            className="h-10 px-4 rounded-full border border-zinc-200 disabled:opacity-40"
+            className="fs-pill disabled:opacity-40"
           >
             {t("next")}
           </button>

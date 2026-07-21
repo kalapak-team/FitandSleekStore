@@ -4,8 +4,8 @@ import BrandRow from "../components/home/BrandRow.jsx";
 import CollectionTiles from "../components/home/CollectionTiles.jsx";
 import PromoBannerSlider from "../components/home/PromoBannerSlider.jsx";
 import Section from "../components/shop/Section.jsx";
-import { useHomepageSettings, writeCachedSettings } from "../state/homepageSettings.jsx";
-import { fetchHomeBootstrap } from "../lib/homeBootstrap.js";
+import { useHomepageSettings } from "../state/homepageSettings.jsx";
+import { useStorefrontBootstrap } from "../state/storefrontBootstrap.jsx";
 import api from "../lib/api";
 import { useLanguage } from "../lib/i18n.jsx";
 import { useAuth } from "../state/auth.jsx";
@@ -65,62 +65,35 @@ function getSectionSearchTokens(section) {
   return Array.from(new Set(tokens));
 }
 
-function mapBootstrapSections(sectionsPayload) {
-  const mapped = {};
-  Object.entries(sectionsPayload || {}).forEach(([key, items]) => {
-    mapped[key] = {
-      loading: false,
-      items: Array.isArray(items) ? items : [],
-    };
-  });
-  return mapped;
-}
-
 export default function Home() {
   const { settings: homepageSettings } = useHomepageSettings();
+  const {
+    bootstrap,
+    ready,
+    sections,
+    heroBanners,
+    promoBanners,
+    brands: brandItems,
+    collections: collectionItems,
+    categories,
+    recommended: bootstrapRecommended,
+  } = useStorefrontBootstrap();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const [bootstrap, setBootstrap] = useState(null);
-  const [bootstrapFailed, setBootstrapFailed] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [sections, setSections] = useState({});
-  const [recommended, setRecommended] = useState({ loading: true, items: [] });
+  const [recommended, setRecommended] = useState(() => ({
+    loading: !bootstrapRecommended?.length,
+    items: bootstrapRecommended || [],
+  }));
 
   useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      try {
-        const data = await fetchHomeBootstrap();
-        if (!mounted) return;
-
-        setBootstrap(data);
-        setBootstrapFailed(false);
-        setCategories(Array.isArray(data?.categories) ? data.categories : []);
-        setSections(mapBootstrapSections(data?.sections));
-        setRecommended({
-          loading: false,
-          items: Array.isArray(data?.recommended) ? data.recommended : [],
-        });
-
-        if (data?.settings) {
-          writeCachedSettings(data.settings);
-        }
-      } catch (error) {
-        console.error("[Home] /homepage/bootstrap failed:", error?.response?.status, error?.message);
-        if (!mounted) return;
-        setBootstrapFailed(true);
-        setRecommended({ loading: false, items: [] });
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    setRecommended({
+      loading: !bootstrapRecommended?.length && !ready,
+      items: bootstrapRecommended || [],
+    });
+  }, [bootstrapRecommended, ready]);
 
   useEffect(() => {
-    if (!user || bootstrapFailed) return;
+    if (!user) return;
     let mounted = true;
 
     (async () => {
@@ -128,8 +101,7 @@ export default function Home() {
         const { data } = await api.get("/products/recommended", { params: { per_page: 8 } });
         if (!mounted) return;
         setRecommended({ loading: false, items: data?.data || [] });
-      } catch (error) {
-        console.error("Error loading personalized recommendations:", error);
+      } catch {
         if (!mounted) return;
       }
     })();
@@ -137,7 +109,7 @@ export default function Home() {
     return () => {
       mounted = false;
     };
-  }, [user, bootstrapFailed]);
+  }, [user]);
 
   const enabledSections = useMemo(() => {
     const settings = bootstrap?.settings || homepageSettings;
@@ -187,21 +159,18 @@ export default function Home() {
     return `/search?search=${encodeURIComponent(section?.title || key || "")}`;
   };
 
-  const heroBanners = bootstrap?.hero_banners;
-  const promoBanners = bootstrap?.promo_banners;
-  const brandItems = bootstrap?.brands;
-  const collectionItems = bootstrap?.collections;
+  const hasBootstrap = ready && bootstrap;
 
   return (
     <div className="pb-14 w-full">
-      <Hero initialBanners={heroBanners} skipFetch={Array.isArray(heroBanners) && !bootstrapFailed} />
+      <Hero initialBanners={heroBanners} skipFetch={Array.isArray(heroBanners) && heroBanners.length > 0} />
       <div className="animate-fade-in">
-        <BrandRow initialItems={brandItems} skipFetch={Array.isArray(brandItems) && !bootstrapFailed} />
+        <BrandRow initialItems={brandItems} skipFetch={Array.isArray(brandItems) && brandItems.length > 0} />
       </div>
       <div className="animate-fade-in-up delay-100">
         <CollectionTiles
           initialCollections={collectionItems}
-          skipFetch={Array.isArray(collectionItems) && !bootstrapFailed}
+          skipFetch={Array.isArray(collectionItems) && collectionItems.length > 0}
         />
       </div>
 
@@ -220,13 +189,13 @@ export default function Home() {
             title={section.title}
             to={getSectionLink(section)}
             items={sections[section.key]?.items || []}
-            loading={sections[section.key]?.loading ?? (!bootstrap && !bootstrapFailed)}
+            loading={sections[section.key]?.loading ?? !hasBootstrap}
             showDiscount={section.key === "discounts"}
           />
           {section.key === "discounts" && (
             <PromoBannerSlider
               initialBanners={promoBanners}
-              skipFetch={Array.isArray(promoBanners) && !bootstrapFailed}
+              skipFetch={Array.isArray(promoBanners) && promoBanners.length > 0}
             />
           )}
         </div>
