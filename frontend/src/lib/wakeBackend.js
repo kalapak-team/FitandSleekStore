@@ -1,4 +1,4 @@
-import api from "./api";
+import { resolveApiBaseUrl } from "./backendOrigin";
 
 let wakePromise = null;
 
@@ -6,9 +6,19 @@ let wakePromise = null;
 export function wakeBackend() {
   if (typeof window === "undefined") return Promise.resolve();
   if (!wakePromise) {
-    wakePromise = api.get("/health").catch(() => {}).finally(() => {
-      wakePromise = null;
-    });
+    const url = `${resolveApiBaseUrl().replace(/\/$/, "")}/health`;
+    wakePromise = fetch(url, {
+      method: "GET",
+      mode: "cors",
+      credentials: "omit",
+      headers: {
+        Accept: "application/json",
+      },
+    })
+      .catch(() => {})
+      .finally(() => {
+        wakePromise = null;
+      });
   }
   return wakePromise;
 }

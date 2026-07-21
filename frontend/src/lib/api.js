@@ -12,7 +12,6 @@ const api = axios.create({
   timeout: 25000,
   headers: {
     Accept: "application/json",
-    "Content-Type": "application/json",
   },
   withCredentials: true, // Allow cookies for CSRF
 });
@@ -60,9 +59,16 @@ const getCsrfToken = () => {
 // Attach Bearer token to requests
 api.interceptors.request.use((config) => {
   config.baseURL = resolveApiBaseUrl();
+  const method = String(config.method || "get").toUpperCase();
+  const isGetLike = method === "GET" || method === "HEAD" || method === "OPTIONS";
 
   // Default `Content-Type: application/json` breaks multipart file uploads (Laravel never sees the file).
   if (typeof FormData !== "undefined" && config.data instanceof FormData && config.headers) {
+    delete config.headers["Content-Type"];
+    delete config.headers["content-type"];
+  }
+  // Keep cross-origin GET requests as "simple" as possible (fewer preflights / CORS failures).
+  if (isGetLike && config.headers) {
     delete config.headers["Content-Type"];
     delete config.headers["content-type"];
   }
@@ -82,17 +88,20 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Add CSRF token if available
+  // Add CSRF token for state-changing requests only.
   const csrfToken = getCsrfToken();
-  if (csrfToken) {
+  if (csrfToken && !isGetLike) {
     config.headers["X-CSRF-TOKEN"] = csrfToken;
   }
 
-  const deviceHeaders = getDeviceHeaders();
-  Object.entries(deviceHeaders).forEach(([key, value]) => {
-    config.headers[key] = value;
-  });
-  config.headers["X-Session-Id"] = getSessionId();
+  // Only attach custom telemetry headers when needed; avoids preflight on public reads.
+  if (token || !isGetLike) {
+    const deviceHeaders = getDeviceHeaders();
+    Object.entries(deviceHeaders).forEach(([key, value]) => {
+      config.headers[key] = value;
+    });
+    config.headers["X-Session-Id"] = getSessionId();
+  }
 
   return config;
 });
