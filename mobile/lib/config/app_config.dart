@@ -18,11 +18,11 @@ class AppConfig {
   /// Public storefront (branding / deep links only — not the API host).
   static const String storefrontUrl = 'https://www.fitandsleek.online';
 
-  /// Laravel API paired with [storefrontUrl] (Render).
+  /// Laravel API paired with [storefrontUrl] (Render Free — new service).
   static const String productionApiBaseUrl =
-      'https://fitandsleek-official-backend.onrender.com/api';
+      'https://fitandsleek-official.onrender.com/api';
   static const String productionBackendOrigin =
-      'https://fitandsleek-official-backend.onrender.com';
+      'https://fitandsleek-official.onrender.com';
 
   static String get defaultApiBaseUrl => productionApiBaseUrl;
 
