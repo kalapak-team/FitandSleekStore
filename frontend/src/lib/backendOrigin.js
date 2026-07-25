@@ -17,6 +17,9 @@ function getConfiguredValues() {
  * Split-host map: storefront SPA and Laravel API use different Cloudflare tunnel hostnames.
  * fitandsleek.kalapak-team.space → frontend only; fitandsleekapp.kalapak-team.space → backend.
  * Do NOT call /api on the storefront host — it returns the SPA HTML shell, not JSON.
+ *
+ * Netlify production hosts proxy `/api/*` → Render (see netlify.toml), so those map to
+ * the same origin as the SPA (no cross-origin CORS).
  */
 const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
     "fitandsleek.kalapak-team.space": "https://fitandsleekapp.kalapak-team.space",
@@ -27,11 +30,26 @@ const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
     "www.norng-fitandsleek-store.vercel.app": "https://norng-fitandsleek-backend.onrender.com",
     "fitandsleek-official.vercel.app": "https://fitandsleek-official.onrender.com",
     "www.fitandsleek-official.vercel.app": "https://fitandsleek-official.onrender.com",
-    "fitandsleek-official-frontend.netlify.app": "https://fitandsleek-official.onrender.com",
-    "www.fitandsleek-official-frontend.netlify.app": "https://fitandsleek-official.onrender.com",
-    "fitandsleek.online": "https://fitandsleek-official.onrender.com",
-    "www.fitandsleek.online": "https://fitandsleek-official.onrender.com",
+    "fitandsleek-official-frontend.netlify.app": "https://fitandsleek-official-frontend.netlify.app",
+    "www.fitandsleek-official-frontend.netlify.app": "https://fitandsleek-official-frontend.netlify.app",
+    "fitandsleek.online": "https://fitandsleek.online",
+    "www.fitandsleek.online": "https://www.fitandsleek.online",
 };
+
+/** Hosts where `/api` is proxied by the static host (Netlify) — always same-origin. */
+const SAME_ORIGIN_API_HOSTS = new Set([
+    "fitandsleek.online",
+    "www.fitandsleek.online",
+    "fitandsleek-official-frontend.netlify.app",
+    "www.fitandsleek-official-frontend.netlify.app",
+]);
+
+function sameOriginApiBaseIfProxied() {
+    if (typeof window === "undefined" || !window.location?.hostname) return null;
+    const host = String(window.location.hostname).toLowerCase();
+    if (!SAME_ORIGIN_API_HOSTS.has(host)) return null;
+    return `${window.location.origin}/api`;
+}
 
 function laravelOriginForPublicStorefrontHostname(hostname) {
     if (!hostname) return null;
@@ -120,11 +138,20 @@ function normalizeConfiguredOrigin() {
 }
 
 export function resolveBackendOrigin() {
+    const proxied = sameOriginApiBaseIfProxied();
+    if (proxied) {
+        return window.location.origin;
+    }
     const configuredOrigin = normalizeConfiguredOrigin();
     return configuredOrigin;
 }
 
 export function resolveApiBaseUrl() {
+    const proxied = sameOriginApiBaseIfProxied();
+    if (proxied) {
+        return proxied;
+    }
+
     const { apiBaseUrl } = getConfiguredValues();
     const trimmed = typeof apiBaseUrl === "string" ? apiBaseUrl.trim() : "";
 
