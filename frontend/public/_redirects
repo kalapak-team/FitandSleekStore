@@ -1,1 +1,5 @@
+# Proxy API to Render BEFORE the SPA fallback (force with !).
+/api/*  https://fitandsleek-official.onrender.com/api/:splat  200!
+
+# SPA: React Router deep links
 /*    /index.html   200
