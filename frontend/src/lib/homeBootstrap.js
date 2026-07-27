@@ -35,7 +35,7 @@ export async function fetchHomeBootstrap({ preferCache = true, allowStale = fals
     return cached;
   }
 
-  const { data } = await api.get("/homepage/bootstrap");
+  const { data } = await api.get("/homepage/bootstrap", { timeout: 90000 });
   writeCachedBootstrap(data);
   return data;
 }

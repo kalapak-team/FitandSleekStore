@@ -26,7 +26,27 @@ class StorefrontCacheService
 
     public static function remember(string $domain, int $ttlSeconds, string $suffix, callable $callback): mixed
     {
-        return Cache::remember(self::key($domain, $suffix), $ttlSeconds, $callback);
+        $key = self::key($domain, $suffix);
+        $hit = Cache::get($key);
+        if ($hit !== null) {
+            return $hit;
+        }
+
+        $lockKey = 'lock:'.md5($key);
+        $lock = Cache::lock($lockKey, 120);
+
+        try {
+            $lock->block(90);
+
+            $hit = Cache::get($key);
+            if ($hit !== null) {
+                return $hit;
+            }
+
+            return Cache::remember($key, $ttlSeconds, $callback);
+        } finally {
+            optional($lock)->release();
+        }
     }
 
     public static function key(string $domain, string $suffix = ''): string

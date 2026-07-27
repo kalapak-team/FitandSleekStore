@@ -4,6 +4,18 @@ import api from "../lib/api";
 const HomepageSettingsContext = createContext();
 const CACHE_KEY = "fs_homepage_settings_v1";
 
+const BOOTSTRAP_CACHE_KEY = "fs_home_bootstrap_v1";
+
+function readBootstrapCachedSettings() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(BOOTSTRAP_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.data?.settings ?? null;
+  } catch {
+    return null;
+  }
 function readCachedSettings() {
   if (typeof window === "undefined") return null;
   try {
@@ -39,27 +51,23 @@ export function HomepageSettingsSync({ settings }) {
 }
 
 export function HomepageSettingsProvider({ children }) {
-  const [settings, setSettings] = useState(() => readCachedSettings());
-  const [loading, setLoading] = useState(() => !readCachedSettings());
+  const [settings, setSettings] = useState(() => readCachedSettings() || readBootstrapCachedSettings());
+  const [loading, setLoading] = useState(() => !(readCachedSettings() || readBootstrapCachedSettings()));
 
   const reloadSettings = useCallback(async () => {
     try {
       const { data } = await api.get("/homepage-settings");
       setSettings(data);
       writeCachedSettings(data);
-    } catch (err) {
-      console.log("Could not load homepage settings");
+    } catch {
+      /* bootstrap sync or cached settings may still apply */
     }
   }, []);
 
   useEffect(() => {
-    if (readCachedSettings()) {
-      reloadSettings().finally(() => setLoading(false));
-      return;
-    }
     const timer = window.setTimeout(() => {
       reloadSettings().finally(() => setLoading(false));
-    }, 1500);
+    }, 8000);
     return () => window.clearTimeout(timer);
   }, [reloadSettings]);
 

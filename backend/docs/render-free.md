@@ -62,7 +62,10 @@ Set in Render **Environment** (defaults in `render.yaml`):
 3. **Netlify:** redeploy frontend if you changed `_redirects` / `netlify.toml` proxy target.
 4. Retire duplicate Render services (`fitandsleek-official-backend` vs `fitandsleek-official`) so only one URL is live.
 
-## Upgrade path
+## Netlify frontend build
+
+If the site publishes **committed** `frontend/dist` without running `npm run build`, production will **not** pick up storefront fixes (API wake, fewer duplicate calls). Use repo-root **`netlify.toml`** (`base = frontend`, `publish = dist`) or set the same in the Netlify UI, then **Clear cache and deploy**.
+
 
 - **Render Starter** — always-on, can set `RUN_QUEUE_WORKER=true` on a dedicated worker or enable scheduler.
 - **Qdrant / CLIP** — run index jobs on deploy hook or CI, not on every Free boot.
