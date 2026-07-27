@@ -18,19 +18,32 @@ class InvoiceService
 
         $shippingAddress = is_array($order->shipping_address) ? $order->shipping_address : [];
 
-        $addressParts = array_filter([
-            $shippingAddress['street'] ?? null,
-            $shippingAddress['line1'] ?? null,
-            $shippingAddress['line2'] ?? null,
-            $shippingAddress['city'] ?? null,
-            $shippingAddress['state'] ?? null,
-            $shippingAddress['postal_code'] ?? null,
-            $shippingAddress['country'] ?? null,
-            $shippingAddress['full_address'] ?? null,
-            $shippingAddress['address'] ?? null,
-        ]);
+        $formatted = trim((string) ($shippingAddress['formatted_address'] ?? ''));
+        if ($formatted !== '') {
+            $fullAddress = $formatted;
+        } else {
+            $addressParts = array_filter([
+                $shippingAddress['receiver_name'] ?? null,
+                filled($shippingAddress['house_no'] ?? null) ? 'ផ្ទះលេខ '.$shippingAddress['house_no'] : null,
+                filled($shippingAddress['street_no'] ?? null) ? 'ផ្លូវ '.$shippingAddress['street_no'] : null,
+                $shippingAddress['street'] ?? null,
+                filled($shippingAddress['sangkat'] ?? null) ? 'សង្កាត់/ឃុំ '.$shippingAddress['sangkat'] : null,
+                filled($shippingAddress['khan'] ?? null) ? 'ខណ្ឌ/ស្រុក '.$shippingAddress['khan'] : null,
+                $shippingAddress['province'] ?? null,
+                $shippingAddress['landmark'] ?? null,
+                $shippingAddress['line1'] ?? null,
+                $shippingAddress['line2'] ?? null,
+                $shippingAddress['district'] ?? null,
+                $shippingAddress['city'] ?? null,
+                $shippingAddress['state'] ?? null,
+                $shippingAddress['postal_code'] ?? null,
+                $shippingAddress['address'] ?? null,
+                $shippingAddress['full_address'] ?? null,
+                $shippingAddress['country'] ?? null,
+            ], fn ($part) => filled($part));
 
-        $fullAddress = implode(', ', $addressParts);
+            $fullAddress = implode(', ', $addressParts);
+        }
 
         $subtotal = (float) ($order->subtotal ?? 0);
         $discount = (float) ($order->discount ?? 0);
@@ -90,7 +103,10 @@ class InvoiceService
             },
             'customer' => [
                 'name' => $shippingAddress['name'] ?? $order->user?->name ?? 'Guest',
-                'phone' => $shippingAddress['phone'] ?? $order->user?->phone ?? '-',
+                'phone' => $shippingAddress['receiver_phone']
+                    ?? $shippingAddress['phone']
+                    ?? $order->user?->phone
+                    ?? '-',
                 'full_address' => $fullAddress ?: '-',
                 'email' => $order->user?->email,
             ],

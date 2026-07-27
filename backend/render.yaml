@@ -1,7 +1,8 @@
-# Render Blueprint (optional). Primary fix: entrypoint binds nginx to $PORT.
+# Render Blueprint (optional). See backend/docs/render-free.md
+# Netlify proxies /api/* → fitandsleek-official.onrender.com — APP_URL + OAuth must match that host.
 services:
   - type: web
-    name: fitandsleek-official-backend
+    name: fitandsleek-official
     runtime: docker
     rootDir: backend
     dockerfilePath: Dockerfile
@@ -14,11 +15,11 @@ services:
       - key: APP_DEBUG
         value: "false"
       - key: APP_URL
-        value: https://fitandsleek-official-backend.onrender.com
+        value: https://fitandsleek-official.onrender.com
       - key: FRONTEND_URL
         value: https://www.fitandsleek.online
       - key: SANCTUM_STATEFUL_DOMAINS
-        value: fitandsleek.online,www.fitandsleek.online,fitandsleek-official.vercel.app
+        value: fitandsleek.online,www.fitandsleek.online,fitandsleek-official-frontend.netlify.app,fitandsleek-official.vercel.app
       - key: RUN_MIGRATIONS
         value: "false"
       # Media — Cloudflare R2 (account 29531ec2… — create bucket "fitandsleek" in dashboard)
@@ -53,21 +54,22 @@ services:
         value: FitandSleek
       # OAuth — same Google/Facebook apps as website; secrets in Render dashboard
       - key: GOOGLE_REDIRECT_URI
-        value: https://fitandsleek-official-backend.onrender.com/api/auth/google/callback
+        value: https://fitandsleek-official.onrender.com/api/auth/google/callback
       - key: FACEBOOK_REDIRECT_URI
-        value: https://fitandsleek-official-backend.onrender.com/api/auth/facebook/callback
+        value: https://fitandsleek-official.onrender.com/api/auth/facebook/callback
       - key: MOBILE_OAUTH_CALLBACK_URL
         value: fitandsleek://oauth/callback
       - key: QUEUE_CONNECTION
         value: database
+      # Light boot for Free tier (see backend/docs/render-free.md)
       - key: RUN_QUEUE_WORKER
-        value: "true"
+        value: "false"
       - key: RUN_SCHEDULER
-        value: "true"
+        value: "false"
       - key: QDRANT_SETUP_ON_BOOT
-        value: "true"
+        value: "false"
       - key: QDRANT_INDEX_MISSING_ON_BOOT
-        value: "true"
+        value: "false"
       - key: QDRANT_INDEX_BATCH_SIZE
         value: "10"
       # Payments — Rielpay KHQR + bank deeplink (set RIELPAY_API_KEY in dashboard)

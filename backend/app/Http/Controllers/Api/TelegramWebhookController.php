@@ -111,7 +111,7 @@ class TelegramWebhookController extends Controller
                 (string) $chatId,
                 TelegramBotTexts::get($locale, 'order_subscribed', ['label' => $label])
             );
-            $this->telegram->sendOrderStatusReply($chatId, $order, $locale);
+            $this->telegram->sendInvoiceToChat($chatId, $order, $locale);
 
             return;
         }

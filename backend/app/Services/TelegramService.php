@@ -193,8 +193,9 @@ class TelegramService
 
         try {
             $message = $this->formatInvoiceTelegramMessage($order, $locale);
+            $keyboard = $this->buildOrderActionKeyboard($order, $order->shipment, $locale);
 
-            return $this->sendMessage((string) $chatId, $message, null, 'HTML');
+            return $this->sendMessage((string) $chatId, $message, $keyboard, 'HTML');
         } catch (\Throwable $e) {
             Log::error('Telegram invoice failed', [
                 'order_id' => $order->id,
@@ -527,13 +528,19 @@ class TelegramService
         $order->loadMissing('user');
         $label = $order->order_number ?: '#'.$order->id;
         $customer = $order->user?->name ?: 'Guest';
+        $phone = $this->resolveOrderPhone($order);
+        $total = number_format((float) $order->total, 2);
+        $address = $this->formatAddress($order);
 
         $message = "✅ *Order completed*\n\n"
             ."Order: `{$label}`\n"
             ."Customer: {$customer}\n"
+            ."Phone: {$phone}\n"
+            ."Total: \${$total}\n"
+            ."Address: {$address}\n\n"
             ."Marked as delivered/completed.";
 
-        $this->sendMessage((string) $chatId, $message);
+        $this->sendMessage((string) $chatId, $message, $this->buildAdminOrderKeyboard($order));
     }
 
     public function notifyAdminOfNewOrder(Order $order): void
@@ -543,23 +550,16 @@ class TelegramService
             return;
         }
 
-        $order->loadMissing(['user', 'items']);
-        $label = $order->order_number ?: '#'.$order->id;
-        $customer = $order->user?->name ?: 'Guest';
-        $phone = $this->resolveOrderPhone($order);
-        $itemCount = $order->items->count();
-        $total = number_format((float) $order->total, 2);
-        $address = $this->formatAddress($order);
+        $order->loadMissing(['user', 'items.product', 'shipment']);
 
-        $message = "🔔 *New paid order*\n\n"
-            ."Order: `{$label}`\n"
-            ."Customer: {$customer}\n"
-            ."Phone: {$phone}\n"
-            ."Items: {$itemCount}\n"
-            ."Total: \${$total}\n"
-            ."Address: {$address}";
+        $message = $this->formatAdminNewOrderTelegramMessage($order);
 
-        $this->sendMessage((string) $chatId, $message);
+        $this->sendMessage(
+            (string) $chatId,
+            $message,
+            $this->buildAdminOrderKeyboard($order),
+            'HTML'
+        );
     }
 
     public function upsertTelegramUser(array $from, int $chatId): TelegramUser
@@ -601,32 +601,54 @@ class TelegramService
     public function sendOrderStatusReply(int $chatId, Order $order, ?string $locale = null): void
     {
         $locale ??= $this->resolveLocaleForChatId($chatId);
-        $order->loadMissing('shipment');
+        $order->loadMissing(['user', 'items.product', 'shipment']);
         $label = $order->order_number ?: '#'.$order->id;
         $status = ucfirst(str_replace('_', ' ', (string) $order->status));
         $shipment = $order->shipment;
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
         $lines = [
-            TelegramBotTexts::get($locale, 'order_status_title'),
+            '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'order_status_title'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</b>',
             '',
-            TelegramBotTexts::get($locale, 'order_label').": `{$label}`",
-            TelegramBotTexts::get($locale, 'status_label').": {$status}",
+            htmlspecialchars(TelegramBotTexts::get($locale, 'order_label'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': <code>'.$e($label).'</code>',
+            htmlspecialchars(TelegramBotTexts::get($locale, 'status_label'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').': '.$e($status),
         ];
 
         if ($shipment) {
-            $lines[] = TelegramBotTexts::get($locale, 'shipment_label').': '.ucfirst(str_replace('_', ' ', (string) $shipment->status));
+            $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'shipment_label'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                .': '.$e(ucfirst(str_replace('_', ' ', (string) $shipment->status)));
             if ($shipment->tracking_code) {
-                $lines[] = TelegramBotTexts::get($locale, 'tracking_label').": `{$shipment->tracking_code}`";
+                $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'tracking_label'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                    .': <code>'.$e((string) $shipment->tracking_code).'</code>';
             }
         }
 
-        if ($order->payment_status !== 'paid') {
-            $lines[] = TelegramBotTexts::get($locale, 'payment_pending');
+        $paymentLabel = $this->formatPaymentMethodLabel($order);
+        $lines[] = htmlspecialchars(TelegramBotTexts::get($locale, 'invoice_status'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            .': <b>'.$e($order->payment_status === 'paid' ? 'Paid' : 'Pending').'</b>'
+            .' · '.$e($paymentLabel);
+
+        $lines[] = '';
+        $lines[] = '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'items'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8').'</b>';
+        $qtyLabel = TelegramBotTexts::get($locale, 'qty_label');
+        $maxItems = 5;
+        foreach ($order->items->take($maxItems) as $item) {
+            $name = $e((string) ($item->name ?: $item->product?->name ?: 'Item'));
+            $qty = (int) ($item->qty ?? 0);
+            $lines[] = '• '.$name.' — '.$qtyLabel.' '.$qty;
         }
+        $remaining = $order->items->count() - $maxItems;
+        if ($remaining > 0) {
+            $lines[] = '<i>'.$e(TelegramBotTexts::get($locale, 'more_items', ['count' => $remaining, 'plural' => ''])).'</i>';
+        }
+
+        $lines[] = '';
+        $lines[] = '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'grand_total'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            .': $'.number_format((float) $order->total, 2).'</b>';
 
         $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment, $locale);
 
-        $this->sendMessage((string) $chatId, implode("\n", $lines), $replyMarkup);
+        $this->sendMessage((string) $chatId, implode("\n", $lines), $replyMarkup, 'HTML');
     }
 
     public function answerCallbackQuery(string $callbackQueryId, ?string $text = null): void
@@ -792,14 +814,17 @@ class TelegramService
 
     private function resolveOrderPhone(Order $order): string
     {
-        $address = $order->shipping_address;
-        if (is_array($address)) {
-            $phone = trim((string) ($address['phone'] ?? $address['receiver_phone'] ?? ''));
-
-            return $phone !== '' ? $phone : '—';
+        $address = is_array($order->shipping_address) ? $order->shipping_address : [];
+        foreach (['receiver_phone', 'phone', 'mobile', 'receiverPhone'] as $key) {
+            $phone = trim((string) ($address[$key] ?? ''));
+            if ($phone !== '') {
+                return $phone;
+            }
         }
 
-        return $order->user?->phone ?: '—';
+        $userPhone = trim((string) ($order->user?->phone ?? ''));
+
+        return $userPhone !== '' ? $userPhone : '—';
     }
 
     private function formatAddress(Order $order): string
@@ -809,12 +834,153 @@ class TelegramService
             return '—';
         }
 
+        $formatted = trim((string) ($address['formatted_address'] ?? ''));
+        if ($formatted !== '') {
+            return $formatted;
+        }
+
         $parts = array_filter([
+            $address['receiver_name'] ?? null,
+            filled($address['house_no'] ?? null) ? 'ផ្ទះលេខ '.$address['house_no'] : null,
+            filled($address['street_no'] ?? null) ? 'ផ្លូវ '.$address['street_no'] : null,
+            $address['street'] ?? null,
+            filled($address['sangkat'] ?? null) ? 'សង្កាត់/ឃុំ '.$address['sangkat'] : null,
+            filled($address['khan'] ?? null) ? 'ខណ្ឌ/ស្រុក '.$address['khan'] : null,
+            $address['province'] ?? null,
+            $address['landmark'] ?? null,
             $address['line1'] ?? $address['address'] ?? null,
+            $address['line2'] ?? null,
             $address['district'] ?? null,
-            $address['city'] ?? $address['province'] ?? null,
+            $address['city'] ?? null,
+            $address['state'] ?? null,
+            $address['full_address'] ?? null,
+            $address['country'] ?? null,
         ], fn ($part) => filled($part));
 
         return $parts !== [] ? implode(', ', $parts) : '—';
+    }
+
+    private function formatAdminNewOrderTelegramMessage(Order $order): string
+    {
+        $invoice = $this->invoices->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+        $customer = $invoice['customer'] ?? [];
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $label = $order->order_number ?: '#'.$order->id;
+        $paymentLabel = $this->formatPaymentMethodLabel($order);
+        $paidLabel = ($invoice['payment_status'] ?? '') === 'PAID' ? 'Paid' : 'Pending';
+        $orderTime = $order->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '';
+
+        $lines = [
+            '🔔 <b>New paid order</b>',
+            '',
+            'Order: <code>'.$e($label).'</code>',
+            'Date: '.$e($orderTime),
+            'Payment: <b>'.$e($paidLabel).'</b> · '.$e($paymentLabel),
+            '',
+            '<b>Customer</b>',
+            $e((string) ($customer['name'] ?? 'Guest')),
+        ];
+
+        $phone = trim((string) ($customer['phone'] ?? ''));
+        if ($phone !== '' && $phone !== '-') {
+            $lines[] = '📞 '.$e($phone);
+        }
+
+        $fullAddress = trim((string) ($customer['full_address'] ?? ''));
+        if ($fullAddress !== '' && $fullAddress !== '-') {
+            $lines[] = '📍 '.$e($fullAddress);
+        }
+
+        $note = trim((string) (is_array($order->shipping_address) ? ($order->shipping_address['landmark'] ?? '') : ''));
+        if ($note !== '' && ! str_contains($fullAddress, $note)) {
+            $lines[] = 'Note: '.$e($note);
+        }
+
+        $lines[] = '';
+        $lines[] = '<b>Items</b>';
+
+        $items = $invoice['items'] ?? [];
+        $maxItems = 8;
+        foreach (array_slice($items, 0, $maxItems) as $item) {
+            $name = $e((string) ($item['product_name'] ?? 'Item'));
+            $sku = $e((string) ($item['sku'] ?? '-'));
+            $qty = (int) ($item['quantity'] ?? 0);
+            $lineTotal = number_format((float) ($item['grand_total'] ?? 0), 2);
+            $lines[] = '• '.$name;
+            $lines[] = '  <code>'.$sku.'</code> · qty '.$qty.' — $'.$lineTotal;
+        }
+
+        $remaining = count($items) - $maxItems;
+        if ($remaining > 0) {
+            $lines[] = '<i>+'.$remaining.' more item(s)</i>';
+        }
+
+        $lines[] = '';
+        $lines[] = 'Subtotal: $'.number_format((float) ($invoice['subtotal'] ?? 0), 2);
+
+        if ((float) ($invoice['discount'] ?? 0) > 0) {
+            $lines[] = 'Discount: −$'.number_format((float) $invoice['discount'], 2);
+        }
+
+        $lines[] = 'Shipping: $'.number_format((float) ($invoice['shipping_fee'] ?? 0), 2);
+        $lines[] = '<b>Total: $'.number_format((float) ($invoice['grand_total'] ?? 0), 2).'</b>';
+
+        if ($order->payment_method === 'cod' && $order->payment_status !== 'paid') {
+            $lines[] = '';
+            $lines[] = '<i>COD — collect $'.number_format((float) $order->total, 2).' on delivery</i>';
+        }
+
+        $message = implode("\n", $lines);
+        if (strlen($message) > 4000) {
+            $message = substr($message, 0, 3990)."\n…";
+        }
+
+        return $message;
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}|null
+     */
+    private function buildAdminOrderKeyboard(Order $order): ?array
+    {
+        $base = rtrim((string) config('app.frontend_url'), '/');
+        $rows = [];
+
+        if ($base !== '') {
+            $rows[] = [
+                [
+                    'text' => 'Open in Admin',
+                    'url' => $base.'/admin/orders',
+                ],
+                [
+                    'text' => 'Invoice',
+                    'url' => $base.'/admin/orders/'.$order->id.'/invoice',
+                ],
+            ];
+        }
+
+        $address = is_array($order->shipping_address) ? $order->shipping_address : [];
+        $lat = $address['latitude'] ?? null;
+        $lng = $address['longitude'] ?? null;
+        if (is_numeric($lat) && is_numeric($lng)) {
+            $rows[] = [[
+                'text' => 'Map',
+                'url' => 'https://www.google.com/maps/search/?api=1&query='.$lat.','.$lng,
+            ]];
+        } elseif ($base === '') {
+            return null;
+        }
+
+        return $rows !== [] ? ['inline_keyboard' => $rows] : null;
+    }
+
+    private function formatPaymentMethodLabel(Order $order): string
+    {
+        return match ($order->payment_method) {
+            'cod' => 'COD',
+            'bakong_khqr' => 'KHQR',
+            default => ucfirst(str_replace('_', ' ', (string) ($order->payment_method ?: 'online'))),
+        };
     }
 }
