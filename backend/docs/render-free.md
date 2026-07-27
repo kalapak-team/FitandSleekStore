@@ -66,3 +66,20 @@ Set in Render **Environment** (defaults in `render.yaml`):
 
 - **Render Starter** — always-on, can set `RUN_QUEUE_WORKER=true` on a dedicated worker or enable scheduler.
 - **Qdrant / CLIP** — run index jobs on deploy hook or CI, not on every Free boot.
+
+## Telegram bot (`/start` silent but admin alerts work)
+
+**Admin order alerts** = Laravel **sends** messages (outbound) → works if `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID` are set.
+
+**Customer `/start`** = Telegram **POSTs webhook** (inbound) → Laravel must receive it, then reply. If webhook URL is wrong, old backend, or 502, the user sees **no reply** even though admin alerts still work.
+
+On Render Shell (after deploy is Live):
+
+```bash
+php artisan telegram:webhook-info
+php artisan telegram:set-webhook
+```
+
+Set `TELEGRAM_WEBHOOK_URL=https://fitandsleek-official.onrender.com` (same as `APP_URL`). Webhook URL is `…/api/telegram/webhook` with secret in header.
+
+If `webhook-info` shows `last_error_message` (502, 404, SSL), fix Render/URL then run `set-webhook` again.

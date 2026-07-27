@@ -198,8 +198,8 @@ Route::post('/vision/search', [ImageSearchController::class, 'search'])->middlew
 Route::get('/shipments/track', [ShipmentTrackingController::class, 'track']);
 
 Route::get('/telegram/settings', [TelegramController::class, 'settings']);
-Route::post('/telegram/webhook/{secret}', [TelegramWebhookController::class, 'handle'])
-    ->middleware('throttle:api-sensitive');
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle']);
+Route::post('/telegram/webhook/{secret}', [TelegramWebhookController::class, 'handle']);
 
 Route::get('/receipt/{token}', [PublicReceiptController::class, 'show']);
 Route::get('/receipt/{token}/pdf', [PublicReceiptController::class, 'downloadPdf']);

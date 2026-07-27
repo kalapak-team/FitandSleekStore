@@ -42,7 +42,7 @@ class TelegramSetWebhookCommand extends Command
             return self::FAILURE;
         }
 
-        $url = rtrim($baseUrl, '/').'/api/telegram/webhook/'.$secret;
+        $url = rtrim($baseUrl, '/').'/api/telegram/webhook';
 
         if (! str_starts_with($url, 'https://')) {
             $this->error('Telegram requires HTTPS. Set TELEGRAM_WEBHOOK_URL=https://your-domain in .env');
@@ -55,6 +55,7 @@ class TelegramSetWebhookCommand extends Command
             'url' => $url,
             'allowed_updates' => ['message', 'callback_query'],
             'secret_token' => $secret,
+            'drop_pending_updates' => false,
         ]);
 
         $this->line($response->body());

@@ -17,10 +17,13 @@ class TelegramWebhookController extends Controller
     {
     }
 
-    public function handle(Request $request, string $secret): JsonResponse
+    public function handle(Request $request, ?string $secret = null): JsonResponse
     {
-        $expected = (string) config('services.telegram.webhook_secret');
-        if ($expected === '' || ! hash_equals($expected, $secret)) {
+        if (! $this->validWebhookSecret($request, $secret)) {
+            Log::warning('Telegram webhook rejected (secret mismatch)', [
+                'has_header_secret' => $request->hasHeader('X-Telegram-Bot-Api-Secret-Token'),
+            ]);
+
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -50,7 +53,7 @@ class TelegramWebhookController extends Controller
 
         $chat = $message['chat'] ?? null;
         $from = $message['from'] ?? null;
-        $text = trim((string) ($message['text'] ?? ''));
+        $text = $this->normalizeCommandText(trim((string) ($message['text'] ?? '')));
 
         if (! is_array($chat) || ! is_array($from) || $text === '') {
             return response()->json(['ok' => true]);
@@ -230,17 +233,49 @@ class TelegramWebhookController extends Controller
     private function sendWelcome(TelegramUser $telegramUser, int $chatId): void
     {
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
-        $this->telegram->sendMessage(
-            (string) $chatId,
-            TelegramBotTexts::get($locale, 'welcome'),
-            [
-                'inline_keyboard' => [
-                    [
-                        ['text' => TelegramBotTexts::get($locale, 'btn_language'), 'callback_data' => 'lang_menu'],
-                    ],
+        $message = TelegramBotTexts::get($locale, 'welcome');
+        $keyboard = [
+            'inline_keyboard' => [
+                [
+                    ['text' => TelegramBotTexts::get($locale, 'btn_language'), 'callback_data' => 'lang_menu'],
                 ],
-            ]
-        );
+            ],
+        ];
+
+        $sent = $this->telegram->sendMessage((string) $chatId, $message, $keyboard);
+        if (! $sent) {
+            $plain = preg_replace('/[*_`]/', '', $message);
+            $this->telegram->sendMessage((string) $chatId, $plain, $keyboard, null);
+        }
+    }
+
+    private function validWebhookSecret(Request $request, ?string $pathSecret): bool
+    {
+        $expected = (string) config('services.telegram.webhook_secret');
+        if ($expected === '') {
+            return false;
+        }
+
+        if ($pathSecret !== null && hash_equals($expected, $pathSecret)) {
+            return true;
+        }
+
+        $header = (string) $request->header('X-Telegram-Bot-Api-Secret-Token', '');
+
+        return $header !== '' && hash_equals($expected, $header);
+    }
+
+    private function normalizeCommandText(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+
+        if (preg_match('#^(/\w+)(@\S+)?(\s+.*)?$#', $text, $matches)) {
+            return $matches[1].($matches[3] ?? '');
+        }
+
+        return $text;
     }
 
     private function sendHelp(TelegramUser $telegramUser, int $chatId): void
