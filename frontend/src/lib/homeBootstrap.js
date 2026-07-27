@@ -1,4 +1,6 @@
 import api from "./api";
+import { resolveBackendOrigin } from "./backendOrigin";
+import { wakeBackend } from "./wakeBackend";
 
 const CACHE_KEY = "fs_home_bootstrap_v1";
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -29,15 +31,74 @@ function writeCachedBootstrap(data) {
   }
 }
 
+function isGatewayTimeout(error) {
+  const status = error?.response?.status;
+  return status === 504 || status === 502 || status === 503;
+}
+
+/** Bypass Netlify ~26s proxy limit when same-origin /api times out. */
+async function fetchBootstrapDirect() {
+  const origin = resolveBackendOrigin()?.replace(/\/$/, "");
+  if (!origin || typeof window === "undefined") {
+    throw new Error("No backend origin for direct bootstrap");
+  }
+  // Same-origin already failed via axios; only useful when page is proxied host.
+  if (origin === window.location.origin) {
+    const direct = "https://fitandsleek-official.onrender.com";
+    const res = await fetch(`${direct}/api/homepage/bootstrap`, {
+      method: "GET",
+      mode: "cors",
+      credentials: "omit",
+      headers: { Accept: "application/json" },
+      signal: typeof AbortSignal !== "undefined" ? AbortSignal.timeout(90000) : undefined,
+    });
+    if (!res.ok) {
+      throw new Error(`Direct bootstrap HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  const res = await fetch(`${origin}/api/homepage/bootstrap`, {
+    method: "GET",
+    mode: "cors",
+    credentials: "omit",
+    headers: { Accept: "application/json" },
+    signal: typeof AbortSignal !== "undefined" ? AbortSignal.timeout(90000) : undefined,
+  });
+  if (!res.ok) {
+    throw new Error(`Direct bootstrap HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchHomeBootstrap({ preferCache = true, allowStale = false } = {}) {
   const cached = readCachedBootstrap({ ignoreExpiry: allowStale });
   if (preferCache && cached && !allowStale) {
     return cached;
   }
 
-  const { data } = await api.get("/homepage/bootstrap", { timeout: 90000 });
-  writeCachedBootstrap(data);
-  return data;
+  try {
+    const { data } = await api.get("/homepage/bootstrap", { timeout: 55000 });
+    writeCachedBootstrap(data);
+    return data;
+  } catch (error) {
+    if (!isGatewayTimeout(error)) {
+      throw error;
+    }
+    await wakeBackend({ force: true });
+    try {
+      const { data } = await api.get("/homepage/bootstrap", { timeout: 55000 });
+      writeCachedBootstrap(data);
+      return data;
+    } catch (retryError) {
+      if (!isGatewayTimeout(retryError)) {
+        throw retryError;
+      }
+      const data = await fetchBootstrapDirect();
+      writeCachedBootstrap(data);
+      return data;
+    }
+  }
 }
 
 /** Return cached bootstrap immediately; refresh in background when stale or missing. */

@@ -32,20 +32,23 @@ class StorefrontCacheService
             return $hit;
         }
 
-        $lockKey = 'lock:'.md5($key);
-        $lock = Cache::lock($lockKey, 120);
-
+        // File cache often cannot provide atomic locks; never block bootstrap on lock failure.
         try {
-            $lock->block(90);
+            $lock = Cache::lock('lock:'.md5($key), 120);
+            $lock->block(45);
 
-            $hit = Cache::get($key);
-            if ($hit !== null) {
-                return $hit;
+            try {
+                $hit = Cache::get($key);
+                if ($hit !== null) {
+                    return $hit;
+                }
+
+                return Cache::remember($key, $ttlSeconds, $callback);
+            } finally {
+                $lock->release();
             }
-
+        } catch (\Throwable) {
             return Cache::remember($key, $ttlSeconds, $callback);
-        } finally {
-            optional($lock)->release();
         }
     }
 

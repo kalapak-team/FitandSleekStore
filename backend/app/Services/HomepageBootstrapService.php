@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\Storefront\CategoryController;
 use App\Http\Controllers\Api\Storefront\CollectionController;
 use App\Http\Controllers\Api\Storefront\ProductController;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Concurrency;
 
 class HomepageBootstrapService
 {
@@ -36,15 +35,13 @@ class HomepageBootstrapService
         $categoryList = is_array($categories) ? $categories : [];
 
         $sectionsConfig = $this->enabledSections($settings);
+        // Sequential on Free-tier: Concurrency::run forks workers and exhausts PHP-FPM → 504 via Netlify.
         $sectionProducts = $this->loadAllSectionProducts($sectionsConfig, $categoryList);
-
-        [$heroBanners, $promoBanners, $collections, $brands, $recommendedPayload] = Concurrency::run([
-            fn () => $this->bannerPayload('hero'),
-            fn () => $this->bannerPayload('promo'),
-            fn () => $this->decodeJson(app(CollectionController::class)->index())['data'] ?? [],
-            fn () => $this->decodeJson(app(BrandController::class)->index())['data'] ?? [],
-            fn () => $this->recommendations->recommendations(null, null, 8)->toArray(),
-        ]);
+        $heroBanners = $this->bannerPayload('hero');
+        $promoBanners = $this->bannerPayload('promo');
+        $collections = $this->decodeJson(app(CollectionController::class)->index())['data'] ?? [];
+        $brands = $this->decodeJson(app(BrandController::class)->index())['data'] ?? [];
+        $recommendedPayload = $this->recommendations->recommendations(null, null, 8)->toArray();
 
         return [
             'settings' => $settings,
@@ -66,23 +63,13 @@ class HomepageBootstrapService
      */
     private function loadAllSectionProducts(array $sectionsConfig, array $categoryList): array
     {
-        if ($sectionsConfig === []) {
-            return [];
-        }
-
-        $tasks = [];
+        $sectionProducts = [];
         foreach ($sectionsConfig as $section) {
-            $tasks[] = fn () => $this->loadSectionProducts(
+            $sectionProducts[$section['key']] = $this->loadSectionProducts(
                 $section['key'],
                 $section['title'],
                 $categoryList
             );
-        }
-
-        $results = Concurrency::run($tasks);
-        $sectionProducts = [];
-        foreach ($sectionsConfig as $index => $section) {
-            $sectionProducts[$section['key']] = $results[$index] ?? [];
         }
 
         return $sectionProducts;
