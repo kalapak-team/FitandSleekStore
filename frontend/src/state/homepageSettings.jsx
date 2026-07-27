@@ -16,6 +16,8 @@ function readBootstrapCachedSettings() {
   } catch {
     return null;
   }
+}
+
 function readCachedSettings() {
   if (typeof window === "undefined") return null;
   try {
