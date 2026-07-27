@@ -1,5 +1,6 @@
 import axios from "axios";
 import { notifyApiInfrastructureDegraded } from "./apiHealth";
+import { wakeBackend } from "./wakeBackend";
 import { getDeviceHeaders } from "./device";
 import { resolveApiBaseUrl, shouldRewriteLoopbackAssetsToPageOrigin } from "./backendOrigin";
 import { getSessionId } from "./sessionId";
@@ -170,6 +171,7 @@ api.interceptors.response.use(
     ) {
       originalRequest._infraRetry = true;
       try {
+        await wakeBackend({ force: true });
         return await api.request(originalRequest);
       } catch (retryError) {
         notifyApiInfrastructureDegraded();

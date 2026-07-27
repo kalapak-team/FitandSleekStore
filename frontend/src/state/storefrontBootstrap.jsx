@@ -107,8 +107,6 @@ export function StorefrontBootstrapProvider({ children }) {
   }, [applyBootstrap]);
 
   useEffect(() => {
-    wakeBackend();
-
     const stale = readCachedBootstrap({ ignoreExpiry: true });
     if (stale) {
       applyBootstrap(stale);
@@ -119,6 +117,8 @@ export function StorefrontBootstrapProvider({ children }) {
       const needsSpinner = !readCachedBootstrap();
       if (needsSpinner) setRefreshing(true);
       try {
+        await wakeBackend();
+        if (cancelled) return;
         const data = await fetchHomeBootstrap({ preferCache: false });
         if (!cancelled) applyBootstrap(data);
       } catch {

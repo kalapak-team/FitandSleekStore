@@ -42,7 +42,7 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL'), '/').'/storage',
+            'url' => rtrim((string) env('APP_URL', ''), '/').'/storage',
             'visibility' => 'public',
             // Serve /storage/* from storage/app/public (unsigned URLs for storefront/admin images).
             'serve' => true,
