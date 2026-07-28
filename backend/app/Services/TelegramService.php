@@ -6,6 +6,7 @@ use App\Models\Notification;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Shipment;
+use App\Models\ShipmentTrackingEvent;
 use App\Models\TelegramOrderSubscription;
 use App\Models\TelegramUser;
 use App\Support\TelegramBotTexts;
@@ -461,6 +462,11 @@ class TelegramService
 
     public function canChatAccessOrder(int $chatId, Order $order, ?TelegramUser $telegramUser = null): bool
     {
+        $adminChatId = (int) config('services.telegram.admin_chat_id');
+        if ($adminChatId > 0 && $chatId === $adminChatId) {
+            return true;
+        }
+
         if (TelegramOrderSubscription::where('order_id', $order->id)->where('chat_id', $chatId)->exists()) {
             return true;
         }
@@ -470,6 +476,59 @@ class TelegramService
         }
 
         return false;
+    }
+
+    public function isAdminChatId(int $chatId): bool
+    {
+        $adminChatId = (int) config('services.telegram.admin_chat_id');
+
+        return $adminChatId > 0 && $chatId === $adminChatId;
+    }
+
+    /**
+     * @return array{ok: bool, message: string}
+     */
+    public function updateShipmentStatusFromAdminChat(Order $order, string $status): array
+    {
+        $status = strtolower(trim($status));
+        $allowed = ['pending', 'processing', 'shipped', 'in_transit', 'delivered', 'failed', 'returned'];
+        if (! in_array($status, $allowed, true)) {
+            return ['ok' => false, 'message' => 'Invalid status.'];
+        }
+
+        $order->loadMissing('shipment');
+        $shipment = $order->shipment;
+        if (! $shipment) {
+            return ['ok' => false, 'message' => 'Shipment not found for this order.'];
+        }
+
+        $shippedAt = $shipment->shipped_at;
+        $deliveredAt = $shipment->delivered_at;
+        if (in_array($status, ['shipped', 'in_transit', 'delivered'], true) && ! $shippedAt) {
+            $shippedAt = now();
+        }
+        if ($status === 'delivered' && ! $deliveredAt) {
+            $deliveredAt = now();
+        }
+
+        $shipment->update([
+            'status' => $status,
+            'shipped_at' => $shippedAt,
+            'delivered_at' => $deliveredAt,
+        ]);
+
+        ShipmentTrackingEvent::create([
+            'shipment_id' => $shipment->id,
+            'status' => $status,
+            'note' => 'Status updated from Telegram admin bot.',
+            'updated_by' => null,
+            'event_time' => now(),
+        ]);
+
+        return [
+            'ok' => true,
+            'message' => 'Shipment status updated to '.str_replace('_', ' ', $status).'.',
+        ];
     }
 
     public function sendPaymentQrToChat(int $chatId, Order $order, ?string $locale = null): bool
@@ -1109,32 +1168,48 @@ class TelegramService
      */
     private function buildAdminOrderKeyboard(Order $order): ?array
     {
-        $base = rtrim((string) config('app.frontend_url'), '/');
+        $order->loadMissing('shipment');
+        $shipment = $order->shipment;
+        $locale = TelegramBotTexts::LOCALE_EN;
         $rows = [];
 
-        if ($base !== '') {
-            $rows[] = [
-                [
-                    'text' => 'Open in Admin',
-                    'url' => $base.'/admin/orders',
-                ],
-                [
-                    'text' => 'Invoice',
-                    'url' => $base.'/admin/orders/'.$order->id.'/invoice',
-                ],
+        $actionRow = [[
+            'text' => TelegramBotTexts::get($locale, 'btn_invoice'),
+            'callback_data' => 'invoice_'.$order->id,
+        ]];
+
+        if ($order->payment_status !== 'paid') {
+            $actionRow[] = [
+                'text' => $order->payment_method === 'cod'
+                    ? TelegramBotTexts::get($locale, 'btn_payment_qr_cod')
+                    : TelegramBotTexts::get($locale, 'btn_payment_qr'),
+                'callback_data' => 'payqr_'.$order->id,
             ];
         }
 
-        $address = is_array($order->shipping_address) ? $order->shipping_address : [];
-        $lat = $address['latitude'] ?? null;
-        $lng = $address['longitude'] ?? null;
-        if (is_numeric($lat) && is_numeric($lng)) {
+        if ($actionRow !== []) {
+            $rows[] = $actionRow;
+        }
+
+        if ($shipment && filled($shipment->external_tracking_url)) {
+            $provider = $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback');
             $rows[] = [[
-                'text' => 'Map',
-                'url' => 'https://www.google.com/maps/search/?api=1&query='.$lat.','.$lng,
+                'text' => TelegramBotTexts::get($locale, 'btn_track_on', ['provider' => $provider]),
+                'url' => $shipment->external_tracking_url,
             ]];
-        } elseif ($base === '') {
-            return null;
+        }
+
+        if ($shipment) {
+            $rows[] = [
+                ['text' => '⏳ Processing', 'callback_data' => 'adminst_'.$order->id.'_processing'],
+                ['text' => '📦 Shipped', 'callback_data' => 'adminst_'.$order->id.'_shipped'],
+                ['text' => '🚚 In Transit', 'callback_data' => 'adminst_'.$order->id.'_in_transit'],
+            ];
+            $rows[] = [
+                ['text' => '✅ Delivered', 'callback_data' => 'adminst_'.$order->id.'_delivered'],
+                ['text' => '⚠️ Failed', 'callback_data' => 'adminst_'.$order->id.'_failed'],
+                ['text' => '↩️ Returned', 'callback_data' => 'adminst_'.$order->id.'_returned'],
+            ];
         }
 
         return $rows !== [] ? ['inline_keyboard' => $rows] : null;

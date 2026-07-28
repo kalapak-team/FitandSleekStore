@@ -330,6 +330,12 @@ class TelegramWebhookController extends Controller
 
             return;
         }
+
+        if (str_starts_with($data, 'adminst_')) {
+            $this->handleAdminStatusCallback($data, $chatId, $telegramUser);
+
+            return;
+        }
     }
 
     private function handlePaymentQrCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
@@ -382,5 +388,40 @@ class TelegramWebhookController extends Controller
         }
 
         $this->telegram->sendInvoiceToChat($chatId, $order, $locale);
+    }
+
+    private function handleAdminStatusCallback(string $data, int $chatId, TelegramUser $telegramUser): void
+    {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+        if (! $this->telegram->isAdminChatId($chatId)) {
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
+
+            return;
+        }
+
+        $parts = explode('_', $data);
+        if (count($parts) < 3) {
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invalid_order'));
+
+            return;
+        }
+
+        $orderId = (int) ($parts[1] ?? 0);
+        $status = implode('_', array_slice($parts, 2));
+        if ($orderId <= 0 || $status === '') {
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invalid_order'));
+
+            return;
+        }
+
+        $order = Order::find($orderId);
+        if (! $order) {
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'order_not_found_short'));
+
+            return;
+        }
+
+        $result = $this->telegram->updateShipmentStatusFromAdminChat($order, $status);
+        $this->telegram->sendMessage((string) $chatId, ($result['ok'] ? '✅ ' : '❌ ').$result['message']);
     }
 }
