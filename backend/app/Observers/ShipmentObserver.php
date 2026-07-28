@@ -17,13 +17,9 @@ class ShipmentObserver
             return;
         }
 
-        if ($shipment->status === 'shipped') {
-            $this->telegramService->notifyOrderShipped($shipment);
-        }
+        $this->telegramService->notifyShipmentStatusChanged($shipment);
 
         if ($shipment->status === 'delivered') {
-            $this->telegramService->notifyOrderDelivered($shipment);
-
             if (! $shipment->order) {
                 return;
             }

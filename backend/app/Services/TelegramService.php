@@ -100,6 +100,171 @@ class TelegramService
         });
     }
 
+    public function notifyOrderPlacedCod(Order $order): void
+    {
+        if (! $this->isEnabled()) {
+            return;
+        }
+
+        $order->loadMissing(['user', 'items', 'shipment']);
+
+        $this->notifyAdminOfNewCodOrder($order);
+        $this->createInAppNotification(
+            $order,
+            'order_placed_cod',
+            'COD order placed',
+            'Your COD order was placed. Pay when it is delivered.'
+        );
+
+        $label = $order->order_number ?: '#'.$order->id;
+        $total = number_format((float) $order->total, 2);
+
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $total) {
+            $message = TelegramBotTexts::get($locale, 'order_placed_cod', [
+                'label' => $label,
+                'total' => $total,
+            ]);
+
+            return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
+        });
+    }
+
+    /**
+     * Customer Telegram alert for order status changes (processing, preparing, cancelled, …).
+     * Skips statuses that already have dedicated shipment/payment handlers.
+     */
+    public function notifyOrderStatusChanged(Order $order, string $status): void
+    {
+        if (! $this->isEnabled()) {
+            return;
+        }
+
+        $status = strtolower(trim($status));
+        $skip = ['paid', 'pending_payment', 'shipped', 'delivered', 'completed', 'in_transit'];
+        if (in_array($status, $skip, true)) {
+            return;
+        }
+
+        $order->loadMissing(['user', 'shipment']);
+        $label = $order->order_number ?: '#'.$order->id;
+
+        $textKey = match ($status) {
+            'processing', 'preparing' => 'order_processing',
+            'cancelled' => 'order_cancelled',
+            'failed' => 'order_failed',
+            'returned' => 'order_returned',
+            default => null,
+        };
+
+        if ($textKey === null) {
+            return;
+        }
+
+        $this->createInAppNotification(
+            $order,
+            'order_status_'.$status,
+            'Order update',
+            'Order '.$label.' is now '.$status.'.'
+        );
+
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $textKey) {
+            $message = TelegramBotTexts::get($locale, $textKey, ['label' => $label]);
+
+            return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
+        });
+    }
+
+    public function notifyShipmentStatusChanged(Shipment $shipment): void
+    {
+        if (! $this->isEnabled()) {
+            return;
+        }
+
+        $status = strtolower(trim((string) $shipment->status));
+
+        if ($status === 'shipped') {
+            $this->notifyOrderShipped($shipment);
+
+            return;
+        }
+
+        if ($status === 'delivered') {
+            $this->notifyOrderDelivered($shipment);
+
+            return;
+        }
+
+        $shipment->loadMissing('order.user');
+        $order = $shipment->order;
+        if (! $order) {
+            return;
+        }
+
+        $label = $order->order_number ?: '#'.$order->id;
+        $trackingCode = $shipment->tracking_code ?: '—';
+
+        $textKey = match ($status) {
+            'processing', 'pending' => 'order_processing',
+            'in_transit' => 'order_in_transit',
+            'failed' => 'order_failed',
+            'returned' => 'order_returned',
+            default => null,
+        };
+
+        if ($textKey === null) {
+            return;
+        }
+
+        // Avoid duplicate "processing" noise right after order paid (shipment starts as pending).
+        if ($status === 'pending') {
+            return;
+        }
+
+        $this->createInAppNotification(
+            $order,
+            'shipment_'.$status,
+            'Shipment update',
+            'Order '.$label.' shipment is now '.$status.'.'
+        );
+
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $provider, $trackingCode, $textKey) {
+            $message = TelegramBotTexts::get($locale, $textKey, [
+                'label' => $label,
+                'provider' => $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback'),
+                'tracking' => $trackingCode,
+            ]);
+
+            return [$message, $this->buildOrderActionKeyboard($order, $shipment, $locale)];
+        });
+    }
+
+    public function notifyAdminOfNewCodOrder(Order $order): void
+    {
+        $chatId = config('services.telegram.admin_chat_id');
+        if (! filled($chatId)) {
+            return;
+        }
+
+        $order->loadMissing(['user', 'items']);
+        $label = $order->order_number ?: '#'.$order->id;
+        $customer = $order->user?->name ?: 'Guest';
+        $phone = $this->resolveOrderPhone($order);
+        $itemCount = $order->items->count();
+        $total = number_format((float) $order->total, 2);
+        $address = $this->formatAddress($order);
+
+        $message = TelegramBotTexts::get(TelegramBotTexts::LOCALE_EN, 'admin_new_cod_order', [
+            'label' => $label,
+            'customer' => $customer,
+            'phone' => $phone,
+            'items' => $itemCount,
+            'total' => $total,
+            'address' => $address,
+        ]);
+
+        $this->sendMessage((string) $chatId, $message);
+    }
+
     public function buildReceiptUrl(Order $order): string
     {
         return $this->receiptTokens->buildReceiptUrl($order);

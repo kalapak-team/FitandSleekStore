@@ -29,6 +29,10 @@ class OrderObserver
             $this->handleOrderCompleted($order);
         }
 
+        if ($order->wasChanged('status')) {
+            $this->telegramService->notifyOrderStatusChanged($order, (string) $order->status);
+        }
+
         $statusPaid = $order->wasChanged('status') && $order->status === 'paid';
         $paymentPaid = $order->wasChanged('payment_status') && $order->payment_status === 'paid';
 
@@ -43,6 +47,13 @@ class OrderObserver
         ]);
 
         if ($order->shipment) {
+            if ($paymentPaid || $statusPaid) {
+                // COD may already have a shipment; still alert when payment clears.
+                if ($order->payment_method === 'cod') {
+                    $this->telegramService->notifyOrderPaid($order->fresh(['user', 'items', 'shipment']));
+                }
+            }
+
             return;
         }
 
@@ -69,6 +80,37 @@ class OrderObserver
         if ($paymentPaid || $statusPaid) {
             $this->telegramService->notifyOrderPaid($order->fresh(['user', 'items', 'shipment']));
         }
+    }
+
+    public function created(Order $order): void
+    {
+        if ($order->payment_method !== 'cod') {
+            return;
+        }
+
+        if ($order->shipment) {
+            $this->telegramService->notifyOrderPlacedCod($order->fresh(['user', 'items', 'shipment']));
+
+            return;
+        }
+
+        $trackingCode = $this->generateTrackingCode();
+
+        $shipment = Shipment::create([
+            'order_id' => $order->id,
+            'provider' => 'Internal',
+            'tracking_code' => $trackingCode,
+            'status' => 'pending',
+        ]);
+
+        ShipmentTrackingEvent::create([
+            'shipment_id' => $shipment->id,
+            'status' => 'pending',
+            'note' => 'COD order placed. Preparing for shipment.',
+            'event_time' => now(),
+        ]);
+
+        $this->telegramService->notifyOrderPlacedCod($order->fresh(['user', 'items', 'shipment']));
     }
 
     private function sendPaymentSuccessEmails(Order $order): void

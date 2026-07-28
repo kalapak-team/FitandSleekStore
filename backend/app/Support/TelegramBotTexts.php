@@ -51,15 +51,49 @@ class TelegramBotTexts
                 ."Total: \$:total\n"
                 ."Status: Preparing for shipment\n\n"
                 ."You will receive updates when your order ships.",
+            'order_placed_cod' => "🧾 *COD order placed*\n\n"
+                ."Order: `:label`\n"
+                ."Total: \$:total\n"
+                ."Payment: Pay on delivery\n"
+                ."Status: Processing\n\n"
+                ."We are preparing your order. You will get updates until it arrives.",
+            'order_processing' => "⏳ *Order is being prepared*\n\n"
+                ."Order: `:label`\n"
+                ."Status: Processing / Preparing\n\n"
+                ."Our team is packing your items.",
             'order_shipped' => "📦 *Order shipped*\n\n"
                 ."Order: `:label`\n"
                 ."Courier: :provider\n"
                 ."Tracking: `:tracking`",
+            'order_in_transit' => "🚚 *Order in transit*\n\n"
+                ."Order: `:label`\n"
+                ."Courier: :provider\n"
+                ."Tracking: `:tracking`\n\n"
+                ."Your package is on the way.",
             'order_delivered' => "🎉 *Order delivered*\n\n"
                 ."Order: `:label`\n"
                 .":cod_note"
                 ."Thank you for shopping with Fitandsleek!",
             'order_delivered_cod_note' => "Pay on delivery — tap *Payment QR* below or pay cash.\n\n",
+            'order_cancelled' => "❌ *Order cancelled*\n\n"
+                ."Order: `:label`\n"
+                ."Status: Cancelled\n\n"
+                ."Contact Fitandsleek if you need help.",
+            'order_failed' => "⚠️ *Delivery issue*\n\n"
+                ."Order: `:label`\n"
+                ."Status: Failed\n\n"
+                ."Please contact Fitandsleek for support.",
+            'order_returned' => "↩️ *Order returned*\n\n"
+                ."Order: `:label`\n"
+                ."Status: Returned\n\n"
+                ."Please contact Fitandsleek for support.",
+            'admin_new_cod_order' => "🔔 *New COD order*\n\n"
+                ."Order: `:label`\n"
+                ."Customer: :customer\n"
+                ."Phone: :phone\n"
+                ."Items: :items\n"
+                ."Total: \$:total\n"
+                ."Address: :address",
             'order_status_title' => '📋 *Order status*',
             'order_label' => 'Order',
             'status_label' => 'Status',
@@ -133,15 +167,49 @@ class TelegramBotTexts
                 ."សរុប: \$:total\n"
                 ."ស្ថានភាព: កំពុងរៀបចំដឹកជញ្ជូន\n\n"
                 ."អ្នកនឹងទទួលធ្វើបច្ចុប្បន្នភាពពេលដឹកចេញ។",
+            'order_placed_cod' => "🧾 *ការបញ្ជាទិញ COD*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."សរុប: \$:total\n"
+                ."ការបង់ប្រាក់: បង់ពេលដឹកដល់\n"
+                ."ស្ថានភាព: កំពុងដំណើរការ\n\n"
+                ."យើងកំពុងរៀបចំទំនិញ។ អ្នកនឹងទទួលធ្វើបច្ចុប្បន្នភាពរហូតដល់ដឹកដល់។",
+            'order_processing' => "⏳ *កំពុងរៀបចំការបញ្ជាទិញ*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."ស្ថានភាព: កំពុងរៀបចំ\n\n"
+                ."ក្រុមការងារកំពុងវេចខ្ចប់ទំនិញរបស់អ្នក។",
             'order_shipped' => "📦 *ការបញ្ជាទិញដឹកចេញហើយ*\n\n"
                 ."ការបញ្ជាទិញ: `:label`\n"
                 ."អ្នកដឹក: :provider\n"
                 ."លេខតាមដាន: `:tracking`",
+            'order_in_transit' => "🚚 *ទំនិញកំពុងដឹក*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."អ្នកដឹក: :provider\n"
+                ."លេខតាមដាន: `:tracking`\n\n"
+                ."កញ្ចប់របស់អ្នកកំពុងធ្វើដំណើរ។",
             'order_delivered' => "🎉 *ការបញ្ជាទិញដឹកដល់ហើយ*\n\n"
                 ."ការបញ្ជាទិញ: `:label`\n"
                 .":cod_note"
                 ."សូមអរគុណដែលបានទិញពី Fitandsleek!",
             'order_delivered_cod_note' => "បង់ពេលដឹកដល់ — ចុច *Payment QR* ខាងក្រោម ឬបង់សាច់ប្រាក់។\n\n",
+            'order_cancelled' => "❌ *ការបញ្ជាទិញត្រូវបានលុបចោល*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."ស្ថានភាព: លុបចោល\n\n"
+                ."ទាក់ទង Fitandsleek បើត្រូវការជំនួយ។",
+            'order_failed' => "⚠️ *មានបញ្ហាការដឹក*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."ស្ថានភាព: បរាជ័យ\n\n"
+                ."សូមទាក់ទង Fitandsleek សម្រាប់ជំនួយ។",
+            'order_returned' => "↩️ *ការបញ្ជាទិញត្រូវបានត្រឡប់*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."ស្ថានភាព: ត្រឡប់\n\n"
+                ."សូមទាក់ទង Fitandsleek សម្រាប់ជំនួយ។",
+            'admin_new_cod_order' => "🔔 *ការបញ្ជាទិញ COD ថ្មី*\n\n"
+                ."ការបញ្ជាទិញ: `:label`\n"
+                ."អតិថិជន: :customer\n"
+                ."ទូរស័ព្ទ: :phone\n"
+                ."មុខទំនិញ: :items\n"
+                ."សរុប: \$:total\n"
+                ."អាសយដ្ឋាន: :address",
             'order_status_title' => '📋 *ស្ថានភាពការបញ្ជាទិញ*',
             'order_label' => 'ការបញ្ជាទិញ',
             'status_label' => 'ស្ថានភាព',
