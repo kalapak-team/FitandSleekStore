@@ -466,8 +466,7 @@ class TelegramService
 
     public function canChatAccessOrder(int $chatId, Order $order, ?TelegramUser $telegramUser = null): bool
     {
-        $adminChatId = (int) config('services.telegram.admin_chat_id');
-        if ($adminChatId > 0 && $chatId === $adminChatId) {
+        if ($this->isAdminChatId($chatId)) {
             return true;
         }
 
@@ -484,9 +483,13 @@ class TelegramService
 
     public function isAdminChatId(int $chatId): bool
     {
-        $adminChatId = (int) config('services.telegram.admin_chat_id');
+        $configured = trim((string) config('services.telegram.admin_chat_id', ''));
+        if ($configured === '') {
+            return false;
+        }
 
-        return $adminChatId > 0 && $chatId === $adminChatId;
+        // Group/supergroup IDs are negative (e.g. -5438165888); do not require > 0.
+        return (string) $chatId === $configured;
     }
 
     /**
@@ -968,17 +971,36 @@ class TelegramService
                 $payload
             );
 
-            if (! $response->successful()) {
-                Log::warning('Telegram sendMessage failed', [
-                    'chat_id' => $chatId,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-
-                return false;
+            if ($response->successful()) {
+                return true;
             }
 
-            return true;
+            Log::warning('Telegram sendMessage failed', [
+                'chat_id' => $chatId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            // Retry without parse mode — Markdown often breaks on addresses / phone numbers.
+            if ($parseMode !== null) {
+                unset($payload['parse_mode']);
+                $retry = Http::timeout(10)->post(
+                    'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendMessage',
+                    $payload
+                );
+
+                if ($retry->successful()) {
+                    return true;
+                }
+
+                Log::warning('Telegram sendMessage retry (no parse_mode) failed', [
+                    'chat_id' => $chatId,
+                    'status' => $retry->status(),
+                    'body' => $retry->body(),
+                ]);
+            }
+
+            return false;
         } catch (\Throwable $e) {
             Log::error('Telegram sendMessage exception', [
                 'chat_id' => $chatId,
