@@ -243,6 +243,8 @@ class TelegramService
     {
         $chatId = config('services.telegram.admin_chat_id');
         if (! filled($chatId)) {
+            Log::warning('Telegram admin COD notify skipped: TELEGRAM_ADMIN_CHAT_ID empty');
+
             return;
         }
 
@@ -253,21 +255,30 @@ class TelegramService
         $itemCount = $order->items->count();
         $total = number_format((float) $order->total, 2);
         $address = $this->formatAddress($order);
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-        $message = TelegramBotTexts::get(TelegramBotTexts::LOCALE_EN, 'admin_new_cod_order', [
-            'label' => $label,
-            'customer' => $customer,
-            'phone' => $phone,
-            'items' => $itemCount,
-            'total' => $total,
-            'address' => $address,
-        ]);
+        // HTML (not Markdown) — addresses/phones often break Markdown and drop the whole message.
+        $message = "🔔 <b>New COD order</b>\n\n"
+            .'Order: <code>'.$e($label)."</code>\n"
+            .'Customer: '.$e($customer)."\n"
+            .'Phone: '.$e($phone)."\n"
+            .'Items: '.$itemCount."\n"
+            .'Total: $'.$total."\n"
+            .'Address: '.$e($address);
 
-        $this->sendMessage(
+        $sent = $this->sendMessage(
             (string) $chatId,
             $message,
-            $this->buildAdminOrderKeyboard($order)
+            $this->buildAdminOrderKeyboard($order),
+            'HTML'
         );
+
+        if (! $sent) {
+            Log::warning('Telegram admin COD notify failed to send', [
+                'chat_id' => $chatId,
+                'order_id' => $order->id,
+            ]);
+        }
     }
 
     public function buildReceiptUrl(Order $order): string
@@ -488,8 +499,8 @@ class TelegramService
             return false;
         }
 
-        // Group/supergroup IDs are negative (e.g. -5438165888); do not require > 0.
-        return (string) $chatId === $configured;
+        // Group/supergroup IDs are negative (e.g. -5438165888); compare as strings of ints.
+        return (string) $chatId === (string) (int) $configured;
     }
 
     /**
@@ -762,16 +773,17 @@ class TelegramService
         $phone = $this->resolveOrderPhone($order);
         $total = number_format((float) $order->total, 2);
         $address = $this->formatAddress($order);
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-        $message = "✅ *Order completed*\n\n"
-            ."Order: `{$label}`\n"
-            ."Customer: {$customer}\n"
-            ."Phone: {$phone}\n"
-            ."Total: \${$total}\n"
-            ."Address: {$address}\n\n"
-            ."Marked as delivered/completed.";
+        $message = "✅ <b>Order completed</b>\n\n"
+            .'Order: <code>'.$e($label)."</code>\n"
+            .'Customer: '.$e($customer)."\n"
+            .'Phone: '.$e($phone)."\n"
+            .'Total: $'.$total."\n"
+            .'Address: '.$e($address)."\n\n"
+            .'Marked as delivered/completed.';
 
-        $this->sendMessage((string) $chatId, $message, $this->buildAdminOrderKeyboard($order));
+        $this->sendMessage((string) $chatId, $message, $this->buildAdminOrderKeyboard($order), 'HTML');
     }
 
     public function notifyAdminOfNewOrder(Order $order): void
@@ -961,15 +973,16 @@ class TelegramService
             $payload['parse_mode'] = $parseMode;
         }
 
+        // Telegram Bot API expects reply_markup as a JSON *string* in form-urlencoded bodies.
         if ($replyMarkup !== null) {
-            $payload['reply_markup'] = json_encode($replyMarkup);
+            $payload['reply_markup'] = json_encode($replyMarkup, JSON_UNESCAPED_UNICODE);
         }
 
+        $endpoint = 'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendMessage';
+
         try {
-            $response = Http::timeout(10)->post(
-                'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendMessage',
-                $payload
-            );
+            // Use asForm() — Laravel Http defaults to JSON, which breaks reply_markup when double-encoded.
+            $response = Http::asForm()->timeout(15)->post($endpoint, $payload);
 
             if ($response->successful()) {
                 return true;
@@ -981,13 +994,10 @@ class TelegramService
                 'body' => $response->body(),
             ]);
 
-            // Retry without parse mode — Markdown often breaks on addresses / phone numbers.
+            // Retry without parse mode — Markdown/HTML often breaks on addresses / phone numbers.
             if ($parseMode !== null) {
                 unset($payload['parse_mode']);
-                $retry = Http::timeout(10)->post(
-                    'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendMessage',
-                    $payload
-                );
+                $retry = Http::asForm()->timeout(15)->post($endpoint, $payload);
 
                 if ($retry->successful()) {
                     return true;
@@ -1009,6 +1019,48 @@ class TelegramService
 
             return false;
         }
+    }
+
+    /**
+     * Send a test admin alert with action buttons (for verifying TELEGRAM_ADMIN_CHAT_ID).
+     */
+    public function sendAdminTestMessage(): array
+    {
+        $chatId = trim((string) config('services.telegram.admin_chat_id', ''));
+        if ($chatId === '') {
+            return ['ok' => false, 'message' => 'TELEGRAM_ADMIN_CHAT_ID is empty'];
+        }
+
+        if (! $this->isEnabled()) {
+            return ['ok' => false, 'message' => 'TELEGRAM_BOT_TOKEN is not configured'];
+        }
+
+        $keyboard = [
+            'inline_keyboard' => [
+                [
+                    ['text' => '🧾 Invoice (test)', 'callback_data' => 'invoice_0'],
+                    ['text' => '✅ Admin OK', 'callback_data' => 'lang_menu'],
+                ],
+                [
+                    ['text' => '⏳ Processing', 'callback_data' => 'adminst_0_processing'],
+                    ['text' => '📦 Shipped', 'callback_data' => 'adminst_0_shipped'],
+                ],
+            ],
+        ];
+
+        $message = "🧪 <b>Fitandsleek admin test</b>\n\n"
+            .'Chat ID: <code>'.htmlspecialchars($chatId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')."</code>\n"
+            ."If you see buttons below, admin Telegram is working.";
+
+        $sent = $this->sendMessage($chatId, $message, $keyboard, 'HTML');
+
+        return [
+            'ok' => $sent,
+            'message' => $sent
+                ? 'Test message sent to '.$chatId
+                : 'Failed to send test message to '.$chatId.' — check bot is in group and can post',
+            'chat_id' => $chatId,
+        ];
     }
 
     /**
