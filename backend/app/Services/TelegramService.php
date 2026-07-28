@@ -589,7 +589,11 @@ class TelegramService
         $locale ??= $this->resolveLocaleForChatId($chatId);
 
         if ($order->payment_status === 'paid') {
-            $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'already_paid'));
+            $this->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'already_paid'),
+                $this->keyboardForChat($chatId, $order)
+            );
 
             return false;
         }
@@ -598,7 +602,11 @@ class TelegramService
             $payment = $this->resolvePaymentQrForOrder($order);
             $qrString = (string) ($payment['qr_string'] ?? '');
             if ($qrString === '') {
-                $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'payment_qr_failed'));
+                $this->sendMessage(
+                    (string) $chatId,
+                    TelegramBotTexts::get($locale, 'payment_qr_failed'),
+                    $this->keyboardForChat($chatId, $order)
+                );
 
                 return false;
             }
@@ -934,7 +942,7 @@ class TelegramService
         $lines[] = '<b>'.htmlspecialchars(TelegramBotTexts::get($locale, 'grand_total'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             .': $'.number_format((float) $order->total, 2).'</b>';
 
-        $replyMarkup = $this->buildOrderActionKeyboard($order, $shipment, $locale);
+        $replyMarkup = $this->keyboardForChat($chatId, $order);
 
         $this->sendMessage((string) $chatId, implode("\n", $lines), $replyMarkup, 'HTML');
     }
