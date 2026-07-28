@@ -19,6 +19,9 @@ class Shipment extends Model
         'delivered_at',
         'delivered_by_name',
         'delivered_by_user_id',
+        'picked_up_by_name',
+        'picked_up_by_phone',
+        'picked_up_at',
     ];
 
     protected function casts(): array
@@ -26,6 +29,7 @@ class Shipment extends Model
         return [
             'shipped_at' => 'datetime',
             'delivered_at' => 'datetime',
+            'picked_up_at' => 'datetime',
         ];
     }
 

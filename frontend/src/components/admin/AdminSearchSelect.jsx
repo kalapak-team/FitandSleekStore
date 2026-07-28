@@ -62,6 +62,7 @@ export default function AdminSearchSelect({
   listClassName = "",
   menuMinWidth,
   allowEmpty = true,
+  allowCustomValue = false,
   inputStyle,
 }) {
   const listId = useId();
@@ -186,6 +187,7 @@ export default function AdminSearchSelect({
         String(o.searchText ?? "").toLowerCase() === q.toLowerCase(),
     );
     if (exact) pick(exact.value);
+    else if (allowCustomValue) pick(q);
     else setQuery("");
   };
 
@@ -216,10 +218,18 @@ export default function AdminSearchSelect({
     if (e.key === "Enter" && filtered[activeIndex]) {
       e.preventDefault();
       pick(filtered[activeIndex].value);
+      return;
+    }
+    if (e.key === "Enter" && allowCustomValue) {
+      const q = String(query || "").trim();
+      if (q) {
+        e.preventDefault();
+        pick(q);
+      }
     }
   };
 
-  const displayValue = open ? query : selected?.label || "";
+  const displayValue = open ? query : selected?.label || (allowCustomValue ? String(value || "") : "");
   const showSwatch = showOptionImage && !open && selected?.value;
 
   const menu =

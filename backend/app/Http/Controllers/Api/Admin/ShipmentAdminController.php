@@ -113,6 +113,8 @@ class ShipmentAdminController extends BaseAdminController
             'tracking_code' => 'required|string|max:100',
             'external_tracking_url' => 'nullable|url|max:500',
             'mark_shipped' => 'sometimes|boolean',
+            'picked_up_by_name' => 'nullable|string|max:150',
+            'picked_up_by_phone' => 'nullable|string|max:40',
         ]);
 
         $shipment = Shipment::firstOrNew(['order_id' => $validated['order_id']]);
@@ -125,6 +127,13 @@ class ShipmentAdminController extends BaseAdminController
             $shipment->external_tracking_url = $validated['external_tracking_url'] ?: null;
         }
 
+        if (array_key_exists('picked_up_by_name', $validated)) {
+            $shipment->picked_up_by_name = $validated['picked_up_by_name'] ?: null;
+        }
+        if (array_key_exists('picked_up_by_phone', $validated)) {
+            $shipment->picked_up_by_phone = $validated['picked_up_by_phone'] ?: null;
+        }
+
         $shouldMarkShipped = ! empty($validated['external_tracking_url'])
             || ($validated['mark_shipped'] ?? false);
 
@@ -132,6 +141,12 @@ class ShipmentAdminController extends BaseAdminController
             $shipment->status = 'shipped';
             if (! $shipment->shipped_at) {
                 $shipment->shipped_at = now();
+            }
+            if (
+                ! $shipment->picked_up_at
+                && (filled($shipment->picked_up_by_name) || filled($shipment->picked_up_by_phone))
+            ) {
+                $shipment->picked_up_at = now();
             }
         } elseif (! $shipment->exists) {
             $shipment->status = 'pending';

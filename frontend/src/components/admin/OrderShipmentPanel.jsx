@@ -36,6 +36,8 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
   const [saving, setSaving] = useState(false);
   const [deliverySaving, setDeliverySaving] = useState(false);
   const [deliveredByName, setDeliveredByName] = useState("");
+  const [pickedUpByName, setPickedUpByName] = useState("");
+  const [pickedUpByPhone, setPickedUpByPhone] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deliverySuccess, setDeliverySuccess] = useState("");
@@ -46,6 +48,8 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
     setTrackingCode(shipment.tracking_code || shipment.tracking_number || "");
     setExternalUrl(shipment.external_tracking_url || "");
     setDeliveredByName(shipment.delivered_by_name || "");
+    setPickedUpByName(shipment.picked_up_by_name || "");
+    setPickedUpByPhone(shipment.picked_up_by_phone || "");
   }, [shipment, orderId]);
 
   const applyPreset = (presetKey) => {
@@ -89,6 +93,8 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
         tracking_code: code,
         external_tracking_url: url,
         mark_shipped: true,
+        picked_up_by_name: pickedUpByName.trim() || null,
+        picked_up_by_phone: pickedUpByPhone.trim() || null,
       });
       setSuccess("Courier tracking saved. Order marked as shipped.");
       onSaved?.(data?.data);
@@ -138,6 +144,9 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
           {shipment.delivered_by_name ? (
             <span className="ml-2">· Delivered by: <span className="font-semibold">{shipment.delivered_by_name}</span></span>
           ) : null}
+          {shipment.picked_up_by_name ? (
+            <span className="ml-2">· Picked up by: <span className="font-semibold">{shipment.picked_up_by_name}</span></span>
+          ) : null}
         </p>
       ) : null}
 
@@ -152,8 +161,9 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
                 options={PROVIDER_OPTIONS}
                 inputClassName="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 ariaLabel="Courier"
-                placeholder="Search courier…"
+                placeholder="Search or type courier…"
                 allowEmpty={false}
+                allowCustomValue
               />
             </div>
             <div>
@@ -192,6 +202,37 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
               placeholder="https://..."
               className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             />
+          </div>
+
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white/80 p-3 dark:border-slate-600 dark:bg-slate-900/40">
+            <p className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
+              Courier pickup at shop / អ្នកដឹកមកយកពីហាង
+            </p>
+            <p className="mb-3 text-[11px] text-slate-500 dark:text-slate-400">
+              Record driver name and phone when they collect the package (also printed on shop delivery note).
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Driver name</label>
+                <input
+                  type="text"
+                  value={pickedUpByName}
+                  onChange={(e) => setPickedUpByName(e.target.value)}
+                  placeholder="Courier driver name"
+                  className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Driver phone</label>
+                <input
+                  type="text"
+                  value={pickedUpByPhone}
+                  onChange={(e) => setPickedUpByPhone(e.target.value)}
+                  placeholder="e.g. 012 345 678"
+                  className="h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+            </div>
           </div>
 
           {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}

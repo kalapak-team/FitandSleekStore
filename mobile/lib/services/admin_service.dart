@@ -1052,6 +1052,8 @@ class AdminOrderDetail {
     this.shipmentStatus,
     this.shipmentProvider,
     this.deliveredByName,
+    this.pickedUpByName,
+    this.pickedUpByPhone,
     this.items = const [],
     this.payments = const [],
   });
@@ -1071,6 +1073,8 @@ class AdminOrderDetail {
   final String? shipmentStatus;
   final String? shipmentProvider;
   final String? deliveredByName;
+  final String? pickedUpByName;
+  final String? pickedUpByPhone;
   final List<AdminOrderItemLine> items;
   final List<AdminPaymentSnippet> payments;
 
@@ -1124,6 +1128,8 @@ class AdminOrderDetail {
       shipmentProvider: provider,
       deliveredByName: shipment?['delivered_by_name']?.toString() ??
           (shipment?['delivered_by_user'] as Map?)?['name']?.toString(),
+      pickedUpByName: shipment?['picked_up_by_name']?.toString(),
+      pickedUpByPhone: shipment?['picked_up_by_phone']?.toString(),
       items: itemsRaw is List
           ? itemsRaw.whereType<Map>().map((e) => AdminOrderItemLine.fromJson(Map<String, dynamic>.from(e))).toList()
           : [],

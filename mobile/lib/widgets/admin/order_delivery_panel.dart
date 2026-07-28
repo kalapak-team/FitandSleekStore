@@ -93,6 +93,15 @@ class _OrderDeliveryPanelState extends State<OrderDeliveryPanel> {
                 ),
               ),
             ),
+          if (order.pickedUpByName != null && order.pickedUpByName!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'យកពីហាង / Picked up by: ${order.pickedUpByName}'
+                '${order.pickedUpByPhone != null && order.pickedUpByPhone!.isNotEmpty ? ' · ${order.pickedUpByPhone}' : ''}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: widget.onOpenShopInvoice,

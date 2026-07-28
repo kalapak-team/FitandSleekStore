@@ -230,6 +230,26 @@ export default function AdminInvoicePage() {
  <p className="text-lg font-bold text-slate-900 dark:text-white">Grand Total: {money(invoice.grand_total)}</p>
  </div>
 
+ <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm dark:border-slate-600 dark:bg-slate-800/50">
+ <p className="font-bold text-slate-800 dark:text-slate-100">Courier pickup · អ្នកដឹកមកយកពីហាង</p>
+ <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Sign on paper; blank lines below if not yet recorded in admin.</p>
+ <div className="grid gap-2 sm:grid-cols-3">
+ <p><span className="font-semibold">Name:</span> {invoice.picked_up_by_name || "________________"}</p>
+ <p><span className="font-semibold">Phone:</span> {invoice.picked_up_by_phone || "________________"}</p>
+ <p><span className="font-semibold">Date:</span> {invoice.picked_up_at || "________________"}</p>
+ </div>
+ <div className="mt-4 grid gap-4 sm:grid-cols-2 text-xs text-slate-600 dark:text-slate-300">
+ <div>
+ <div className="mb-1 border-b border-slate-400 pb-6 dark:border-slate-500" />
+ Courier signature / ហត្ថលេខា
+ </div>
+ <div>
+ <div className="mb-1 border-b border-slate-400 pb-6 dark:border-slate-500" />
+ Shop staff / បុគ្គលិកហាង
+ </div>
+ </div>
+ </div>
+
  <div className="mt-4 border-t-2 border-dashed border-slate-400 dark:border-slate-600 pt-2 text-center text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">
  — CUT HERE —
  </div>

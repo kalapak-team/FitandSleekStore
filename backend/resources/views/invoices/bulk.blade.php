@@ -326,6 +326,53 @@
             letter-spacing: 1px;
             text-transform: uppercase;
         }
+
+        .pickup-box {
+            margin-top: 16px;
+            border: 1px solid {{ $borderSoft }};
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: #f8fafc;
+        }
+        .pickup-box .pickup-title {
+            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.6px;
+            color: {{ $textPrimary }};
+            margin: 0 0 4px 0;
+        }
+        .pickup-box .pickup-sub {
+            font-size: 9px;
+            color: {{ $textMuted }};
+            margin: 0 0 10px 0;
+        }
+        table.pickup-fields td {
+            padding: 6px 0;
+            font-size: 10px;
+            vertical-align: bottom;
+        }
+        table.pickup-fields td.k {
+            width: 28%;
+            color: {{ $textMuted }};
+            font-weight: 600;
+        }
+        table.pickup-fields td.line {
+            border-bottom: 1px solid #94A3B8;
+            min-height: 18px;
+            color: {{ $textPrimary }};
+            font-weight: 600;
+        }
+        table.pickup-sign td {
+            padding: 10px 0 4px 0;
+            font-size: 9px;
+            color: {{ $textMuted }};
+            vertical-align: top;
+        }
+        table.pickup-sign td.sig-line {
+            border-bottom: 1px solid #64748b;
+            min-height: 28px;
+        }
     </style>
 </head>
 <body>
@@ -339,6 +386,7 @@
         $items        = $invoice['items'] ?? [];
         $audience     = $invoice['invoice_audience'] ?? 'customer';
         $isInternal   = in_array($audience, ['shop', 'driver'], true);
+        $isShop       = $audience === 'shop';
         $docTitle     = $invoice['doc_title'] ?? 'Invoice';
         $docTitleKm   = $invoice['doc_title_km'] ?? 'វិក័យបត្រ';
     @endphp
@@ -482,6 +530,39 @@
                     </td>
                 </tr>
             </table>
+
+            @if ($isShop)
+                <div class="pickup-box">
+                    <p class="pickup-title">Courier pickup · អ្នកដឹកមកយកពីហាង</p>
+                    <p class="pickup-sub">Courier signs on paper; shop keeps a copy and records name/phone in admin.</p>
+                    <table class="pickup-fields" style="width:100%;">
+                        <tr>
+                            <td class="k">Name / ឈ្មោះ</td>
+                            <td class="line">{{ $invoice['picked_up_by_name'] ?? '' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="k">Phone / ទូរស័ព្ធ</td>
+                            <td class="line">{{ $invoice['picked_up_by_phone'] ?? '' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="k">Date / កាលបរិច្ឆេទ</td>
+                            <td class="line">{{ $invoice['picked_up_at'] ?? '' }}</td>
+                        </tr>
+                    </table>
+                    <table class="pickup-sign" style="width:100%; margin-top:8px;">
+                        <tr>
+                            <td style="width:50%; padding-right:12px;">
+                                <div class="sig-line"></div>
+                                Courier signature / ហត្ថលេខា
+                            </td>
+                            <td style="width:50%;">
+                                <div class="sig-line"></div>
+                                Shop staff / បុគ្គលិកហាង
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            @endif
 
             <div class="footnote">
                 <span class="brand">{{ $brandName }}</span>

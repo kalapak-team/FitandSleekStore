@@ -126,6 +126,13 @@ class InvoiceService
             $invoice['courier_provider'] = $courierLabel;
         }
 
+        if ($audience === self::AUDIENCE_SHOP) {
+            $shipment = $order->shipment;
+            $invoice['picked_up_by_name'] = $shipment?->picked_up_by_name;
+            $invoice['picked_up_by_phone'] = $shipment?->picked_up_by_phone;
+            $invoice['picked_up_at'] = $shipment?->picked_up_at?->format('Y-m-d H:i');
+        }
+
         return $invoice;
     }
 }
