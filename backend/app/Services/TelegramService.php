@@ -92,10 +92,10 @@ class TelegramService
         $total = number_format((float) $order->total, 2);
 
         $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $total) {
-            $message = TelegramBotTexts::get($locale, 'order_confirmed', [
+            $message = TelegramBotTexts::get($locale, 'order_confirmed', $this->htmlReplace([
                 'label' => $label,
                 'total' => $total,
-            ]);
+            ]));
 
             return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
         });
@@ -121,10 +121,10 @@ class TelegramService
         $total = number_format((float) $order->total, 2);
 
         $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $total) {
-            $message = TelegramBotTexts::get($locale, 'order_placed_cod', [
+            $message = TelegramBotTexts::get($locale, 'order_placed_cod', $this->htmlReplace([
                 'label' => $label,
                 'total' => $total,
-            ]);
+            ]));
 
             return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
         });
@@ -169,7 +169,7 @@ class TelegramService
         );
 
         $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $textKey) {
-            $message = TelegramBotTexts::get($locale, $textKey, ['label' => $label]);
+            $message = TelegramBotTexts::get($locale, $textKey, $this->htmlReplace(['label' => $label]));
 
             return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
         });
@@ -229,11 +229,14 @@ class TelegramService
         );
 
         $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $trackingCode, $textKey) {
-            $message = TelegramBotTexts::get($locale, $textKey, [
+            $provider = $shipment->provider && strtolower((string) $shipment->provider) !== 'internal'
+                ? (string) $shipment->provider
+                : TelegramBotTexts::get($locale, 'courier_fallback');
+            $message = TelegramBotTexts::get($locale, $textKey, $this->htmlReplace([
                 'label' => $label,
-                'provider' => $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback'),
+                'provider' => $provider,
                 'tracking' => $trackingCode,
-            ]);
+            ]));
 
             return [$message, $this->buildOrderActionKeyboard($order, $shipment, $locale)];
         });
@@ -311,9 +314,39 @@ class TelegramService
 
     public function resolveLocaleForChatId(int $chatId): string
     {
-        $user = TelegramUser::where('chat_id', $chatId)->latest('id')->first();
+        $user = TelegramUser::where('chat_id', $chatId)
+            ->orderByRaw("CASE WHEN preferred_locale IS NULL OR preferred_locale = '' THEN 1 ELSE 0 END")
+            ->latest('id')
+            ->first();
 
         return TelegramBotTexts::resolveLocale($user);
+    }
+
+    public function resolveLocaleForOrderChat(Order $order, int $chatId): string
+    {
+        $byChat = TelegramUser::where('chat_id', $chatId)
+            ->orderByRaw("CASE WHEN preferred_locale IS NULL OR preferred_locale = '' THEN 1 ELSE 0 END")
+            ->latest('id')
+            ->first();
+
+        $preferred = strtolower(trim((string) ($byChat?->preferred_locale ?? '')));
+        if (in_array($preferred, [TelegramBotTexts::LOCALE_KM, TelegramBotTexts::LOCALE_EN], true)) {
+            return $preferred;
+        }
+
+        if ($order->user_id) {
+            $byUser = TelegramUser::where('user_id', $order->user_id)
+                ->whereNotNull('preferred_locale')
+                ->where('preferred_locale', '!=', '')
+                ->latest('id')
+                ->first();
+            $userPreferred = strtolower(trim((string) ($byUser?->preferred_locale ?? '')));
+            if (in_array($userPreferred, [TelegramBotTexts::LOCALE_KM, TelegramBotTexts::LOCALE_EN], true)) {
+                return $userPreferred;
+            }
+        }
+
+        return TelegramBotTexts::resolveLocale($byChat);
     }
 
     public function setPreferredLocale(TelegramUser $telegramUser, string $locale): TelegramUser
@@ -762,12 +795,15 @@ class TelegramService
         $provider = $shipment->provider ?: TelegramBotTexts::get(TelegramBotTexts::LOCALE_EN, 'courier_fallback');
         $trackingCode = $shipment->tracking_code ?: '—';
 
-        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $provider, $trackingCode) {
-            $message = TelegramBotTexts::get($locale, 'order_shipped', [
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $trackingCode) {
+            $provider = $shipment->provider && strtolower((string) $shipment->provider) !== 'internal'
+                ? (string) $shipment->provider
+                : TelegramBotTexts::get($locale, 'courier_fallback');
+            $message = TelegramBotTexts::get($locale, 'order_shipped', $this->htmlReplace([
                 'label' => $label,
-                'provider' => $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback'),
+                'provider' => $provider,
                 'tracking' => $trackingCode,
-            ]);
+            ]));
 
             return [$message, $this->buildOrderActionKeyboard($order, $shipment, $locale)];
         });
@@ -812,12 +848,12 @@ class TelegramService
         );
 
         $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $codPending) {
-            $message = TelegramBotTexts::get($locale, 'order_delivered', [
+            $message = TelegramBotTexts::get($locale, 'order_delivered', $this->htmlReplace([
                 'label' => $label,
                 'cod_note' => $codPending
                     ? TelegramBotTexts::get($locale, 'order_delivered_cod_note')
                     : '',
-            ]);
+            ]));
 
             return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
         });
@@ -1164,10 +1200,32 @@ class TelegramService
     private function notifyOrderRecipients(Order $order, \Closure $buildForLocale): void
     {
         foreach ($this->resolveOrderChatIds($order) as $chatId) {
-            $locale = $this->resolveLocaleForChatId((int) $chatId);
+            $locale = $this->resolveLocaleForOrderChat($order, (int) $chatId);
             [$message, $replyMarkup] = $buildForLocale($locale);
-            $this->sendMessage((string) $chatId, $message, $replyMarkup);
+            // HTML status templates (same as invoice) — Markdown often fails and looked like "English only".
+            $this->sendMessage((string) $chatId, $message, $replyMarkup, 'HTML');
         }
+    }
+
+    /**
+     * Escape dynamic values for HTML Telegram messages.
+     *
+     * @param  array<string, string|int|float>  $replace
+     * @return array<string, string>
+     */
+    private function htmlReplace(array $replace): array
+    {
+        $out = [];
+        foreach ($replace as $key => $value) {
+            if ($key === 'cod_note') {
+                // Already localized HTML snippet.
+                $out[$key] = (string) $value;
+            } else {
+                $out[$key] = htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            }
+        }
+
+        return $out;
     }
 
     private function createInAppNotification(Order $order, string $type, string $title, string $message): void

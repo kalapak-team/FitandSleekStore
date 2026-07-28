@@ -46,45 +46,45 @@ class TelegramBotTexts
             'no_orders' => 'You have no orders yet.',
             'recent_orders_title' => '📋 *Your recent orders*',
             'track_hint' => 'Use `/track ORDER_NUMBER` for details.',
-            'order_confirmed' => "✅ *Order confirmed*\n\n"
-                ."Order: `:label`\n"
-                ."Total: \$:total\n"
+            'order_confirmed' => "✅ <b>Order confirmed</b>\n\n"
+                ."Order: <code>:label</code>\n"
+                ."Total: $:total\n"
                 ."Status: Preparing for shipment\n\n"
                 ."You will receive updates when your order ships.",
-            'order_placed_cod' => "🧾 *COD order placed*\n\n"
-                ."Order: `:label`\n"
-                ."Total: \$:total\n"
+            'order_placed_cod' => "🧾 <b>COD order placed</b>\n\n"
+                ."Order: <code>:label</code>\n"
+                ."Total: $:total\n"
                 ."Payment: Pay on delivery\n"
                 ."Status: Processing\n\n"
                 ."We are preparing your order. You will get updates until it arrives.",
-            'order_processing' => "⏳ *Order is being prepared*\n\n"
-                ."Order: `:label`\n"
+            'order_processing' => "⏳ <b>Order is being prepared</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 ."Status: Processing / Preparing\n\n"
                 ."Our team is packing your items.",
-            'order_shipped' => "📦 *Order shipped*\n\n"
-                ."Order: `:label`\n"
+            'order_shipped' => "📦 <b>Order shipped</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 ."Courier: :provider\n"
-                ."Tracking: `:tracking`",
-            'order_in_transit' => "🚚 *Order in transit*\n\n"
-                ."Order: `:label`\n"
+                ."Tracking: <code>:tracking</code>",
+            'order_in_transit' => "🚚 <b>Order in transit</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 ."Courier: :provider\n"
-                ."Tracking: `:tracking`\n\n"
+                ."Tracking: <code>:tracking</code>\n\n"
                 ."Your package is on the way.",
-            'order_delivered' => "🎉 *Order delivered*\n\n"
-                ."Order: `:label`\n"
+            'order_delivered' => "🎉 <b>Order delivered</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 .":cod_note"
                 ."Thank you for shopping with Fitandsleek!",
-            'order_delivered_cod_note' => "Pay on delivery — tap *Payment QR* below or pay cash.\n\n",
-            'order_cancelled' => "❌ *Order cancelled*\n\n"
-                ."Order: `:label`\n"
+            'order_delivered_cod_note' => "Pay on delivery — tap <b>Payment QR</b> below or pay cash.\n\n",
+            'order_cancelled' => "❌ <b>Order cancelled</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 ."Status: Cancelled\n\n"
                 ."Contact Fitandsleek if you need help.",
-            'order_failed' => "⚠️ *Delivery issue*\n\n"
-                ."Order: `:label`\n"
+            'order_failed' => "⚠️ <b>Delivery issue</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 ."Status: Failed\n\n"
                 ."Please contact Fitandsleek for support.",
-            'order_returned' => "↩️ *Order returned*\n\n"
-                ."Order: `:label`\n"
+            'order_returned' => "↩️ <b>Order returned</b>\n\n"
+                ."Order: <code>:label</code>\n"
                 ."Status: Returned\n\n"
                 ."Please contact Fitandsleek for support.",
             'admin_new_cod_order' => "🔔 *New COD order*\n\n"
@@ -94,7 +94,7 @@ class TelegramBotTexts
                 ."Items: :items\n"
                 ."Total: \$:total\n"
                 ."Address: :address",
-            'order_status_title' => '📋 *Order status*',
+            'order_status_title' => '📋 Order status',
             'order_label' => 'Order',
             'status_label' => 'Status',
             'shipment_label' => 'Shipment',
@@ -103,9 +103,9 @@ class TelegramBotTexts
             'already_paid' => '✅ This order is already paid.',
             'payment_qr_failed' => '❌ Could not generate payment QR. Please try again later.',
             'payment_qr_failed_gen' => '❌ Failed to generate payment QR. Please try again.',
-            'payment_qr_title' => '💳 *Payment QR*',
-            'payment_qr_cod_note' => "\n\n_Pay on delivery — Scan with ABA / Bakong_",
-            'payment_qr_scan_note' => "\n\n_Scan with your banking app to pay_",
+            'payment_qr_title' => '💳 Payment QR',
+            'payment_qr_cod_note' => "\n\nPay on delivery — Scan with ABA / Bakong",
+            'payment_qr_scan_note' => "\n\nScan with your banking app to pay",
             'amount_label' => 'Amount',
             'generating_qr' => 'Generating payment QR…',
             'loading_invoice' => 'Loading invoice…',
@@ -148,7 +148,7 @@ class TelegramBotTexts
             'language_set_en' => '✅ English is now set.',
             'btn_language' => '🌐 ភាសា / Language',
             'btn_invoice' => '🧾 វិក័យបត្រ',
-            'btn_payment_qr' => '💳 Payment QR',
+            'btn_payment_qr' => '💳 បង់តាម KHQR',
             'btn_payment_qr_cod' => '💳 Scan KHQR (COD)',
             'btn_track_on' => 'តាមដាន :provider',
             'track_usage' => "របៀបប្រើ: `/track FS-123456`\n\nឬបើកតំណតាមដានពីការបញ្ជាក់ការបញ្ជាទិញរបស់អ្នក។",
@@ -162,45 +162,45 @@ class TelegramBotTexts
             'no_orders' => 'អ្នកមិនទាន់មានការបញ្ជាទិញទេ។',
             'recent_orders_title' => '📋 *ការបញ្ជាទិញថ្មីៗរបស់អ្នក*',
             'track_hint' => 'ប្រើ `/track ORDER_NUMBER` សម្រាប់ព័ត៌មានលម្អិត។',
-            'order_confirmed' => "✅ *ការបញ្ជាទិញបានបញ្ជាក់*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
-                ."សរុប: \$:total\n"
+            'order_confirmed' => "✅ <b>ការបញ្ជាទិញបានបញ្ជាក់</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
+                ."សរុប: $:total\n"
                 ."ស្ថានភាព: កំពុងរៀបចំដឹកជញ្ជូន\n\n"
                 ."អ្នកនឹងទទួលធ្វើបច្ចុប្បន្នភាពពេលដឹកចេញ។",
-            'order_placed_cod' => "🧾 *ការបញ្ជាទិញ COD*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
-                ."សរុប: \$:total\n"
+            'order_placed_cod' => "🧾 <b>ការបញ្ជាទិញ COD</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
+                ."សរុប: $:total\n"
                 ."ការបង់ប្រាក់: បង់ពេលដឹកដល់\n"
                 ."ស្ថានភាព: កំពុងដំណើរការ\n\n"
                 ."យើងកំពុងរៀបចំទំនិញ។ អ្នកនឹងទទួលធ្វើបច្ចុប្បន្នភាពរហូតដល់ដឹកដល់។",
-            'order_processing' => "⏳ *កំពុងរៀបចំការបញ្ជាទិញ*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+            'order_processing' => "⏳ <b>កំពុងរៀបចំការបញ្ជាទិញ</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 ."ស្ថានភាព: កំពុងរៀបចំ\n\n"
                 ."ក្រុមការងារកំពុងវេចខ្ចប់ទំនិញរបស់អ្នក។",
-            'order_shipped' => "📦 *ការបញ្ជាទិញដឹកចេញហើយ*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+            'order_shipped' => "📦 <b>ការបញ្ជាទិញដឹកចេញហើយ</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 ."អ្នកដឹក: :provider\n"
-                ."លេខតាមដាន: `:tracking`",
-            'order_in_transit' => "🚚 *ទំនិញកំពុងដឹក*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+                ."លេខតាមដាន: <code>:tracking</code>",
+            'order_in_transit' => "🚚 <b>ទំនិញកំពុងដឹក</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 ."អ្នកដឹក: :provider\n"
-                ."លេខតាមដាន: `:tracking`\n\n"
+                ."លេខតាមដាន: <code>:tracking</code>\n\n"
                 ."កញ្ចប់របស់អ្នកកំពុងធ្វើដំណើរ។",
-            'order_delivered' => "🎉 *ការបញ្ជាទិញដឹកដល់ហើយ*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+            'order_delivered' => "🎉 <b>ការបញ្ជាទិញដឹកដល់ហើយ</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 .":cod_note"
                 ."សូមអរគុណដែលបានទិញពី Fitandsleek!",
-            'order_delivered_cod_note' => "បង់ពេលដឹកដល់ — ចុច *Payment QR* ខាងក្រោម ឬបង់សាច់ប្រាក់។\n\n",
-            'order_cancelled' => "❌ *ការបញ្ជាទិញត្រូវបានលុបចោល*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+            'order_delivered_cod_note' => "បង់ពេលដឹកដល់ — ចុច <b>Payment QR</b> ខាងក្រោម ឬបង់សាច់ប្រាក់។\n\n",
+            'order_cancelled' => "❌ <b>ការបញ្ជាទិញត្រូវបានលុបចោល</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 ."ស្ថានភាព: លុបចោល\n\n"
                 ."ទាក់ទង Fitandsleek បើត្រូវការជំនួយ។",
-            'order_failed' => "⚠️ *មានបញ្ហាការដឹក*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+            'order_failed' => "⚠️ <b>មានបញ្ហាការដឹក</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 ."ស្ថានភាព: បរាជ័យ\n\n"
                 ."សូមទាក់ទង Fitandsleek សម្រាប់ជំនួយ។",
-            'order_returned' => "↩️ *ការបញ្ជាទិញត្រូវបានត្រឡប់*\n\n"
-                ."ការបញ្ជាទិញ: `:label`\n"
+            'order_returned' => "↩️ <b>ការបញ្ជាទិញត្រូវបានត្រឡប់</b>\n\n"
+                ."ការបញ្ជាទិញ: <code>:label</code>\n"
                 ."ស្ថានភាព: ត្រឡប់\n\n"
                 ."សូមទាក់ទង Fitandsleek សម្រាប់ជំនួយ។",
             'admin_new_cod_order' => "🔔 *ការបញ្ជាទិញ COD ថ្មី*\n\n"
@@ -210,7 +210,7 @@ class TelegramBotTexts
                 ."មុខទំនិញ: :items\n"
                 ."សរុប: \$:total\n"
                 ."អាសយដ្ឋាន: :address",
-            'order_status_title' => '📋 *ស្ថានភាពការបញ្ជាទិញ*',
+            'order_status_title' => '📋 ស្ថានភាពការបញ្ជាទិញ',
             'order_label' => 'ការបញ្ជាទិញ',
             'status_label' => 'ស្ថានភាព',
             'shipment_label' => 'ការដឹកជញ្ជូន',
@@ -219,9 +219,9 @@ class TelegramBotTexts
             'already_paid' => '✅ ការបញ្ជាទិញនេះបានបង់រួចហើយ។',
             'payment_qr_failed' => '❌ មិនអាចបង្កើត Payment QR។ សូមព្យាយាមម្តងទៀត។',
             'payment_qr_failed_gen' => '❌ បរាជ័យក្នុងការបង្កើត Payment QR។ សូមព្យាយាមម្តងទៀត។',
-            'payment_qr_title' => '💳 *Payment QR*',
-            'payment_qr_cod_note' => "\n\n_បង់ពេលដឹកដល់ — Scan ជាមួយ ABA / Bakong_",
-            'payment_qr_scan_note' => "\n\n_Scan ជាមួយកម្មវិធីធនាគាររបស់អ្នកដើម្បីបង់_",
+            'payment_qr_title' => '💳 Payment QR',
+            'payment_qr_cod_note' => "\n\nបង់ពេលដឹកដល់ — Scan ជាមួយ ABA / Bakong",
+            'payment_qr_scan_note' => "\n\nScan ជាមួយកម្មវិធីធនាគាររបស់អ្នកដើម្បីបង់",
             'amount_label' => 'ចំនួនទឹកប្រាក់',
             'generating_qr' => 'កំពុងបង្កើត Payment QR…',
             'loading_invoice' => 'កំពុងផ្ទុកវិក័យបត្រ…',
@@ -256,11 +256,12 @@ class TelegramBotTexts
         }
 
         $telegramLang = strtolower(trim((string) ($user?->language_code ?? '')));
-        if ($telegramLang !== '' && (str_starts_with($telegramLang, 'km') || str_starts_with($telegramLang, 'kh'))) {
-            return self::LOCALE_KM;
+        if ($telegramLang !== '' && (str_starts_with($telegramLang, 'en'))) {
+            return self::LOCALE_EN;
         }
 
-        return self::LOCALE_EN;
+        // Fitandsleek default: Khmer (Cambodia storefront).
+        return self::LOCALE_KM;
     }
 
     /**
