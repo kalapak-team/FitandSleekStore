@@ -357,8 +357,10 @@ class TelegramService
         $locale ??= $this->resolveLocaleForChatId($chatId);
 
         try {
+            $order->loadMissing('shipment');
             $message = $this->formatInvoiceTelegramMessage($order, $locale);
-            $keyboard = $this->buildOrderActionKeyboard($order, $order->shipment, $locale);
+            // Keep action buttons after viewing invoice (admin = full status keyboard).
+            $keyboard = $this->keyboardForChat($chatId, $order);
 
             return $this->sendMessage((string) $chatId, $message, $keyboard, 'HTML');
         } catch (\Throwable $e) {
@@ -367,10 +369,28 @@ class TelegramService
                 'chat_id' => $chatId,
                 'error' => $e->getMessage(),
             ]);
-            $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invoice_failed'));
+            $this->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'invoice_failed'),
+                $this->keyboardForChat($chatId, $order)
+            );
 
             return false;
         }
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}|null
+     */
+    public function keyboardForChat(int $chatId, Order $order): ?array
+    {
+        $order->loadMissing('shipment');
+
+        if ($this->isAdminChatId($chatId)) {
+            return $this->buildAdminOrderKeyboard($order);
+        }
+
+        return $this->buildOrderActionKeyboard($order, $order->shipment, $this->resolveLocaleForChatId($chatId));
     }
 
     private function formatInvoiceTelegramMessage(Order $order, string $locale): string
@@ -599,14 +619,35 @@ class TelegramService
                 .TelegramBotTexts::get($locale, 'amount_label').": *{$amountLabel}*"
                 .$codNote;
 
-            return $this->sendPhoto((string) $chatId, $this->buildQrPngBytes($qrString), $caption);
+            $sent = $this->sendPhoto(
+                (string) $chatId,
+                $this->buildQrPngBytes($qrString),
+                $caption,
+                $this->keyboardForChat($chatId, $order)
+            );
+
+            // Ensure action buttons remain even if photo markup fails.
+            if ($sent && $this->isAdminChatId($chatId)) {
+                $this->sendMessage(
+                    (string) $chatId,
+                    "⬆️ KHQR ខាងលើ · បន្តចុចប៊ូតុងខាងក្រោមបាន\n⬆️ QR above · use buttons below to continue",
+                    $this->buildAdminOrderKeyboard($order),
+                    null
+                );
+            }
+
+            return $sent;
         } catch (\Throwable $e) {
             Log::error('Telegram payment QR failed', [
                 'order_id' => $order->id,
                 'chat_id' => $chatId,
                 'error' => $e->getMessage(),
             ]);
-            $this->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'payment_qr_failed_gen'));
+            $this->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'payment_qr_failed_gen'),
+                $this->keyboardForChat($chatId, $order)
+            );
 
             return false;
         }
@@ -919,7 +960,7 @@ class TelegramService
         }
     }
 
-    public function sendPhoto(string $chatId, string $pngBytes, ?string $caption = null): bool
+    public function sendPhoto(string $chatId, string $pngBytes, ?string $caption = null, ?array $replyMarkup = null): bool
     {
         if (! $this->isEnabled()) {
             return false;
@@ -936,6 +977,13 @@ class TelegramService
                 $multipart[] = ['name' => 'parse_mode', 'contents' => 'Markdown'];
             }
 
+            if ($replyMarkup !== null) {
+                $multipart[] = [
+                    'name' => 'reply_markup',
+                    'contents' => json_encode($replyMarkup, JSON_UNESCAPED_UNICODE),
+                ];
+            }
+
             $response = Http::timeout(20)
                 ->asMultipart()
                 ->post('https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendPhoto', $multipart);
@@ -946,6 +994,21 @@ class TelegramService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
+                // Retry caption without Markdown if parse failed, keep buttons.
+                if ($caption !== null && $replyMarkup !== null) {
+                    $retryParts = [
+                        ['name' => 'chat_id', 'contents' => $chatId],
+                        ['name' => 'photo', 'contents' => $pngBytes, 'filename' => 'payment-qr.png'],
+                        ['name' => 'caption', 'contents' => preg_replace('/[*_`]/', '', $caption) ?? $caption],
+                        ['name' => 'reply_markup', 'contents' => json_encode($replyMarkup, JSON_UNESCAPED_UNICODE)],
+                    ];
+                    $retry = Http::timeout(20)
+                        ->asMultipart()
+                        ->post('https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendPhoto', $retryParts);
+
+                    return $retry->successful();
+                }
 
                 return false;
             }

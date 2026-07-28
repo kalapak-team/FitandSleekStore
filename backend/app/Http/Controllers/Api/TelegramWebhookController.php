@@ -436,7 +436,7 @@ class TelegramWebhookController extends Controller
         $this->telegram->sendMessage(
             (string) $chatId,
             ($result['ok'] ? '' : '❌ ').$result['message'],
-            $this->telegram->buildAdminOrderKeyboardPublic($order->fresh(['shipment', 'user', 'items.product'])),
+            $this->telegram->keyboardForChat($chatId, $order->fresh(['shipment', 'user', 'items.product'])),
             null
         );
     }
