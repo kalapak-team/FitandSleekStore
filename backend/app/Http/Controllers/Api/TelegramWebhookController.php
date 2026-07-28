@@ -299,8 +299,10 @@ class TelegramWebhookController extends Controller
         $chatId = (int) $chat['id'];
         $telegramUser = $this->telegram->upsertTelegramUser($from, $chatId);
 
-        // Dismiss Telegram button spinner immediately (must happen within a few seconds).
-        $this->telegram->answerCallbackQuery($callbackId);
+        // Dismiss spinner quickly; admin status answers with result text after update.
+        if (! str_starts_with($data, 'adminst_')) {
+            $this->telegram->answerCallbackQuery($callbackId);
+        }
 
         if ($data === 'lang_menu') {
             $this->telegram->sendLanguageMenu($chatId, $telegramUser);
@@ -332,7 +334,7 @@ class TelegramWebhookController extends Controller
         }
 
         if (str_starts_with($data, 'adminst_')) {
-            $this->handleAdminStatusCallback($data, $chatId, $telegramUser);
+            $this->handleAdminStatusCallback($callbackId, $data, $chatId, $telegramUser);
 
             return;
         }
@@ -390,10 +392,11 @@ class TelegramWebhookController extends Controller
         $this->telegram->sendInvoiceToChat($chatId, $order, $locale);
     }
 
-    private function handleAdminStatusCallback(string $data, int $chatId, TelegramUser $telegramUser): void
+    private function handleAdminStatusCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
     {
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
         if (! $this->telegram->isAdminChatId($chatId)) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Admin only');
             $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
 
             return;
@@ -401,6 +404,7 @@ class TelegramWebhookController extends Controller
 
         $parts = explode('_', $data);
         if (count($parts) < 3) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Invalid');
             $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invalid_order'));
 
             return;
@@ -409,19 +413,31 @@ class TelegramWebhookController extends Controller
         $orderId = (int) ($parts[1] ?? 0);
         $status = implode('_', array_slice($parts, 2));
         if ($orderId <= 0 || $status === '') {
+            $this->telegram->answerCallbackQuery($callbackId, 'Invalid');
             $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'invalid_order'));
 
             return;
         }
 
-        $order = Order::find($orderId);
+        $order = Order::with('shipment')->find($orderId);
         if (! $order) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Not found');
             $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'order_not_found_short'));
 
             return;
         }
 
         $result = $this->telegram->updateShipmentStatusFromAdminChat($order, $status);
-        $this->telegram->sendMessage((string) $chatId, ($result['ok'] ? '✅ ' : '❌ ').$result['message']);
+        $toast = $result['ok']
+            ? ('OK · '.str_replace('_', ' ', $status))
+            : ('Fail · '.($result['message'] ?? 'error'));
+        $this->telegram->answerCallbackQuery($callbackId, mb_substr($toast, 0, 180));
+
+        $this->telegram->sendMessage(
+            (string) $chatId,
+            ($result['ok'] ? '' : '❌ ').$result['message'],
+            $this->telegram->buildAdminOrderKeyboardPublic($order->fresh(['shipment', 'user', 'items.product'])),
+            null
+        );
     }
 }

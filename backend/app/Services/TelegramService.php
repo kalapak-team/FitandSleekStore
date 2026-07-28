@@ -216,8 +216,8 @@ class TelegramService
             return;
         }
 
-        // Avoid duplicate "processing" noise right after order paid (shipment starts as pending).
-        if ($status === 'pending') {
+        // Avoid duplicate noise: pending/processing are covered by order status alerts.
+        if (in_array($status, ['pending', 'processing'], true)) {
             return;
         }
 
@@ -228,7 +228,7 @@ class TelegramService
             'Order '.$label.' shipment is now '.$status.'.'
         );
 
-        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $provider, $trackingCode, $textKey) {
+        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $shipment, $label, $trackingCode, $textKey) {
             $message = TelegramBotTexts::get($locale, $textKey, [
                 'label' => $label,
                 'provider' => $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback'),
@@ -249,26 +249,10 @@ class TelegramService
         }
 
         $order->loadMissing(['user', 'items', 'shipment']);
-        $label = $order->order_number ?: '#'.$order->id;
-        $customer = $order->user?->name ?: 'Guest';
-        $phone = $this->resolveOrderPhone($order);
-        $itemCount = $order->items->count();
-        $total = number_format((float) $order->total, 2);
-        $address = $this->formatAddress($order);
-        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-
-        // HTML (not Markdown) — addresses/phones often break Markdown and drop the whole message.
-        $message = "🔔 <b>New COD order</b>\n\n"
-            .'Order: <code>'.$e($label)."</code>\n"
-            .'Customer: '.$e($customer)."\n"
-            .'Phone: '.$e($phone)."\n"
-            .'Items: '.$itemCount."\n"
-            .'Total: $'.$total."\n"
-            .'Address: '.$e($address);
 
         $sent = $this->sendMessage(
             (string) $chatId,
-            $message,
+            $this->formatAdminOrderCardHtml($order, 'cod'),
             $this->buildAdminOrderKeyboard($order),
             'HTML'
         );
@@ -504,20 +488,20 @@ class TelegramService
     }
 
     /**
-     * @return array{ok: bool, message: string}
+     * @return array{ok: bool, message: string, customer_notified: bool}
      */
     public function updateShipmentStatusFromAdminChat(Order $order, string $status): array
     {
         $status = strtolower(trim($status));
         $allowed = ['pending', 'processing', 'shipped', 'in_transit', 'delivered', 'failed', 'returned'];
         if (! in_array($status, $allowed, true)) {
-            return ['ok' => false, 'message' => 'Invalid status.'];
+            return ['ok' => false, 'message' => 'Invalid status.', 'customer_notified' => false];
         }
 
-        $order->loadMissing('shipment');
+        $order->loadMissing(['shipment', 'user']);
         $shipment = $order->shipment;
         if (! $shipment) {
-            return ['ok' => false, 'message' => 'Shipment not found for this order.'];
+            return ['ok' => false, 'message' => 'Shipment not found for this order.', 'customer_notified' => false];
         }
 
         $shippedAt = $shipment->shipped_at;
@@ -543,9 +527,40 @@ class TelegramService
             'event_time' => now(),
         ]);
 
+        // Sync order status into system (web/app) immediately.
+        $orderStatus = match ($status) {
+            'processing' => 'processing',
+            'shipped', 'in_transit' => 'shipped',
+            'failed' => 'failed',
+            'returned' => 'returned',
+            'delivered' => null, // ShipmentObserver sets completed
+            default => null,
+        };
+
+        if ($orderStatus !== null && (string) $order->status !== $orderStatus) {
+            $order->update(['status' => $orderStatus]);
+        }
+
+        $customerNotified = $this->resolveOrderChatIds($order->fresh(['user']))->isNotEmpty();
+
+        $statusKm = match ($status) {
+            'processing' => 'កំពុងរៀបចំ',
+            'shipped' => 'ដឹកចេញ',
+            'in_transit' => 'កំពុងដឹក',
+            'delivered' => 'ដឹកដល់',
+            'failed' => 'បរាជ័យ',
+            'returned' => 'ត្រឡប់',
+            default => $status,
+        };
+
         return [
             'ok' => true,
-            'message' => 'Shipment status updated to '.str_replace('_', ' ', $status).'.',
+            'message' => "✅ {$statusKm} / ".str_replace('_', ' ', $status)
+                ."\nOrder: ".($order->order_number ?: '#'.$order->id)
+                ."\n".($customerNotified
+                    ? '📣 Customer Telegram: notified'
+                    : '⚠️ Customer Telegram: not linked — alert skipped'),
+            'customer_notified' => $customerNotified,
         ];
     }
 
@@ -767,23 +782,14 @@ class TelegramService
             return;
         }
 
-        $order->loadMissing('user');
-        $label = $order->order_number ?: '#'.$order->id;
-        $customer = $order->user?->name ?: 'Guest';
-        $phone = $this->resolveOrderPhone($order);
-        $total = number_format((float) $order->total, 2);
-        $address = $this->formatAddress($order);
-        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $order->loadMissing(['user', 'items.product', 'shipment']);
 
-        $message = "✅ <b>Order completed</b>\n\n"
-            .'Order: <code>'.$e($label)."</code>\n"
-            .'Customer: '.$e($customer)."\n"
-            .'Phone: '.$e($phone)."\n"
-            .'Total: $'.$total."\n"
-            .'Address: '.$e($address)."\n\n"
-            .'Marked as delivered/completed.';
-
-        $this->sendMessage((string) $chatId, $message, $this->buildAdminOrderKeyboard($order), 'HTML');
+        $this->sendMessage(
+            (string) $chatId,
+            $this->formatAdminOrderCardHtml($order, 'completed'),
+            $this->buildAdminOrderKeyboard($order),
+            'HTML'
+        );
     }
 
     public function notifyAdminOfNewOrder(Order $order): void
@@ -795,11 +801,9 @@ class TelegramService
 
         $order->loadMissing(['user', 'items.product', 'shipment']);
 
-        $message = $this->formatAdminNewOrderTelegramMessage($order);
-
         $this->sendMessage(
             (string) $chatId,
-            $message,
+            $this->formatAdminOrderCardHtml($order, 'paid'),
             $this->buildAdminOrderKeyboard($order),
             'HTML'
         );
@@ -1244,52 +1248,150 @@ class TelegramService
     /**
      * @return array{inline_keyboard: list<list<array<string, string>>>}|null
      */
+    public function buildAdminOrderKeyboardPublic(Order $order): ?array
+    {
+        return $this->buildAdminOrderKeyboard($order);
+    }
+
+    private function formatAdminOrderCardHtml(Order $order, string $kind = 'paid'): string
+    {
+        $order->loadMissing(['user', 'items.product', 'shipment']);
+        $invoice = $this->invoices->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+        $customer = $invoice['customer'] ?? [];
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $label = $order->order_number ?: '#'.$order->id;
+        $paymentLabel = $this->formatPaymentMethodLabel($order);
+        $paidLabel = ($invoice['payment_status'] ?? '') === 'PAID' ? 'Paid / បានបង់' : 'Pending / មិនទាន់បង់';
+        $orderTime = $order->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '';
+        $shipment = $order->shipment;
+        $shipStatus = $shipment
+            ? ucfirst(str_replace('_', ' ', (string) $shipment->status))
+            : '—';
+
+        $title = match ($kind) {
+            'cod' => '🔔 <b>ការបញ្ជាទិញ COD ថ្មី</b>\n<i>New COD order</i>',
+            'completed' => '✅ <b>ដឹកដល់ / បញ្ចប់</b>\n<i>Order completed</i>',
+            default => '🔔 <b>ការបញ្ជាទិញបានបង់</b>\n<i>New paid order</i>',
+        };
+
+        $lines = [
+            $title,
+            '',
+            '🧾 Order: <code>'.$e($label).'</code>',
+            '📅 Date: '.$e($orderTime),
+            '💳 Payment: <b>'.$e($paidLabel).'</b> · '.$e($paymentLabel),
+            '📦 Shipment: <b>'.$e($shipStatus).'</b>',
+            '',
+            '<b>អតិថិជន / Customer</b>',
+            '👤 '.$e((string) ($customer['name'] ?? $order->user?->name ?? 'Guest')),
+        ];
+
+        $phone = trim((string) ($customer['phone'] ?? $this->resolveOrderPhone($order)));
+        if ($phone !== '' && $phone !== '-') {
+            $lines[] = '📞 '.$e($phone);
+        }
+
+        $fullAddress = trim((string) ($customer['full_address'] ?? $this->formatAddress($order)));
+        if ($fullAddress !== '' && $fullAddress !== '-') {
+            $lines[] = '📍 '.$e($fullAddress);
+        }
+
+        $lines[] = '';
+        $lines[] = '<b>ទំនិញ / Items</b>';
+        $items = $invoice['items'] ?? [];
+        $maxItems = 8;
+        foreach (array_slice($items, 0, $maxItems) as $item) {
+            $name = $e((string) ($item['product_name'] ?? 'Item'));
+            $sku = $e((string) ($item['sku'] ?? '-'));
+            $qty = (int) ($item['quantity'] ?? 0);
+            $lineTotal = number_format((float) ($item['grand_total'] ?? 0), 2);
+            $lines[] = '• '.$name;
+            $lines[] = '  <code>'.$sku.'</code> · ចំនួន '.$qty.' — $'.$lineTotal;
+        }
+        $remaining = count($items) - $maxItems;
+        if ($remaining > 0) {
+            $lines[] = '<i>+'.$remaining.' more</i>';
+        }
+
+        $lines[] = '';
+        $lines[] = 'Subtotal: $'.number_format((float) ($invoice['subtotal'] ?? 0), 2);
+        if ((float) ($invoice['discount'] ?? 0) > 0) {
+            $lines[] = 'Discount: −$'.number_format((float) $invoice['discount'], 2);
+        }
+        $lines[] = 'Shipping: $'.number_format((float) ($invoice['shipping_fee'] ?? 0), 2);
+        $lines[] = '<b>សរុប / Total: $'.number_format((float) ($invoice['grand_total'] ?? $order->total), 2).'</b>';
+
+        if ($shipment?->tracking_code) {
+            $lines[] = 'Tracking: <code>'.$e((string) $shipment->tracking_code).'</code>';
+        }
+        if ($shipment?->provider && strtolower((string) $shipment->provider) !== 'internal') {
+            $lines[] = 'Courier: '.$e((string) $shipment->provider);
+        }
+
+        if ($order->payment_method === 'cod' && $order->payment_status !== 'paid') {
+            $lines[] = '';
+            $lines[] = '<i>COD — ប្រមូល $'.number_format((float) $order->total, 2).' ពេលដឹកដល់</i>';
+        }
+
+        if ($kind === 'completed') {
+            $lines[] = '';
+            $lines[] = '<i>Marked as delivered/completed.</i>';
+        }
+
+        $message = implode("\n", $lines);
+        if (strlen($message) > 4000) {
+            $message = substr($message, 0, 3990)."\n…";
+        }
+
+        return $message;
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}|null
+     */
     private function buildAdminOrderKeyboard(Order $order): ?array
     {
         $order->loadMissing('shipment');
         $shipment = $order->shipment;
-        $locale = TelegramBotTexts::LOCALE_EN;
         $rows = [];
 
-        $actionRow = [[
-            'text' => TelegramBotTexts::get($locale, 'btn_invoice'),
-            'callback_data' => 'invoice_'.$order->id,
-        ]];
-
+        // Short bilingual labels (2 per row) to avoid Telegram truncation.
+        $actionRow = [
+            ['text' => '🧾 វិក័យបត្រ', 'callback_data' => 'invoice_'.$order->id],
+        ];
         if ($order->payment_status !== 'paid') {
             $actionRow[] = [
-                'text' => $order->payment_method === 'cod'
-                    ? TelegramBotTexts::get($locale, 'btn_payment_qr_cod')
-                    : TelegramBotTexts::get($locale, 'btn_payment_qr'),
+                'text' => $order->payment_method === 'cod' ? '💳 KHQR COD' : '💳 KHQR',
                 'callback_data' => 'payqr_'.$order->id,
             ];
         }
-
-        if ($actionRow !== []) {
-            $rows[] = $actionRow;
-        }
+        $rows[] = $actionRow;
 
         if ($shipment && filled($shipment->external_tracking_url)) {
-            $provider = $shipment->provider ?: TelegramBotTexts::get($locale, 'courier_fallback');
+            $provider = $shipment->provider && strtolower((string) $shipment->provider) !== 'internal'
+                ? (string) $shipment->provider
+                : 'Courier';
             $rows[] = [[
-                'text' => TelegramBotTexts::get($locale, 'btn_track_on', ['provider' => $provider]),
+                'text' => '🔗 Track '.$provider,
                 'url' => $shipment->external_tracking_url,
             ]];
         }
 
-        // Always show manual status controls for admin (same as web/app).
         $rows[] = [
-            ['text' => '⏳ Processing', 'callback_data' => 'adminst_'.$order->id.'_processing'],
-            ['text' => '📦 Shipped', 'callback_data' => 'adminst_'.$order->id.'_shipped'],
-            ['text' => '🚚 In Transit', 'callback_data' => 'adminst_'.$order->id.'_in_transit'],
+            ['text' => '⏳ រៀបចំ', 'callback_data' => 'adminst_'.$order->id.'_processing'],
+            ['text' => '📦 ដឹកចេញ', 'callback_data' => 'adminst_'.$order->id.'_shipped'],
         ];
         $rows[] = [
-            ['text' => '✅ Delivered', 'callback_data' => 'adminst_'.$order->id.'_delivered'],
-            ['text' => '⚠️ Failed', 'callback_data' => 'adminst_'.$order->id.'_failed'],
-            ['text' => '↩️ Returned', 'callback_data' => 'adminst_'.$order->id.'_returned'],
+            ['text' => '🚚 កំពុងដឹក', 'callback_data' => 'adminst_'.$order->id.'_in_transit'],
+            ['text' => '✅ ដឹកដល់', 'callback_data' => 'adminst_'.$order->id.'_delivered'],
+        ];
+        $rows[] = [
+            ['text' => '⚠️ បរាជ័យ', 'callback_data' => 'adminst_'.$order->id.'_failed'],
+            ['text' => '↩️ ត្រឡប់', 'callback_data' => 'adminst_'.$order->id.'_returned'],
         ];
 
-        return $rows !== [] ? ['inline_keyboard' => $rows] : null;
+        return ['inline_keyboard' => $rows];
     }
 
     private function formatPaymentMethodLabel(Order $order): string
