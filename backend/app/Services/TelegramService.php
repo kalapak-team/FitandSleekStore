@@ -246,7 +246,7 @@ class TelegramService
             return;
         }
 
-        $order->loadMissing(['user', 'items']);
+        $order->loadMissing(['user', 'items', 'shipment']);
         $label = $order->order_number ?: '#'.$order->id;
         $customer = $order->user?->name ?: 'Guest';
         $phone = $this->resolveOrderPhone($order);
@@ -263,7 +263,11 @@ class TelegramService
             'address' => $address,
         ]);
 
-        $this->sendMessage((string) $chatId, $message);
+        $this->sendMessage(
+            (string) $chatId,
+            $message,
+            $this->buildAdminOrderKeyboard($order)
+        );
     }
 
     public function buildReceiptUrl(Order $order): string
@@ -1199,18 +1203,17 @@ class TelegramService
             ]];
         }
 
-        if ($shipment) {
-            $rows[] = [
-                ['text' => '⏳ Processing', 'callback_data' => 'adminst_'.$order->id.'_processing'],
-                ['text' => '📦 Shipped', 'callback_data' => 'adminst_'.$order->id.'_shipped'],
-                ['text' => '🚚 In Transit', 'callback_data' => 'adminst_'.$order->id.'_in_transit'],
-            ];
-            $rows[] = [
-                ['text' => '✅ Delivered', 'callback_data' => 'adminst_'.$order->id.'_delivered'],
-                ['text' => '⚠️ Failed', 'callback_data' => 'adminst_'.$order->id.'_failed'],
-                ['text' => '↩️ Returned', 'callback_data' => 'adminst_'.$order->id.'_returned'],
-            ];
-        }
+        // Always show manual status controls for admin (same as web/app).
+        $rows[] = [
+            ['text' => '⏳ Processing', 'callback_data' => 'adminst_'.$order->id.'_processing'],
+            ['text' => '📦 Shipped', 'callback_data' => 'adminst_'.$order->id.'_shipped'],
+            ['text' => '🚚 In Transit', 'callback_data' => 'adminst_'.$order->id.'_in_transit'],
+        ];
+        $rows[] = [
+            ['text' => '✅ Delivered', 'callback_data' => 'adminst_'.$order->id.'_delivered'],
+            ['text' => '⚠️ Failed', 'callback_data' => 'adminst_'.$order->id.'_failed'],
+            ['text' => '↩️ Returned', 'callback_data' => 'adminst_'.$order->id.'_returned'],
+        ];
 
         return $rows !== [] ? ['inline_keyboard' => $rows] : null;
     }

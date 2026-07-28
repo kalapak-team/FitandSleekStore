@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 
 class TelegramResetMenuButtonCommand extends Command
 {
-    protected $signature = 'telegram:reset-menu-button {--default : Set bot menu button back to default instead of deleting chat menu button}';
+    protected $signature = 'telegram:reset-menu-button';
 
     protected $description = 'Reset Telegram persistent menu button (Shop Now, etc.)';
 
@@ -20,11 +20,10 @@ class TelegramResetMenuButtonCommand extends Command
             return self::FAILURE;
         }
 
-        $method = $this->option('default') ? 'setChatMenuButton' : 'deleteChatMenuButton';
-        $payload = [];
-        if ($this->option('default')) {
-            $payload['menu_button'] = ['type' => 'default'];
-        }
+        $method = 'setChatMenuButton';
+        $payload = [
+            'menu_button' => ['type' => 'default'],
+        ];
 
         $response = Http::timeout(15)->post("https://api.telegram.org/bot{$token}/{$method}", $payload);
 
@@ -35,11 +34,7 @@ class TelegramResetMenuButtonCommand extends Command
             return self::FAILURE;
         }
 
-        $this->info(
-            $this->option('default')
-                ? 'Menu button reset to Telegram default.'
-                : 'Persistent chat menu button deleted.'
-        );
+        $this->info('Menu button reset to Telegram default.');
 
         return self::SUCCESS;
     }
