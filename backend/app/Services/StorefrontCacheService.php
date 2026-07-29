@@ -20,7 +20,9 @@ class StorefrontCacheService
 
     public const TTL_RECOMMENDATIONS = 180;
 
-    public const TTL_BOOTSTRAP = 600;
+    // Admin edits call bump()/bumpProducts(), so a long TTL stays fresh while
+    // surviving the gaps between keep-warm pings on Render Free.
+    public const TTL_BOOTSTRAP = 3600;
 
     private const VERSION_PREFIX = 'storefront:v1:ver:';
 
@@ -50,6 +52,11 @@ class StorefrontCacheService
         } catch (\Throwable) {
             return Cache::remember($key, $ttlSeconds, $callback);
         }
+    }
+
+    public static function forget(string $domain, string $suffix = ''): void
+    {
+        Cache::forget(self::key($domain, $suffix));
     }
 
     public static function key(string $domain, string $suffix = ''): string

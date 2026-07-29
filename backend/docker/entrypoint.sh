@@ -64,6 +64,12 @@ case "$1" in
         >> storage/logs/qdrant-index.log 2>&1 &
     fi
 
+    # A fresh container starts with an empty file cache, so the first visitor would
+    # otherwise trigger the slow homepage build and time out behind the CDN proxy.
+    if [ "${WARM_STOREFRONT_ON_BOOT:-true}" != "false" ]; then
+      php artisan storefront:warm >> storage/logs/storefront-warm.log 2>&1 &
+    fi
+
     php-fpm -D
     exec nginx -g 'daemon off;'
     ;;
