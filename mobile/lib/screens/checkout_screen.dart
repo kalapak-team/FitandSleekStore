@@ -133,11 +133,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       'receiver_name': _nameController.text.trim(),
       'receiver_phone': _phoneController.text.trim(),
       'province': _provinceController.text.trim(),
-      'house_no': street,
-      'street_no': street,
-      'sangkat': _provinceController.text.trim(),
-      'khan': _provinceController.text.trim(),
-      if (street.isNotEmpty) 'formatted_address': street,
+      'street': street,
     };
   }
 

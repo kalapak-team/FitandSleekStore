@@ -9,6 +9,7 @@ use App\Models\Shipment;
 use App\Models\ShipmentTrackingEvent;
 use App\Models\TelegramOrderSubscription;
 use App\Models\TelegramUser;
+use App\Support\ShippingAddress;
 use App\Support\TelegramBotTexts;
 use Endroid\QrCode\Color\Color;
 use Endroid\QrCode\Encoding\Encoding;
@@ -1264,35 +1265,7 @@ class TelegramService
 
     private function formatAddress(Order $order): string
     {
-        $address = $order->shipping_address;
-        if (! is_array($address)) {
-            return '—';
-        }
-
-        $formatted = trim((string) ($address['formatted_address'] ?? ''));
-        if ($formatted !== '') {
-            return $formatted;
-        }
-
-        $parts = array_filter([
-            $address['receiver_name'] ?? null,
-            filled($address['house_no'] ?? null) ? 'ផ្ទះលេខ '.$address['house_no'] : null,
-            filled($address['street_no'] ?? null) ? 'ផ្លូវ '.$address['street_no'] : null,
-            $address['street'] ?? null,
-            filled($address['sangkat'] ?? null) ? 'សង្កាត់/ឃុំ '.$address['sangkat'] : null,
-            filled($address['khan'] ?? null) ? 'ខណ្ឌ/ស្រុក '.$address['khan'] : null,
-            $address['province'] ?? null,
-            $address['landmark'] ?? null,
-            $address['line1'] ?? $address['address'] ?? null,
-            $address['line2'] ?? null,
-            $address['district'] ?? null,
-            $address['city'] ?? null,
-            $address['state'] ?? null,
-            $address['full_address'] ?? null,
-            $address['country'] ?? null,
-        ], fn ($part) => filled($part));
-
-        return $parts !== [] ? implode(', ', $parts) : '—';
+        return ShippingAddress::format($order->shipping_address);
     }
 
     private function formatAdminNewOrderTelegramMessage(Order $order): string
@@ -1416,14 +1389,33 @@ class TelegramService
             '👤 '.$e((string) ($customer['name'] ?? $order->user?->name ?? 'Guest')),
         ];
 
+        $address = is_array($order->shipping_address) ? $order->shipping_address : [];
+
+        $accountName = trim((string) ($order->user?->name ?? ''));
+        $receiver = trim((string) ($address['receiver_name'] ?? ''));
+        if ($receiver !== '' && $receiver !== $accountName) {
+            $lines[] = '📥 ទទួល / Receiver: '.$e($receiver);
+        }
+
         $phone = trim((string) ($customer['phone'] ?? $this->resolveOrderPhone($order)));
-        if ($phone !== '' && $phone !== '-') {
+        if ($phone !== '' && $phone !== '-' && $phone !== '—') {
             $lines[] = '📞 '.$e($phone);
         }
 
         $fullAddress = trim((string) ($customer['full_address'] ?? $this->formatAddress($order)));
-        if ($fullAddress !== '' && $fullAddress !== '-') {
+        if ($fullAddress !== '' && $fullAddress !== '-' && $fullAddress !== '—') {
             $lines[] = '📍 '.$e($fullAddress);
+        }
+
+        if (! ShippingAddress::isDeliverable($address)) {
+            $lines[] = '⚠️ <b>អាសយដ្ឋានមិនពេញលេញ</b> — សូមទូរស័ព្ទសួរអតិថិជនមុនដឹក';
+            $lines[] = '<i>Incomplete address — call the customer before dispatch</i>';
+        }
+
+        $lat = $address['latitude'] ?? null;
+        $lng = $address['longitude'] ?? null;
+        if (filled($lat) && filled($lng)) {
+            $lines[] = '🗺 <a href="https://maps.google.com/?q='.$e((string) $lat).','.$e((string) $lng).'">Google Maps</a>';
         }
 
         $lines[] = '';

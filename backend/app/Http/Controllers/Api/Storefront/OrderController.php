@@ -12,6 +12,7 @@ use App\Services\InventoryLotService;
 use App\Services\LoyaltyService;
 use App\Services\ProductVariantInventory;
 use App\Services\SecurityAuditService;
+use App\Support\ShippingAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -140,8 +141,25 @@ class OrderController extends Controller
             'payment_method' => 'required|in:bakong_khqr,cod',
             'shipping_address' => 'required|array',
             'shipping_address.province' => 'required|string|max:120',
+            'shipping_address.house_no' => 'nullable|string|max:50',
+            'shipping_address.street_no' => 'nullable|string|max:120',
+            'shipping_address.sangkat' => 'nullable|string|max:120',
+            'shipping_address.khan' => 'nullable|string|max:120',
+            'shipping_address.landmark' => 'nullable|string|max:255',
+            'shipping_address.receiver_name' => 'nullable|string|max:120',
+            'shipping_address.receiver_phone' => 'nullable|string|max:30',
             'billing_address' => 'nullable|array',
         ]);
+
+        $shippingAddress = ShippingAddress::hydrateFromSaved($validated['shipping_address'], $user);
+
+        if (! ShippingAddress::isDeliverable($shippingAddress)) {
+            throw ValidationException::withMessages([
+                'shipping_address' => ['Please provide a full delivery address (house no., street, sangkat/khan), not only the province.'],
+            ]);
+        }
+
+        $validated['shipping_address'] = ShippingAddress::normalize($shippingAddress, $user);
 
         $userId = (int) $request->user()->id;
 
