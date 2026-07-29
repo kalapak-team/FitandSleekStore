@@ -296,23 +296,28 @@ class DatabaseBackupService
 
     private function resolveBinary(string $name): string
     {
-        $result = Process::run(['which', $name]);
-        $path = trim($result->output());
-        if ($result->successful() && $path !== '') {
-            return $path;
-        }
-
-        // Homebrew PostgreSQL often lives outside PATH on macOS.
+        // Prefer a client at least as new as Neon (PG 18+). Homebrew / PGDG paths first.
         $candidates = [
+            "/opt/homebrew/opt/postgresql@18/bin/{$name}",
+            "/usr/local/opt/postgresql@18/bin/{$name}",
+            "/usr/lib/postgresql/18/bin/{$name}",
+            "/opt/homebrew/opt/postgresql@17/bin/{$name}",
+            "/usr/lib/postgresql/17/bin/{$name}",
             "/opt/homebrew/opt/postgresql@16/bin/{$name}",
-            "/opt/homebrew/opt/postgresql@15/bin/{$name}",
             "/usr/local/opt/postgresql@16/bin/{$name}",
+            "/usr/lib/postgresql/16/bin/{$name}",
             "/usr/bin/{$name}",
         ];
         foreach ($candidates as $candidate) {
             if (is_executable($candidate)) {
                 return $candidate;
             }
+        }
+
+        $result = Process::run(['which', $name]);
+        $path = trim($result->output());
+        if ($result->successful() && $path !== '' && is_executable($path)) {
+            return $path;
         }
 
         throw new RuntimeException("Required binary not found: {$name}");

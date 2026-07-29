@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\TelegramUser;
+use App\Services\DatabaseBackupService;
 use App\Services\TelegramService;
 use App\Support\TelegramBotTexts;
 use Illuminate\Http\JsonResponse;
@@ -75,6 +76,8 @@ class TelegramWebhookController extends Controller
                 $this->sendHelp($telegramUser, $chatId);
             } elseif (str_starts_with($text, '/chatid')) {
                 $this->handleChatId($chat, $chatId);
+            } elseif (str_starts_with($text, '/backup')) {
+                $this->handleBackup($chatId);
             }
         } catch (\Throwable $e) {
             Log::error('Telegram webhook handler failed', [
@@ -110,6 +113,53 @@ class TelegramWebhookController extends Controller
         }
 
         $this->telegram->sendMessage((string) $chatId, implode("\n", $lines), null, 'HTML');
+    }
+
+    /**
+     * Manual backup trigger for staff chats (no Render shell required).
+     */
+    private function handleBackup(int $chatId): void
+    {
+        if (! $this->isAllowedBackupChat($chatId)) {
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                '⛔ Backup command is only available in the backup / admin group.',
+                null,
+                null
+            );
+
+            return;
+        }
+
+        $this->telegram->sendMessage(
+            (string) $chatId,
+            '⏳ Starting database backup… please wait.',
+            null,
+            null
+        );
+
+        // Finish the Telegram webhook quickly; Neon dumps can exceed webhook timeouts.
+        dispatch(function () {
+            try {
+                app(DatabaseBackupService::class)->run();
+            } catch (\Throwable $e) {
+                Log::error('Telegram /backup failed', ['error' => $e->getMessage()]);
+            }
+        })->afterResponse();
+    }
+
+    private function isAllowedBackupChat(int $chatId): bool
+    {
+        if ($this->telegram->isAdminChatId($chatId)) {
+            return true;
+        }
+
+        $backupChat = trim((string) config('backup.telegram_chat_id'));
+        if ($backupChat === '') {
+            return false;
+        }
+
+        return (string) $chatId === (string) (int) $backupChat;
     }
 
     private function handleStart(TelegramUser $telegramUser, string $text, int $chatId): void

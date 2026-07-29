@@ -30,7 +30,7 @@ return [
 
     'path_prefix' => trim((string) env('BACKUP_PATH_PREFIX', 'database-backups'), '/'),
 
-    'telegram_chat_id' => env('BACKUP_TELEGRAM_CHAT_ID', env('TELEGRAM_ADMIN_CHAT_ID')),
+    'telegram_chat_id' => env('BACKUP_TELEGRAM_CHAT_ID') ?: env('TELEGRAM_ADMIN_CHAT_ID'),
 
     // Bot API document limit is ~50MB; leave headroom.
     'telegram_max_bytes' => (int) env('BACKUP_TELEGRAM_MAX_BYTES', 45 * 1024 * 1024),
