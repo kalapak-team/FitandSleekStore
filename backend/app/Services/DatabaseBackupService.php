@@ -129,12 +129,16 @@ class DatabaseBackupService
         }
 
         $pgDump = $this->resolveBinary('pg_dump');
-        $env = array_merge($_ENV, [
+        $ldPath = '/opt/pg18/lib';
+        if ($existing = getenv('LD_LIBRARY_PATH')) {
+            $ldPath .= ':'.$existing;
+        }
+
+        $result = Process::env($this->processEnv([
             'PGPASSWORD' => $password,
             'PGSSLMODE' => $sslmode,
-        ]);
-
-        $result = Process::env($env)
+            'LD_LIBRARY_PATH' => $ldPath,
+        ]))
             ->timeout(600)
             ->run([
                 $pgDump,
@@ -190,7 +194,9 @@ class DatabaseBackupService
     {
         $openssl = $this->resolveBinary('openssl');
 
-        $result = Process::env(['BACKUP_ENCRYPTION_KEY' => $password])
+        $result = Process::env($this->processEnv([
+            'BACKUP_ENCRYPTION_KEY' => $password,
+        ]))
             ->timeout(300)
             ->run([
                 $openssl, 'enc',
@@ -296,8 +302,9 @@ class DatabaseBackupService
 
     private function resolveBinary(string $name): string
     {
-        // Prefer a client at least as new as Neon (PG 18+). Homebrew / PGDG paths first.
+        // Prefer a client at least as new as Neon (PG 18+).
         $candidates = [
+            "/opt/pg18/bin/{$name}",
             "/opt/homebrew/opt/postgresql@18/bin/{$name}",
             "/usr/local/opt/postgresql@18/bin/{$name}",
             "/usr/lib/postgresql/18/bin/{$name}",
@@ -321,6 +328,26 @@ class DatabaseBackupService
         }
 
         throw new RuntimeException("Required binary not found: {$name}");
+    }
+
+    /**
+     * @param  array<string, string>  $overrides
+     * @return array<string, string>
+     */
+    private function processEnv(array $overrides): array
+    {
+        $base = [];
+        foreach (array_merge($_ENV, $_SERVER) as $key => $value) {
+            if (is_string($key) && is_string($value)) {
+                $base[$key] = $value;
+            }
+        }
+
+        $base['PATH'] = $base['PATH']
+            ?? getenv('PATH')
+            ?: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+
+        return array_merge($base, $overrides);
     }
 
     private function humanBytes(int $bytes): string

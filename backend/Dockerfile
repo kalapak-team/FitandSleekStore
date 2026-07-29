@@ -1,20 +1,22 @@
-FROM php:8.2-fpm
+FROM php:8.2-fpm-bookworm
 
-# PGDG client so pg_dump matches Neon Postgres 18+ (Debian default client is too old).
+# Keep Debian libpq-dev for PHP — do NOT add PGDG apt (breaks libldap / libpq resolution).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-        | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
-        > /etc/apt/sources.list.d/pgdg.list \
-    && apt-get update \
     && apt-get install -y --no-install-recommends \
-        git unzip nginx openssl postgresql-client-18 \
+        git unzip nginx openssl \
         libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev \
     && docker-php-ext-configure gd --with-jpeg --with-webp \
     && docker-php-ext-install pdo_pgsql zip gd \
     && rm -f /etc/nginx/sites-enabled/default \
     && rm -rf /var/lib/apt/lists/*
+
+# Neon is Postgres 18; ship a matching pg_dump from the official image (private libs).
+RUN mkdir -p /opt/pg18/bin /opt/pg18/lib
+COPY --from=postgres:18-bookworm /usr/lib/postgresql/18/bin/pg_dump /opt/pg18/bin/pg_dump
+COPY --from=postgres:18-bookworm /usr/lib/postgresql/18/bin/pg_restore /opt/pg18/bin/pg_restore
+COPY --from=postgres:18-bookworm /usr/lib/x86_64-linux-gnu/libpq.so.5 /opt/pg18/lib/
+COPY --from=postgres:18-bookworm /usr/lib/x86_64-linux-gnu/libpq.so.5.* /opt/pg18/lib/
+RUN chmod +x /opt/pg18/bin/pg_dump /opt/pg18/bin/pg_restore
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
