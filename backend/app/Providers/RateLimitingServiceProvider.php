@@ -66,5 +66,17 @@ class RateLimitingServiceProvider extends ServiceProvider
         RateLimiter::for('auth-two-factor', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
+
+        // Own Chat AI (Ollama) — protect local GPU/CPU from bursts.
+        RateLimiter::for('admin-ai-chat', function (Request $request) {
+            return Limit::perMinute(20)->by('admin-ai:'.($request->user()?->id ?: $request->ip()));
+        });
+
+        RateLimiter::for('storefront-ai-chat', function (Request $request) {
+            return [
+                Limit::perMinute(12)->by('store-ai:'.($request->user()?->id ?: $request->ip())),
+                Limit::perDay(80)->by('store-ai-day:'.($request->user()?->id ?: $request->ip())),
+            ];
+        });
     }
 }

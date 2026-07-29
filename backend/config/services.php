@@ -137,15 +137,25 @@ return [
     ],
 
     /*
-    | Self-hosted Dify → local LLM (Ollama / Llama 3 / DeepSeek).
-    | API key: Dify Studio → API Access → create key for your Chat app.
+    | Own Chat AI — Ollama (local or VPS). Replaces Dify + Gemini for admin/customer chat.
+    | Docs: docs/own-chat-ai-plan.md
+    */
+    'ollama' => [
+        'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+        'model' => env('OLLAMA_MODEL', 'qwen2.5:7b'),
+        'timeout' => (int) env('OLLAMA_TIMEOUT', 120),
+        'temperature' => (float) env('OLLAMA_TEMPERATURE', 0.4),
+        'num_predict' => (int) env('OLLAMA_NUM_PREDICT', 512),
+    ],
+
+    /*
+    | Legacy Dify (unused by chat controllers — kept so old .env keys do not break config:cache).
     */
     'dify' => [
-        'base_url' => env('DIFY_BASE_URL', 'http://localhost'),
+        'base_url' => env('DIFY_BASE_URL', ''),
         'api_key' => env('DIFY_API_KEY'),
         'app_id' => env('DIFY_APP_ID', ''),
         'timeout' => (int) env('DIFY_TIMEOUT', 120),
-        // Set true once your Dify app defines a `dashboard_context` input variable.
         'use_inputs_only' => filter_var(env('DIFY_USE_INPUTS_ONLY', true), FILTER_VALIDATE_BOOLEAN),
     ],
 

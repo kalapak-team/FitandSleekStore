@@ -184,7 +184,7 @@ Route::get('/brands', [StorefrontBrandController::class, 'index']);
 Route::get('/brands/{slug}', [StorefrontBrandController::class, 'show']);
 
 // Public chatbot (guests + customers)
-Route::post('/chatbot/message', [ChatbotController::class, 'message'])->middleware('throttle:api-sensitive');
+Route::post('/chatbot/message', [ChatbotController::class, 'message'])->middleware('throttle:storefront-ai-chat');
 Route::get('/chatbot/settings', [ChatbotController::class, 'settings']);
 
 // Public notifications (guests)
@@ -303,9 +303,9 @@ Route::middleware(['auth:sanctum', 'device.bound'])->group(function () {
 });
 
 // -------------------------
-// ADMIN AI (proxied to self-hosted Dify — key stays server-side)
+// ADMIN AI (Laravel → Ollama — own model stack)
 // -------------------------
-Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->group(function () {
+Route::middleware(['auth:sanctum', 'device.bound', 'admin', 'throttle:admin-ai-chat'])->group(function () {
     Route::post('/ai/chat', [AdminAiChatController::class, 'chat']);
 });
 
