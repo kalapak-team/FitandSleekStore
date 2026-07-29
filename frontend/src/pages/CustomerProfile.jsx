@@ -605,9 +605,12 @@ export default function CustomerProfile() {
         </div>
 
         {/* Main Container with Responsive Layout */}
-        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+        <div className="flex flex-col items-start lg:flex-row gap-4 sm:gap-6">
           {/* Sidebar - Tabs (Horizontal on mobile, Vertical on desktop) */}
-          <div className="w-full lg:w-64 lg:flex-shrink-0">
+          <aside
+            className="w-full lg:w-64 lg:flex-shrink-0 lg:sticky lg:top-36 lg:self-start"
+            aria-label="Profile navigation"
+          >
             <div className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 overflow-hidden">
               {/* Mobile: Horizontal scrollable tabs */}
               <div className="lg:hidden overflow-x-auto">
@@ -657,10 +660,10 @@ export default function CustomerProfile() {
                 ))}
               </div>
             </div>
-          </div>
+          </aside>
 
           {/* Content Area */}
-          <div className="flex-1 min-w-0">
+          <main className="w-full flex-1 min-w-0">
             {activeTab === "info" && (
               <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 border border-gray-200">
                 {!editing ? (
@@ -1229,7 +1232,7 @@ export default function CustomerProfile() {
                 )}
               </div>
             )}
-          </div>
+          </main>
         </div>
       </div>
 
