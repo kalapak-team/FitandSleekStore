@@ -241,6 +241,10 @@ export default function AdminSearchSelect({
         id={`${listId}-listbox`}
         role="listbox"
         style={menuStyle}
+        // The menu is portalled to <body>, so it sits outside any popover that renders
+        // this select. Without this, their outside-click listeners unmount us on
+        // mousedown and the option's click never lands.
+        onMouseDown={(e) => e.stopPropagation()}
         className={`overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-slate-950/5 dark:border-slate-600 dark:bg-slate-900 dark:ring-white/10 ${listClassName}`}
       >
         {filtered.length === 0 ? (
