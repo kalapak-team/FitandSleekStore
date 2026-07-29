@@ -34,20 +34,16 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
   const [externalUrl, setExternalUrl] = useState("");
   const [presetId, setPresetId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [deliverySaving, setDeliverySaving] = useState(false);
-  const [deliveredByName, setDeliveredByName] = useState("");
   const [pickedUpByName, setPickedUpByName] = useState("");
   const [pickedUpByPhone, setPickedUpByPhone] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [deliverySuccess, setDeliverySuccess] = useState("");
 
   useEffect(() => {
     if (!shipment) return;
     setProvider(shipment.provider && shipment.provider !== "Internal" ? shipment.provider : "J&T Express");
     setTrackingCode(shipment.tracking_code || shipment.tracking_number || "");
     setExternalUrl(shipment.external_tracking_url || "");
-    setDeliveredByName(shipment.delivered_by_name || "");
     setPickedUpByName(shipment.picked_up_by_name || "");
     setPickedUpByPhone(shipment.picked_up_by_phone || "");
   }, [shipment, orderId]);
@@ -105,24 +101,6 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
     }
   };
 
-  const saveDeliveryInfo = async () => {
-    if (!canEdit || !shipment?.id) return;
-    setDeliverySaving(true);
-    setError("");
-    setDeliverySuccess("");
-    try {
-      const { data } = await api.patch(`/admin/shipments/${shipment.id}/delivery`, {
-        delivered_by_name: deliveredByName.trim() || null,
-      });
-      setDeliverySuccess("Delivery info saved.");
-      onSaved?.(data?.data);
-    } catch (e) {
-      setError(e?.response?.data?.message || "Failed to save delivery info.");
-    } finally {
-      setDeliverySaving(false);
-    }
-  };
-
   if (!orderId) return null;
 
   return (
@@ -141,11 +119,12 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
           {shipment.courier_provider || (shipment.provider && shipment.provider !== "Internal") ? (
             <span className="ml-2">· Courier: <span className="font-semibold">{shipment.courier_provider || shipment.provider}</span></span>
           ) : null}
-          {shipment.delivered_by_name ? (
-            <span className="ml-2">· Delivered by: <span className="font-semibold">{shipment.delivered_by_name}</span></span>
-          ) : null}
           {shipment.picked_up_by_name ? (
-            <span className="ml-2">· Picked up by: <span className="font-semibold">{shipment.picked_up_by_name}</span></span>
+            <span className="ml-2">· Picked up by: <span className="font-semibold">{shipment.picked_up_by_name}</span>
+              {shipment.picked_up_by_phone ? (
+                <span className="font-normal"> · {shipment.picked_up_by_phone}</span>
+              ) : null}
+            </span>
           ) : null}
         </p>
       ) : null}
@@ -209,7 +188,7 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
               Courier pickup at shop / អ្នកដឹកមកយកពីហាង
             </p>
             <p className="mb-3 text-[11px] text-slate-500 dark:text-slate-400">
-              Record driver name and phone when they collect the package (also printed on shop delivery note).
+              កត់ឈ្មោះ + ទូរស័ព្ទពេលប្រគល់ទំនិញ — ជាអ្នកទទួលខុសត្រូវ (បង្ហាញលើ delivery note ហាង).
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -259,32 +238,6 @@ export default function OrderShipmentPanel({ orderId, shipment, canEdit, onSaved
       ) : (
         <p className="text-xs text-slate-500 dark:text-slate-400">No external courier link yet.</p>
       )}
-
-      {shipment?.id && canEdit ? (
-        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
-          <label className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">
-            Delivered by / អ្នកដឹក (name on delivery note)
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <input
-              type="text"
-              value={deliveredByName}
-              onChange={(e) => setDeliveredByName(e.target.value)}
-              placeholder="Driver name when package delivered"
-              className="h-11 min-w-[200px] flex-1 rounded-xl border-2 border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-[var(--admin-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-            <button
-              type="button"
-              onClick={saveDeliveryInfo}
-              disabled={deliverySaving}
-              className="h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-            >
-              {deliverySaving ? "Saving…" : "Save driver name"}
-            </button>
-          </div>
-          {deliverySuccess ? <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">{deliverySuccess}</p> : null}
-        </div>
-      ) : null}
     </div>
   );
 }

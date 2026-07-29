@@ -12,6 +12,7 @@ use App\Models\Category;
 use App\Models\Setting;
 use App\Support\AdminSpreadsheetExport;
 use App\Support\OrderMetrics;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -348,7 +349,7 @@ class ReportController extends Controller
     // Dashboard overview — respects from/to or period query params
     public function dashboard(Request $request)
     {
-        $cacheKey = 'admin_dashboard_v2:' . md5(json_encode([
+        $cacheKey = 'admin_dashboard_v3:' . md5(json_encode([
             'period' => $request->input('period'),
             'from' => $request->input('from'),
             'to' => $request->input('to'),
@@ -400,6 +401,10 @@ class ReportController extends Controller
             ];
         });
 
+        $paymentMethods = $this->paymentMethodBucketStats(
+            OrderMetrics::revenueOrdersQuery($fromRange, $toRange)
+        );
+
         return [
             'revenue' => [
                 'total' => round($totalRevenue, 2),
@@ -412,6 +417,7 @@ class ReportController extends Controller
                 'processing' => $processingOrders,
                 'completed' => $completedOrders,
             ],
+            'payment_methods' => $paymentMethods,
             'orders_by_status' => $ordersByStatusRows->map(fn ($row) => [
                 'status' => (string) $row->status,
                 'count' => (int) $row->cnt,
@@ -422,6 +428,39 @@ class ReportController extends Controller
                 'from' => $fromRange->toDateString(),
                 'to' => $toRange->toDateString(),
             ],
+        ];
+    }
+
+    /**
+     * Split non-cancelled orders into Pay now (KHQR/prepaid) vs COD (courier).
+     *
+     * @return array{cod: array{orders: int, revenue: float, paid_orders: int, unpaid_orders: int}, prepaid: array{orders: int, revenue: float, paid_orders: int, unpaid_orders: int}}
+     */
+    private function paymentMethodBucketStats(Builder $ordersQuery): array
+    {
+        $codQuery = (clone $ordersQuery)->whereRaw("LOWER(COALESCE(orders.payment_method, '')) = 'cod'");
+        $prepaidQuery = (clone $ordersQuery)->where(function (Builder $q) {
+            $q->whereNull('orders.payment_method')
+                ->orWhereRaw("LOWER(COALESCE(orders.payment_method, '')) != 'cod'");
+        });
+
+        $bucket = function (Builder $query): array {
+            $orders = (int) (clone $query)->count('orders.id');
+            $paidOrders = (int) (clone $query)
+                ->whereRaw("LOWER(COALESCE(orders.payment_status, '')) = 'paid'")
+                ->count('orders.id');
+
+            return [
+                'orders' => $orders,
+                'revenue' => round((float) (clone $query)->sum('orders.total'), 2),
+                'paid_orders' => $paidOrders,
+                'unpaid_orders' => max(0, $orders - $paidOrders),
+            ];
+        };
+
+        return [
+            'cod' => $bucket($codQuery),
+            'prepaid' => $bucket($prepaidQuery),
         ];
     }
 
@@ -887,10 +926,40 @@ class ReportController extends Controller
             'Other categories'
         );
 
+        $paymentQuery = Order::query()->where('status', '!=', 'cancelled');
+        $this->applyOrderPeriodFilter($paymentQuery, $request, 'created_at');
+        $paymentBuckets = $this->paymentMethodBucketStats($paymentQuery);
+        $paymentOrderTotal = (int) ($paymentBuckets['cod']['orders'] + $paymentBuckets['prepaid']['orders']);
+        $byPayment = [];
+        foreach (
+            [
+                ['key' => 'prepaid', 'name' => 'Pay now (KHQR)', 'bucket' => $paymentBuckets['prepaid']],
+                ['key' => 'cod', 'name' => 'COD (Courier)', 'bucket' => $paymentBuckets['cod']],
+            ] as $row
+        ) {
+            $count = (int) $row['bucket']['orders'];
+            if ($count <= 0) {
+                continue;
+            }
+            $byPayment[] = [
+                'key' => $row['key'],
+                'name' => $row['name'],
+                'count' => $count,
+                'revenue' => (float) $row['bucket']['revenue'],
+                'paid_orders' => (int) $row['bucket']['paid_orders'],
+                'unpaid_orders' => (int) $row['bucket']['unpaid_orders'],
+                'percentage' => $paymentOrderTotal > 0
+                    ? round(($count / $paymentOrderTotal) * 100, 1)
+                    : 0.0,
+            ];
+        }
+
         return response()->json([
             'total_orders' => $totalOrders,
             'by_status' => $byStatus,
             'by_category' => $byCategory,
+            'payment_methods' => $paymentBuckets,
+            'by_payment' => $byPayment,
         ]);
     }
 

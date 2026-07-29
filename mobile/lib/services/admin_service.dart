@@ -16,6 +16,11 @@ class AdminDashboardStats {
     required this.totalProducts,
     required this.lowStockProducts,
     required this.totalCustomers,
+    this.prepaidOrders = 0,
+    this.prepaidRevenue = 0,
+    this.codOrders = 0,
+    this.codRevenue = 0,
+    this.codUnpaidOrders = 0,
   });
 
   final double totalRevenue;
@@ -25,12 +30,20 @@ class AdminDashboardStats {
   final int totalProducts;
   final int lowStockProducts;
   final int totalCustomers;
+  final int prepaidOrders;
+  final double prepaidRevenue;
+  final int codOrders;
+  final double codRevenue;
+  final int codUnpaidOrders;
 
   factory AdminDashboardStats.fromJson(Map<String, dynamic> json) {
     final revenue = json['revenue'] as Map? ?? {};
     final orders = json['orders'] as Map? ?? {};
     final products = json['products'] as Map? ?? {};
     final customers = json['customers'] as Map? ?? {};
+    final payment = json['payment_methods'] as Map? ?? {};
+    final prepaid = payment['prepaid'] as Map? ?? {};
+    final cod = payment['cod'] as Map? ?? {};
     return AdminDashboardStats(
       totalRevenue: _toDouble(revenue['total']),
       todayRevenue: _toDouble(revenue['today']),
@@ -39,6 +52,11 @@ class AdminDashboardStats {
       totalProducts: _toInt(products['total']),
       lowStockProducts: _toInt(products['low_stock']),
       totalCustomers: _toInt(customers['total']),
+      prepaidOrders: _toInt(prepaid['orders']),
+      prepaidRevenue: _toDouble(prepaid['revenue']),
+      codOrders: _toInt(cod['orders']),
+      codRevenue: _toDouble(cod['revenue']),
+      codUnpaidOrders: _toInt(cod['unpaid_orders']),
     );
   }
 
@@ -803,17 +821,20 @@ class OrderAnalyticsData {
     required this.totalOrders,
     required this.byStatus,
     required this.byCategory,
+    this.byPayment = const [],
   });
 
   final int totalOrders;
   final List<CategorySlice> byStatus;
   final List<CategorySlice> byCategory;
+  final List<CategorySlice> byPayment;
 
   factory OrderAnalyticsData.fromJson(Map<String, dynamic> json) {
     return OrderAnalyticsData(
       totalOrders: AdminDashboardStats._toInt(json['total_orders']),
       byStatus: ProductAnalyticsData._sliceList(json['by_status']),
       byCategory: ProductAnalyticsData._sliceList(json['by_category']),
+      byPayment: ProductAnalyticsData._sliceList(json['by_payment']),
     );
   }
 }
@@ -928,6 +949,8 @@ class AdminOrderRow {
     required this.total,
     required this.createdAt,
     this.customerName,
+    this.paymentMethod,
+    this.paymentStatus,
   });
 
   final int id;
@@ -936,6 +959,19 @@ class AdminOrderRow {
   final double total;
   final String createdAt;
   final String? customerName;
+  final String? paymentMethod;
+  final String? paymentStatus;
+
+  bool get isCod => (paymentMethod ?? '').toLowerCase() == 'cod';
+
+  String get paymentLabel {
+    if (isCod) {
+      final collected = (paymentStatus ?? '').toLowerCase() == 'paid';
+      return collected ? 'COD · Collected' : 'COD · Courier';
+    }
+    final paid = (paymentStatus ?? '').toLowerCase() == 'paid';
+    return paid ? 'Pay now · Paid' : 'Pay now · KHQR';
+  }
 
   factory AdminOrderRow.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map?;
@@ -946,6 +982,8 @@ class AdminOrderRow {
       total: AdminDashboardStats._toDouble(json['total']),
       createdAt: (json['created_at'] ?? '').toString(),
       customerName: user?['name']?.toString(),
+      paymentMethod: json['payment_method']?.toString(),
+      paymentStatus: json['payment_status']?.toString(),
     );
   }
 }

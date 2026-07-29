@@ -87,18 +87,6 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
     }
   }
 
-  Future<void> _saveDeliveredByName(String? name) async {
-    final shipmentId = _order?.shipmentId;
-    if (shipmentId == null) return;
-    final order = await AdminService(context.read<ApiClient>()).saveDeliveredByName(
-      orderId: widget.orderId,
-      shipmentId: shipmentId,
-      deliveredByName: name,
-    );
-    if (!mounted) return;
-    setState(() => _order = order);
-  }
-
   @override
   Widget build(BuildContext context) {
     final fmt = AdminFmt.of(context);
@@ -145,10 +133,7 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
                       const SizedBox(height: 16),
                       OrderDeliveryPanel(
                         order: _order!,
-                        canEdit: canEdit && AdminPermissions.has(widget.user, 'shipments', 'edit'),
-                        onSaved: _load,
                         onOpenShopInvoice: _openShopInvoice,
-                        onSaveDeliveredBy: _saveDeliveredByName,
                       ),
                       if (_order!.isCod) ...[
                         const SizedBox(height: 16),

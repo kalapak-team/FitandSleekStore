@@ -28,7 +28,13 @@ final class BrandLogo
     /** Absolute raster banner URL for email HTML — never inline base64 (Gmail clips >102KB). */
     public static function emailUrl(): string
     {
-        return self::emailAssetUrl((string) config('app.logo_png_url', '/logo.png'));
+        $bannerUrl = (string) config('app.logo_email_url', '/logo.png');
+
+        if ($bannerUrl === '') {
+            $bannerUrl = (string) config('app.logo_png_url', '/logo.png');
+        }
+
+        return self::emailAssetUrl($bannerUrl);
     }
 
     /** Circular raster mark (legacy). Prefer {@see bimiLogoUrl()} for inbox avatar. */

@@ -105,6 +105,13 @@ class OrderAdminFilters
                         $sub->whereRaw("LOWER(COALESCE(orders.payment_status, '')) = 'paid'");
                     } elseif ($payment === 'unpaid') {
                         $sub->whereRaw("LOWER(COALESCE(orders.payment_status, '')) != 'paid'");
+                    } elseif ($payment === 'cod') {
+                        $sub->whereRaw("LOWER(COALESCE(orders.payment_method, '')) = 'cod'");
+                    } elseif ($payment === 'prepaid') {
+                        $sub->where(function (Builder $inner) {
+                            $inner->whereNull('orders.payment_method')
+                                ->orWhereRaw("LOWER(COALESCE(orders.payment_method, '')) != 'cod'");
+                        });
                     }
                 });
             }

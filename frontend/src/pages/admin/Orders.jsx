@@ -36,6 +36,7 @@ const ORDERS_TABLE_COLUMNS = [
  { id: "orderId", label: "Order ID" },
  { id: "customer", label: "Customer" },
  { id: "status", label: "Status" },
+ { id: "payment", label: "Payment" },
  { id: "items", label: "Items" },
  { id: "total", label: "Total" },
  { id: "date", label: "Date" },
@@ -120,6 +121,45 @@ const getStatusStyle = (status, mode, primaryColor) => {
 
 const isOrderPaid = (paymentStatus) => (paymentStatus || '').toLowerCase() === 'paid';
 
+const isCodOrder = (order) => String(order?.payment_method || '').toLowerCase() === 'cod';
+
+const getPaymentMethodStyle = (order, mode) => {
+ const isDark = mode === 'dark';
+ if (isCodOrder(order)) {
+  return {
+   backgroundColor: isDark ? '#7C2D12' : '#FFF7ED',
+   color: isDark ? '#FFEDD5' : '#9A3412',
+   borderColor: isDark ? '#EA580C' : '#FDBA74',
+  };
+ }
+ return {
+  backgroundColor: isDark ? '#1E3A5F' : '#EFF6FF',
+  color: isDark ? '#DBEAFE' : '#1E40AF',
+  borderColor: isDark ? '#3B82F6' : '#93C5FD',
+ };
+};
+
+function OrderPaymentBadge({ order, mode }) {
+ const cod = isCodOrder(order);
+ const paid = isOrderPaid(order.payment_status);
+ const label = cod
+  ? (paid ? 'COD · Collected' : 'COD · Courier')
+  : (paid ? 'Pay now · Paid' : 'Pay now · KHQR');
+ const title = cod
+  ? (paid ? 'Cash on delivery — collected' : 'Pay with courier on delivery')
+  : (paid ? 'Paid online (KHQR / prepaid)' : 'Pay immediately online (KHQR)');
+
+ return (
+  <span
+   className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap"
+   style={getPaymentMethodStyle(order, mode)}
+   title={title}
+  >
+   {label}
+  </span>
+ );
+}
+
 const getPaymentStatusStyle = (paymentStatus, mode, primaryColor) => {
  if (isOrderPaid(paymentStatus)) {
  const isDark = mode === 'dark';
@@ -173,7 +213,8 @@ function OrderStatusBadges({ order, mode, primaryColor }) {
  const fulfillmentLabel = formatFulfillmentStatus(fulfillment, order.payment_status);
 
  // Checkout: payment not received yet — one badge (status + payment_status say the same thing)
- if (isAwaitingPayment(order)) {
+ // COD is never "awaiting online payment" at placement.
+ if (isAwaitingPayment(order) && !isCodOrder(order)) {
  return (
  <span
  className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border"
@@ -235,6 +276,20 @@ const formatDate = (dateString) => {
  });
 };
 
+const QUICK_DATE_OPTIONS = [
+ { value: "today", label: "ថ្ងៃនេះ", daysAgo: 0 },
+ { value: "yesterday", label: "ម្សិលមិញ", daysAgo: 1 },
+];
+
+const localDateDaysAgo = (daysAgo) => {
+ const date = new Date();
+ date.setDate(date.getDate() - daysAgo);
+ const year = date.getFullYear();
+ const month = String(date.getMonth() + 1).padStart(2, "0");
+ const day = String(date.getDate()).padStart(2, "0");
+ return `${year}-${month}-${day}`;
+};
+
 export default function AdminOrders() {
  const { primaryColor, mode } = useTheme();
  const { user, can, permissionsReady } = useAdminPermissions();
@@ -260,6 +315,13 @@ export default function AdminOrders() {
  });
  const listFilters = useAdminFilterDrawer(["status", "payment"]);
  const yearMonthFilter = useAdminYearMonthFilter(2020, currentYearMonthDefault());
+ const [quickDate, setQuickDate] = useState("");
+ const selectedDateRange = useMemo(() => {
+  const option = QUICK_DATE_OPTIONS.find((item) => item.value === quickDate);
+  if (!option) return yearMonthFilter.dateRange;
+  const date = localDateDaysAgo(option.daysAgo);
+  return { from: date, to: date };
+ }, [quickDate, yearMonthFilter.dateRange]);
  const fetchAbortRef = useRef(null);
  const hasLoadedOnceRef = useRef(false);
  const [refreshCounter, setRefreshCounter] = useState(0);
@@ -276,8 +338,8 @@ export default function AdminOrders() {
  const ordersQueryKey = useMemo(
  () =>
  JSON.stringify({
- from: yearMonthFilter.dateRange.from,
- to: yearMonthFilter.dateRange.to,
+ from: selectedDateRange.from,
+ to: selectedDateRange.to,
  status: listFilters.applied.status || [],
  payment: listFilters.applied.payment || [],
  search: searchDebounced,
@@ -285,8 +347,8 @@ export default function AdminOrders() {
  refresh: refreshCounter,
  }),
  [
- yearMonthFilter.dateRange.from,
- yearMonthFilter.dateRange.to,
+ selectedDateRange.from,
+ selectedDateRange.to,
  listFilters.applied,
  searchDebounced,
  currentPage,
@@ -304,8 +366,8 @@ export default function AdminOrders() {
  useEffect(() => {
  setCurrentPage(1);
  }, [
- yearMonthFilter.dateRange.from,
- yearMonthFilter.dateRange.to,
+ selectedDateRange.from,
+ selectedDateRange.to,
  listFilters.applied,
  searchDebounced,
  ]);
@@ -336,7 +398,7 @@ export default function AdminOrders() {
 
  (async () => {
  try {
- const params = { per_page: ADMIN_LIST_PAGE_SIZE, compact: 1, page: parsed.page || 1, include_summary: 0 };
+ const params = { per_page: ADMIN_LIST_PAGE_SIZE, compact: 1, page: parsed.page || 1, include_summary: 1 };
  if (parsed.from) params.from_date = parsed.from;
  if (parsed.to) params.to_date = parsed.to;
  if (parsed.status?.length) params.statuses = parsed.status;
@@ -385,11 +447,13 @@ export default function AdminOrders() {
  };
 
  const applyAllFilters = () => {
+ setQuickDate("");
  yearMonthFilter.apply();
  listFilters.apply();
  };
 
  const clearAllFilters = () => {
+ setQuickDate("");
  yearMonthFilter.clear();
  listFilters.clearAll();
  setSearch("");
@@ -397,7 +461,7 @@ export default function AdminOrders() {
  };
 
  const toolbarFilterCount =
- countFilterSelections(listFilters.applied) + yearMonthFilter.activeCount;
+ countFilterSelections(listFilters.applied) + (quickDate ? 1 : yearMonthFilter.activeCount);
 
  useEffect(() => {
  try {
@@ -551,13 +615,18 @@ export default function AdminOrders() {
  }));
 
  const paymentOpts = [
- { value: "paid", label: "Paid" },
+ { value: "prepaid", label: "Pay now (KHQR)" },
+ { value: "cod", label: "COD (courier)" },
+ { value: "paid", label: "Paid / collected" },
  { value: "unpaid", label: "Unpaid" },
  ].map((opt) => ({
  ...opt,
- count: rows.filter((o) => (
- opt.value === "paid" ? isOrderPaid(o.payment_status) : !isOrderPaid(o.payment_status)
- )).length,
+ count: rows.filter((o) => {
+  if (opt.value === "cod") return isCodOrder(o);
+  if (opt.value === "prepaid") return !isCodOrder(o);
+  if (opt.value === "paid") return isOrderPaid(o.payment_status);
+  return !isOrderPaid(o.payment_status);
+ }).length,
  }));
 
  return [
@@ -644,6 +713,23 @@ export default function AdminOrders() {
  </div>
  </div>
  <div className="flex flex-wrap items-center gap-2 md:gap-3 justify-end w-full md:w-auto">
+ <div className="flex flex-wrap items-center gap-1 rounded-lg border admin-border admin-surface p-1">
+ {QUICK_DATE_OPTIONS.map((option) => (
+ <button
+ key={option.value}
+ type="button"
+ onClick={() => setQuickDate((current) => current === option.value ? "" : option.value)}
+ className={
+  "h-8 rounded-md px-2.5 text-xs font-semibold transition-colors " +
+  (quickDate === option.value
+   ? "bg-[var(--admin-primary)] text-[#0b0b0f]"
+   : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")
+ }
+ >
+ {option.label}
+ </button>
+ ))}
+ </div>
  <input
  value={search}
  onChange={(e) => setSearch(e.target.value)}
@@ -787,6 +873,7 @@ export default function AdminOrders() {
  {isColVisible("orderId") ? <th className="px-4 md:px-6 py-3 md:py-4">Order ID</th> : null}
  {isColVisible("customer") ? <th className="px-4 md:px-6 py-3 md:py-4">Customer</th> : null}
  {isColVisible("status") ? <th className="px-4 md:px-6 py-3 md:py-4">Status</th> : null}
+ {isColVisible("payment") ? <th className="px-4 md:px-6 py-3 md:py-4">Payment</th> : null}
  {isColVisible("items") ? <th className="px-4 md:px-6 py-3 md:py-4">Items</th> : null}
  {isColVisible("total") ? <th className="px-4 md:px-6 py-3 md:py-4">Total</th> : null}
  {isColVisible("date") ? <th className="px-4 md:px-6 py-3 md:py-4">Date</th> : null}
@@ -827,6 +914,11 @@ export default function AdminOrders() {
  {isColVisible("status") ? (
  <td className="px-4 md:px-6 py-3 md:py-4">
  <OrderStatusBadges order={o} mode={mode} primaryColor={primaryColor} />
+ </td>
+ ) : null}
+ {isColVisible("payment") ? (
+ <td className="px-4 md:px-6 py-3 md:py-4">
+ <OrderPaymentBadge order={o} mode={mode} />
  </td>
  ) : null}
  {isColVisible("items") ? (
@@ -906,7 +998,10 @@ export default function AdminOrders() {
  />
  <span className="text-sm font-bold text-slate-800 dark:text-slate-100">#{o.id}</span>
  </div>
+ <div className="flex flex-wrap items-center justify-end gap-1.5">
+ <OrderPaymentBadge order={o} mode={mode} />
  <OrderStatusBadges order={o} mode={mode} primaryColor={primaryColor} />
+ </div>
  </div>
  <div className="flex items-center gap-3">
  <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm flex-shrink-0">
@@ -1001,6 +1096,7 @@ export default function AdminOrders() {
  ) : (
  <>
  <div className="mb-6 flex flex-wrap items-center gap-3">
+ <OrderPaymentBadge order={selected} mode={mode} />
  <OrderStatusBadges order={selected} mode={mode} primaryColor={primaryColor} />
  <span className="text-sm text-slate-500 dark:text-slate-400">
  {formatDate(selected?.created_at)}

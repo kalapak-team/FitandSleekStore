@@ -69,6 +69,9 @@ return [
 
     'logo_circle_png_url' => env('APP_LOGO_CIRCLE_PNG_URL', '/logo-circle.png'),
 
+    /** Wide wordmark banner for the email header — not the circular avatar mark. */
+    'logo_email_url' => env('APP_EMAIL_LOGO_URL', env('APP_LOGO_EMAIL_URL', '/logo.png')),
+
     /** Sage header behind the wide logo in transactional emails. */
     'email_header_bg' => env('APP_EMAIL_HEADER_BG', '#6e8b7e'),
 

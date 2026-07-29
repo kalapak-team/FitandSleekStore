@@ -273,6 +273,51 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 14),
+            AdminReportPanel(
+              title: 'Payment method',
+              subtitle: 'Pay now (KHQR) vs COD courier',
+              icon: Icons.account_balance_wallet_outlined,
+              accentColor: primary,
+              child: Column(
+                children: [
+                  _PaymentMethodRow(
+                    label: 'Pay now · KHQR',
+                    orders: dash.prepaidOrders,
+                    revenue: dash.prepaidRevenue,
+                    hint: 'Paid online',
+                    color: const Color(0xFF2563EB),
+                    fmt: fmt,
+                  ),
+                  const SizedBox(height: 10),
+                  _PaymentMethodRow(
+                    label: 'COD · Courier',
+                    orders: dash.codOrders,
+                    revenue: dash.codRevenue,
+                    hint: dash.codUnpaidOrders > 0
+                        ? '${fmt.formatNum(dash.codUnpaidOrders)} to collect'
+                        : 'Collected / settled',
+                    color: const Color(0xFFEA580C),
+                    fmt: fmt,
+                  ),
+                  if (orderAnalytics.byPayment.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    AdminDonutChart(
+                      size: 140,
+                      showLegend: false,
+                      centerLabel: 'ORDERS',
+                      centerValue: fmt.formatNum(
+                        orderAnalytics.byPayment.fold<int>(0, (s, e) => s + e.count),
+                      ),
+                      slices: [
+                        for (final s in orderAnalytics.byPayment)
+                          (label: s.name, value: s.count, percentage: s.percentage),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
             if (channelSales.channels.isNotEmpty) ...[
               const SizedBox(height: 14),
               AdminReportPanel(
@@ -489,6 +534,62 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 color: primary.withValues(alpha: 0.1),
                 child: Icon(Icons.image_outlined, size: 16, color: primary.withValues(alpha: 0.45)),
               ),
+      ),
+    );
+  }
+}
+
+class _PaymentMethodRow extends StatelessWidget {
+  const _PaymentMethodRow({
+    required this.label,
+    required this.orders,
+    required this.revenue,
+    required this.hint,
+    required this.color,
+    required this.fmt,
+  });
+
+  final String label;
+  final int orders;
+  final double revenue;
+  final String hint;
+  final Color color;
+  final AdminFmt fmt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(hint, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(fmt.usd(revenue), style: TextStyle(fontWeight: FontWeight.w800, color: color)),
+              Text('${fmt.formatNum(orders)} orders', style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ],
       ),
     );
   }

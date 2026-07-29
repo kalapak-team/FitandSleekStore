@@ -319,7 +319,10 @@ export default function Reports() {
     total_orders: 0,
     by_status: [],
     by_category: [],
+    by_payment: [],
+    payment_methods: { cod: null, prepaid: null },
   });
+  const [orderPaymentSpan, setOrderPaymentSpan] = useAdminUiPreference("charts.reports.orderPaymentSpan", 1);
   const [period, setPeriod] = useState("28d");
   const [loading, setLoading] = useState(true);
 
@@ -373,6 +376,8 @@ export default function Reports() {
         total_orders: 0,
         by_status: [],
         by_category: [],
+        by_payment: [],
+        payment_methods: { cod: null, prepaid: null },
       });
       setLoading(false);
     } else {
@@ -391,7 +396,7 @@ export default function Reports() {
           data: { revenue_by_category: [], top_categories: [], total_revenue: 0, total_units: 0 },
         })),
         api.get("/admin/reports/order-analytics", { params: periodParams }).catch(() => ({
-          data: { total_orders: 0, by_status: [], by_category: [] },
+          data: { total_orders: 0, by_status: [], by_category: [], by_payment: [], payment_methods: {} },
         })),
       ]);
 
@@ -401,6 +406,10 @@ export default function Reports() {
         orders: dashData.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
         products: dashData.products || { total: 0, active: 0, low_stock: 0 },
         customers: dashData.customers || { total: 0, new_this_month: 0 },
+        payment_methods: dashData.payment_methods || orderAnalyticsRes.data?.payment_methods || {
+          cod: { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 },
+          prepaid: { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 },
+        },
       };
 
       const nextSales = salesRes.data?.sales || salesRes.data?.data || [];
@@ -420,6 +429,8 @@ export default function Reports() {
         total_orders: orderAnalyticsRes.data?.total_orders || 0,
         by_status: orderAnalyticsRes.data?.by_status || [],
         by_category: orderAnalyticsRes.data?.by_category || [],
+        by_payment: orderAnalyticsRes.data?.by_payment || [],
+        payment_methods: orderAnalyticsRes.data?.payment_methods || nextDashboard.payment_methods,
       };
 
       setDashboard(nextDashboard);
@@ -638,6 +649,27 @@ export default function Reports() {
   const orderCategoryTotal = useMemo(
     () => orderCategoryDonutData.reduce((sum, row) => sum + row.count, 0),
     [orderCategoryDonutData],
+  );
+
+  const paymentMethods = dashboard?.payment_methods || orderAnalytics.payment_methods || {};
+  const prepaidStats = paymentMethods.prepaid || { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 };
+  const codStats = paymentMethods.cod || { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 };
+
+  const orderPaymentDonutData = useMemo(
+    () =>
+      (orderAnalytics.by_payment || []).map((row, index) => ({
+        name: row.name,
+        count: Number(row.count) || 0,
+        revenue: Number(row.revenue) || 0,
+        percentage: row.percentage,
+        fill: row.key === "cod" ? "#EA580C" : reportChartColor(index),
+      })),
+    [orderAnalytics.by_payment],
+  );
+
+  const orderPaymentTotal = useMemo(
+    () => orderPaymentDonutData.reduce((sum, row) => sum + row.count, 0),
+    [orderPaymentDonutData],
   );
 
   const salesChartData = useMemo(
@@ -949,6 +981,27 @@ export default function Reports() {
               />
             </div>
 
+            <div className="admin-stat-grid grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <StatCard
+                index={4}
+                title={`Pay now (KHQR) · ${periodLabel(period)}`}
+                value={formatUsd(prepaidStats.revenue || 0, numberFormat)}
+                subtext={`${formatNumber(prepaidStats.orders || 0, numberFormat)} orders · ${formatNumber(prepaidStats.paid_orders || 0, numberFormat)} paid`}
+                icon="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                iconBoxStyle={iconBoxStyle(0)}
+                isDark={isDark}
+              />
+              <StatCard
+                index={5}
+                title={`COD (Courier) · ${periodLabel(period)}`}
+                value={formatUsd(codStats.revenue || 0, numberFormat)}
+                subtext={`${formatNumber(codStats.orders || 0, numberFormat)} orders · ${formatNumber(codStats.unpaid_orders || 0, numberFormat)} to collect`}
+                icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                iconBoxStyle={iconBoxStyle(1)}
+                isDark={isDark}
+              />
+            </div>
+
             <RevenueDashboard theme={reportTheme} />
             <StockDashboard theme={reportTheme} />
             <PlanDashboard theme={reportTheme} />
@@ -1243,14 +1296,14 @@ export default function Reports() {
               subtitle={`${orderTotal} total orders · ${periodLabel(period)}`}
               theme={reportTheme}
             >
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
                 <ReportChartPanel
                   className="report-chart-panel"
                   title="Order Status"
                   subtitle="Share of orders by lifecycle status"
                   theme={reportTheme}
                   style={{ gridColumn: `span ${orderStatusSpan}` }}
-                  action={<ChartResizeMenu colSpan={orderStatusSpan} maxCols={2} onChange={setOrderStatusSpan} />}
+                  action={<ChartResizeMenu colSpan={orderStatusSpan} maxCols={3} onChange={setOrderStatusSpan} />}
                 >
                   {orderStatusDonutData.length === 0 ? (
                     <ReportEmptyChart message="No orders in this period" theme={reportTheme} />
@@ -1276,11 +1329,43 @@ export default function Reports() {
 
                 <ReportChartPanel
                   className="report-chart-panel"
+                  title="Payment method"
+                  subtitle="Pay now (KHQR) vs COD courier"
+                  theme={reportTheme}
+                  style={{ gridColumn: `span ${orderPaymentSpan}` }}
+                  action={<ChartResizeMenu colSpan={orderPaymentSpan} maxCols={3} onChange={setOrderPaymentSpan} />}
+                >
+                  {orderPaymentDonutData.length === 0 ? (
+                    <ReportEmptyChart message="No payment method data in this period" theme={reportTheme} />
+                  ) : (
+                    <ReportDonutChart
+                      data={orderPaymentDonutData}
+                      dataKey="count"
+                      centerTitle="Orders"
+                      centerValue={orderPaymentTotal}
+                      theme={reportTheme}
+                      legendRows={orderPaymentDonutData}
+                      formatLegendValue={(row) => `${row.count} · ${formatUsd(row.revenue || 0, numberFormat)}`}
+                      tooltipContent={(props) => (
+                        <ReportChartTooltip
+                          {...props}
+                          theme={reportTheme}
+                          formatLine={(e) =>
+                            `${e.payload?.count ?? e.value} orders · ${formatUsdFull(Number(e.payload?.revenue) || 0)}`
+                          }
+                        />
+                      )}
+                    />
+                  )}
+                </ReportChartPanel>
+
+                <ReportChartPanel
+                  className="report-chart-panel"
                   title="Orders by Category"
                   subtitle="Distinct orders with products in each category (non-cancelled)"
                   theme={reportTheme}
                   style={{ gridColumn: `span ${orderCatSpan}` }}
-                  action={<ChartResizeMenu colSpan={orderCatSpan} maxCols={2} onChange={setOrderCatSpan} />}
+                  action={<ChartResizeMenu colSpan={orderCatSpan} maxCols={3} onChange={setOrderCatSpan} />}
                 >
                   {orderCategoryDonutData.length === 0 ? (
                     <ReportEmptyChart message="No orders with category data in this period" theme={reportTheme} />

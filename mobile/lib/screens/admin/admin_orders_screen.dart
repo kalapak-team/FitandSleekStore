@@ -132,7 +132,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
               child: AdminListRow(
                 index: index,
                 title: row.orderNumber,
-                subtitle: '${row.status} · ${row.customerName ?? 'Guest'}',
+                subtitle: '${row.paymentLabel} · ${row.status} · ${row.customerName ?? 'Guest'}',
                 trailing: Text(fmt.usd(row.total), style: const TextStyle(fontWeight: FontWeight.w800)),
                 onTap: () => AdminNavigation.openOrderDetail(context, user: widget.user, orderId: row.id),
               ),
