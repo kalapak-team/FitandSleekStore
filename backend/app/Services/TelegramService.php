@@ -1399,9 +1399,9 @@ class TelegramService
             : '—';
 
         $title = match ($kind) {
-            'cod' => '🔔 <b>ការបញ្ជាទិញ COD ថ្មី</b>\n<i>New COD order</i>',
-            'completed' => '✅ <b>ដឹកដល់ / បញ្ចប់</b>\n<i>Order completed</i>',
-            default => '🔔 <b>ការបញ្ជាទិញបានបង់</b>\n<i>New paid order</i>',
+            'cod' => "🔔 <b>ការបញ្ជាទិញ COD ថ្មី</b>\n<i>New COD order</i>",
+            'completed' => "✅ <b>ដឹកដល់ / បញ្ចប់</b>\n<i>Order completed</i>",
+            default => "🔔 <b>ការបញ្ជាទិញបានបង់</b>\n<i>New paid order</i>",
         };
 
         $lines = [
@@ -1429,6 +1429,22 @@ class TelegramService
         $lines[] = '';
         $lines[] = '<b>ទំនិញ / Items</b>';
         $items = $invoice['items'] ?? [];
+        if ($items === [] && $order->items->isNotEmpty()) {
+            foreach ($order->items as $item) {
+                $qty = (int) ($item->qty ?? 0);
+                $price = (float) ($item->price ?? 0);
+                $lineTotal = (float) ($item->line_total ?? ($qty * $price));
+                $items[] = [
+                    'product_name' => $item->name ?: ($item->product->name ?? 'Item'),
+                    'sku' => $item->sku ?: ($item->product->sku ?? '-'),
+                    'quantity' => $qty,
+                    'grand_total' => $lineTotal,
+                ];
+            }
+        }
+        if ($items === []) {
+            $lines[] = '<i>— គ្មានទិន្នន័យទំនិញ</i>';
+        }
         $maxItems = 8;
         foreach (array_slice($items, 0, $maxItems) as $item) {
             $name = $e((string) ($item['product_name'] ?? 'Item'));

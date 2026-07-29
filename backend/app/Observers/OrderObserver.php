@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\LoyaltyService;
 use App\Services\StorefrontEventService;
 use App\Services\TelegramService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -88,29 +89,35 @@ class OrderObserver
             return;
         }
 
-        if ($order->shipment) {
-            $this->telegramService->notifyOrderPlacedCod($order->fresh(['user', 'items', 'shipment']));
+        // Order::create fires before cart lines are inserted in the same transaction.
+        // Wait until commit so Telegram admin card can include items.
+        $orderId = (int) $order->id;
+        DB::afterCommit(function () use ($orderId) {
+            $order = Order::query()->with(['user', 'items.product', 'shipment'])->find($orderId);
+            if (! $order || $order->payment_method !== 'cod') {
+                return;
+            }
 
-            return;
-        }
+            if (! $order->shipment) {
+                $shipment = Shipment::create([
+                    'order_id' => $order->id,
+                    'provider' => 'Internal',
+                    'tracking_code' => $this->generateTrackingCode(),
+                    'status' => 'pending',
+                ]);
 
-        $trackingCode = $this->generateTrackingCode();
+                ShipmentTrackingEvent::create([
+                    'shipment_id' => $shipment->id,
+                    'status' => 'pending',
+                    'note' => 'COD order placed. Preparing for shipment.',
+                    'event_time' => now(),
+                ]);
 
-        $shipment = Shipment::create([
-            'order_id' => $order->id,
-            'provider' => 'Internal',
-            'tracking_code' => $trackingCode,
-            'status' => 'pending',
-        ]);
+                $order->setRelation('shipment', $shipment);
+            }
 
-        ShipmentTrackingEvent::create([
-            'shipment_id' => $shipment->id,
-            'status' => 'pending',
-            'note' => 'COD order placed. Preparing for shipment.',
-            'event_time' => now(),
-        ]);
-
-        $this->telegramService->notifyOrderPlacedCod($order->fresh(['user', 'items', 'shipment']));
+            $this->telegramService->notifyOrderPlacedCod($order);
+        });
     }
 
     private function sendPaymentSuccessEmails(Order $order): void
