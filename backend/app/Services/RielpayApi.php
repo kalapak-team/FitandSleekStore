@@ -144,6 +144,16 @@ class RielpayApi
             'errors' => data_get($json, 'errors'),
         ]);
 
+        // A non-JSON body means we never reached Rielpay itself — it is the CDN or
+        // reverse proxy answering because the origin is down.
+        if ($json === null) {
+            throw new RuntimeException(
+                'Rielpay server is unreachable (HTTP '.$status.'). '
+                .'Check that the Rielpay host and its Cloudflare tunnel are running.'
+                .($message !== '' ? ' Gateway said: '.$message : '')
+            );
+        }
+
         $userMessage = match ($status) {
             401 => 'Payment service authentication failed. Please contact support.',
             403 => 'Payment service is not active. Please contact support.',

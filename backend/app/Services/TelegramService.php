@@ -685,9 +685,20 @@ class TelegramService
                 'chat_id' => $chatId,
                 'error' => $e->getMessage(),
             ]);
+
+            $message = TelegramBotTexts::get($locale, 'payment_qr_failed_gen');
+            if ($this->isAdminChatId($chatId)) {
+                // Customers get the generic text; staff need the reason to know whether
+                // to retry or to go fix the payment gateway.
+                $reason = trim($e->getMessage());
+                if ($reason !== '') {
+                    $message .= "\n\n🛠 ".$reason;
+                }
+            }
+
             $this->sendMessage(
                 (string) $chatId,
-                TelegramBotTexts::get($locale, 'payment_qr_failed_gen'),
+                $message,
                 $this->keyboardForChat($chatId, $order)
             );
 
