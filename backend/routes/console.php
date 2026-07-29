@@ -14,6 +14,12 @@ Schedule::command('qdrant:index-products --only-missing --limit=10')
     ->everyTenMinutes()
     ->withoutOverlapping(25);
 
+Schedule::command('backup:database')
+    ->dailyAt((string) config('backup.schedule_at', '02:00'))
+    ->timezone((string) config('backup.timezone', 'Asia/Phnom_Penh'))
+    ->withoutOverlapping(120)
+    ->when(fn () => (bool) config('backup.enabled', true));
+
 Schedule::call(function () {
     $base = rtrim((string) config('app.url'), '/');
     if ($base === '') {

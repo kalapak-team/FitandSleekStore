@@ -81,6 +81,24 @@ return [
             'report' => true,
         ],
 
+        // Private R2 (or S3) bucket for encrypted DB dumps. Prefer a dedicated bucket
+        // via BACKUP_R2_*; falls back to the media R2 credentials when unset.
+        'backup' => [
+            'driver' => 's3',
+            'key' => env('BACKUP_R2_ACCESS_KEY_ID', env('R2_ACCESS_KEY_ID', env('AWS_ACCESS_KEY_ID'))),
+            'secret' => env('BACKUP_R2_SECRET_ACCESS_KEY', env('R2_SECRET_ACCESS_KEY', env('AWS_SECRET_ACCESS_KEY'))),
+            'region' => env('BACKUP_R2_REGION', env('R2_REGION', env('AWS_DEFAULT_REGION', 'auto'))),
+            'bucket' => env('BACKUP_R2_BUCKET', env('R2_BUCKET', env('AWS_BUCKET'))),
+            'endpoint' => env('BACKUP_R2_ENDPOINT', env('R2_ENDPOINT', env('AWS_ENDPOINT'))),
+            'use_path_style_endpoint' => env(
+                'BACKUP_R2_USE_PATH_STYLE_ENDPOINT',
+                env('R2_USE_PATH_STYLE_ENDPOINT', env('AWS_USE_PATH_STYLE_ENDPOINT', true))
+            ),
+            'visibility' => 'private',
+            'throw' => true,
+            'report' => true,
+        ],
+
         'cloudinary' => [
             'driver' => 'cloudinary',
             'cloud_url' => env('CLOUDINARY_URL'),

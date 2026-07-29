@@ -1080,6 +1080,61 @@ class TelegramService
         }
     }
 
+    public function sendDocument(string $chatId, string $filePath, string $filename, ?string $caption = null): bool
+    {
+        if (! $this->isEnabled()) {
+            return false;
+        }
+
+        if (! is_readable($filePath)) {
+            Log::warning('Telegram sendDocument: file not readable', ['path' => $filePath]);
+
+            return false;
+        }
+
+        try {
+            $stream = fopen($filePath, 'r');
+            if ($stream === false) {
+                return false;
+            }
+
+            $fields = ['chat_id' => $chatId];
+            if ($caption !== null && $caption !== '') {
+                $fields['caption'] = $caption;
+            }
+
+            $response = Http::timeout(120)
+                ->attach('document', $stream, $filename)
+                ->post(
+                    'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/sendDocument',
+                    $fields
+                );
+
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+
+            if ($response->successful()) {
+                return true;
+            }
+
+            Log::warning('Telegram sendDocument failed', [
+                'chat_id' => $chatId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return false;
+        } catch (\Throwable $e) {
+            Log::error('Telegram sendDocument exception', [
+                'chat_id' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
     public function sendMessage(string $chatId, string $text, ?array $replyMarkup = null, ?string $parseMode = 'Markdown'): bool
     {
         if (! $this->isEnabled()) {
