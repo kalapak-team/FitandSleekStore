@@ -59,6 +59,7 @@ Set in Render **Environment** (defaults in `render.yaml`):
 
 1. **Health check path:** `/api/health` (Render service settings).
 2. **Keep warm:** ping every 10 minutes, e.g. [cron-job.org](https://cron-job.org) → `GET https://fitandsleek-official.onrender.com/api/health`.
+   Also ping `GET /api/homepage/bootstrap` — `/api/health` does not touch the storefront cache.
 3. **Netlify:** redeploy frontend if you changed `_redirects` / `netlify.toml` proxy target.
 4. Retire duplicate Render services (`fitandsleek-official-backend` vs `fitandsleek-official`) so only one URL is live.
 

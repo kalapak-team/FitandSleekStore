@@ -24,6 +24,10 @@ class StorefrontCacheService
     // surviving the gaps between keep-warm pings on Render Free.
     public const TTL_BOOTSTRAP = 3600;
 
+    // Last known-good copy kept far beyond the fresh TTL so visitors can be served
+    // instantly while a single request rebuilds the expensive payload.
+    private const TTL_STALE = 604800;
+
     private const VERSION_PREFIX = 'storefront:v1:ver:';
 
     public static function remember(string $domain, int $ttlSeconds, string $suffix, callable $callback): mixed
@@ -34,23 +38,40 @@ class StorefrontCacheService
             return $hit;
         }
 
-        // File cache often cannot provide atomic locks; never block bootstrap on lock failure.
+        // File cache often cannot provide atomic locks; never block on lock failure.
+        $lock = null;
         try {
             $lock = Cache::lock('lock:'.md5($key), 120);
-            $lock->block(45);
 
-            try {
-                $hit = Cache::get($key);
-                if ($hit !== null) {
-                    return $hit;
+            if (! $lock->get()) {
+                $stale = Cache::get($key.':stale');
+                if ($stale !== null) {
+                    return $stale;
                 }
 
-                return Cache::remember($key, $ttlSeconds, $callback);
-            } finally {
-                $lock->release();
+                $lock->block(45);
             }
         } catch (\Throwable) {
-            return Cache::remember($key, $ttlSeconds, $callback);
+            $lock = null;
+        }
+
+        try {
+            $hit = Cache::get($key);
+            if ($hit !== null) {
+                return $hit;
+            }
+
+            $value = $callback();
+            Cache::put($key, $value, $ttlSeconds);
+            Cache::put($key.':stale', $value, self::TTL_STALE);
+
+            return $value;
+        } finally {
+            try {
+                $lock?->release();
+            } catch (\Throwable) {
+                // Lock already expired or unsupported by the store.
+            }
         }
     }
 

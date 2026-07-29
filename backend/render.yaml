@@ -61,6 +61,10 @@ services:
         value: fitandsleek://oauth/callback
       - key: QUEUE_CONNECTION
         value: database
+      # Free tier restarts wipe the container disk, so a file cache is empty on every
+      # boot and the first visitor pays for the whole homepage rebuild (504 via Netlify).
+      - key: CACHE_STORE
+        value: database
       # Light boot for Free tier (see backend/docs/render-free.md)
       - key: RUN_QUEUE_WORKER
         value: "false"
