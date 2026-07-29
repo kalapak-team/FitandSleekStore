@@ -170,8 +170,10 @@ export default function AdminSearchSelect({
   const openList = () => {
     if (disabled) return;
     setOpen(true);
-    setQuery(selected?.label || "");
-    requestAnimationFrame(() => inputRef.current?.select());
+    // Keep search empty on open so the full option list is visible.
+    // Pre-filling with the selected label filtered the list down to one row.
+    setQuery("");
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const commitQueryOnBlur = () => {
