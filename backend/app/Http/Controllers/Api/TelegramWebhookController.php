@@ -73,6 +73,8 @@ class TelegramWebhookController extends Controller
                 $this->telegram->sendLanguageMenu($chatId, $telegramUser);
             } elseif (str_starts_with($text, '/help')) {
                 $this->sendHelp($telegramUser, $chatId);
+            } elseif (str_starts_with($text, '/chatid')) {
+                $this->handleChatId($chat, $chatId);
             }
         } catch (\Throwable $e) {
             Log::error('Telegram webhook handler failed', [
@@ -81,6 +83,33 @@ class TelegramWebhookController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Report the chat id so staff can wire up new groups (backups, alerts)
+     * without pulling in a third-party "get id" bot.
+     *
+     * @param  array<string, mixed>  $chat
+     */
+    private function handleChatId(array $chat, int $chatId): void
+    {
+        $e = fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        $title = trim((string) ($chat['title'] ?? $chat['username'] ?? $chat['first_name'] ?? ''));
+        $type = trim((string) ($chat['type'] ?? 'unknown'));
+
+        $lines = [
+            '🆔 <b>Chat ID</b>',
+            '',
+            '<code>'.$e((string) $chatId).'</code>',
+            'Type: '.$e($type),
+        ];
+
+        if ($title !== '') {
+            $lines[] = 'Name: '.$e($title);
+        }
+
+        $this->telegram->sendMessage((string) $chatId, implode("\n", $lines), null, 'HTML');
     }
 
     private function handleStart(TelegramUser $telegramUser, string $text, int $chatId): void
