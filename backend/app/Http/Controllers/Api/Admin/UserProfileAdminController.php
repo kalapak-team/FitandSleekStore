@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\UserDeviceSession;
 use App\Services\AdminPermissionService;
 use App\Services\LoyaltyService;
+use App\Services\TelegramBotAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class UserProfileAdminController extends BaseAdminController
     public function __construct(
         private readonly AdminPermissionService $permissions,
         private readonly LoyaltyService $loyaltyService,
+        private readonly TelegramBotAuthService $telegramAuth,
     ) {}
 
     public function show(Request $request, User $user): JsonResponse
@@ -98,6 +100,10 @@ class UserProfileAdminController extends BaseAdminController
             return $viewer->isSuperAdmin();
         }
 
+        if ($target->isDriver()) {
+            return $viewer->isSuperAdmin() || $viewer->isAdmin();
+        }
+
         return $this->permissions->has($viewer, 'customers', 'view');
     }
 
@@ -111,7 +117,7 @@ class UserProfileAdminController extends BaseAdminController
      */
     private function formatUser(User $user): array
     {
-        return [
+        $payload = [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
@@ -124,6 +130,12 @@ class UserProfileAdminController extends BaseAdminController
             'created_at' => $user->created_at,
             'has_two_factor' => $user->hasTwoFactorEnabled(),
         ];
+
+        if ($this->telegramAuth->purposeForUser($user) !== null) {
+            $payload['telegram'] = $this->telegramAuth->telegramLinkStatus($user);
+        }
+
+        return $payload;
     }
 
     /**

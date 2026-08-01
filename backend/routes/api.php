@@ -85,6 +85,7 @@ use App\Http\Controllers\Api\Admin\ProfileController;
 use App\Http\Controllers\Api\Admin\FooterHeaderController;
 use App\Http\Controllers\Api\Admin\DiscountAdminController;
 use App\Http\Controllers\Api\Admin\DriverAdminController;
+use App\Http\Controllers\Api\Admin\TelegramLinkAdminController;
 use App\Http\Controllers\Api\Admin\AdminAiChatController;
 use App\Http\Controllers\Api\Admin\LoyaltyAdminController;
 
@@ -404,6 +405,10 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     // Unified user profile (admin view)
     Route::get('users/{user}/profile', [UserProfileAdminController::class, 'show']);
     Route::put('users/{user}/password', [UserProfileAdminController::class, 'resetPassword']);
+    Route::get('users/{user}/telegram-link', [TelegramLinkAdminController::class, 'status']);
+    Route::post('users/{user}/telegram-link-code', [TelegramLinkAdminController::class, 'createCode']);
+    Route::delete('users/{user}/telegram-link', [TelegramLinkAdminController::class, 'unlink']);
+    Route::get('orders/{order}/driver-telegram-qr', [TelegramLinkAdminController::class, 'driverJobQr']);
 
     // Customers (full CRUD) - Using explicit routes to avoid implicit model binding
     Route::get('customers', [CustomerAdminController::class, 'index']);

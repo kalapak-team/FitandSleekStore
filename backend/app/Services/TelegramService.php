@@ -9,6 +9,7 @@ use App\Models\Shipment;
 use App\Models\ShipmentTrackingEvent;
 use App\Models\TelegramOrderSubscription;
 use App\Models\TelegramUser;
+use App\Models\User;
 use App\Support\ShippingAddress;
 use App\Support\TelegramBotTexts;
 use Endroid\QrCode\Color\Color;
@@ -544,7 +545,7 @@ class TelegramService
     /**
      * @return array{ok: bool, message: string, customer_notified: bool}
      */
-    public function updateShipmentStatusFromAdminChat(Order $order, string $status): array
+    public function updateShipmentStatusFromAdminChat(Order $order, string $status, ?User $actor = null): array
     {
         $status = strtolower(trim($status));
         $allowed = ['pending', 'processing', 'shipped', 'in_transit', 'delivered', 'failed', 'returned'];
@@ -567,17 +568,30 @@ class TelegramService
             $deliveredAt = now();
         }
 
-        $shipment->update([
+        $shipmentUpdate = [
             'status' => $status,
             'shipped_at' => $shippedAt,
             'delivered_at' => $deliveredAt,
-        ]);
+        ];
+
+        if ($actor?->isDriver() && in_array($status, ['delivered', 'in_transit', 'shipped'], true)) {
+            $shipmentUpdate['delivered_by_user_id'] = $actor->id;
+            if (! filled($shipment->delivered_by_name)) {
+                $shipmentUpdate['delivered_by_name'] = $actor->name;
+            }
+        }
+
+        $shipment->update($shipmentUpdate);
+
+        $actorLabel = $actor
+            ? trim(($actor->name ?: 'user').' #'.$actor->id.' ('.$actor->role.')')
+            : 'unknown';
 
         ShipmentTrackingEvent::create([
             'shipment_id' => $shipment->id,
             'status' => $status,
-            'note' => 'Status updated from Telegram admin bot.',
-            'updated_by' => null,
+            'note' => 'Status updated from Telegram bot by '.$actorLabel.'.',
+            'updated_by' => $actor?->id,
             'event_time' => now(),
         ]);
 
@@ -611,11 +625,64 @@ class TelegramService
             'ok' => true,
             'message' => "✅ {$statusKm} / ".str_replace('_', ' ', $status)
                 ."\nOrder: ".($order->order_number ?: '#'.$order->id)
+                ."\nBy: {$actorLabel}"
                 ."\n".($customerNotified
                     ? '📣 Customer Telegram: notified'
                     : '⚠️ Customer Telegram: not linked — alert skipped'),
             'customer_notified' => $customerNotified,
         ];
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}
+     */
+    public function buildDriverOrderKeyboard(Order $order): array
+    {
+        $rows = [];
+        $actionRow = [];
+        if ($order->payment_status !== 'paid') {
+            $actionRow[] = [
+                'text' => $order->payment_method === 'cod' ? '💳 KHQR COD' : '💳 KHQR',
+                'callback_data' => 'payqr_'.$order->id,
+            ];
+        }
+        if ($actionRow !== []) {
+            $rows[] = $actionRow;
+        }
+
+        $rows[] = [
+            ['text' => '📦 ដឹកចេញ', 'callback_data' => 'drivest_'.$order->id.'_shipped'],
+            ['text' => '🚚 កំពុងដឹក', 'callback_data' => 'drivest_'.$order->id.'_in_transit'],
+        ];
+        $rows[] = [
+            ['text' => '✅ មកដល់', 'callback_data' => 'drivest_'.$order->id.'_delivered'],
+            ['text' => '✔️ បញ្ចប់', 'callback_data' => 'drivest_'.$order->id.'_complete'],
+        ];
+
+        return ['inline_keyboard' => $rows];
+    }
+
+    public function sendDriverJobCard(int $chatId, Order $order, ?string $locale = null): void
+    {
+        $locale ??= $this->resolveLocaleForChatId($chatId);
+        $order->loadMissing('shipment');
+        $label = $order->order_number ?: '#'.$order->id;
+        $payment = $this->formatPaymentMethodLabel($order);
+        if ($order->payment_status === 'paid') {
+            $payment .= ' · paid';
+        } elseif ($order->payment_method === 'cod') {
+            $payment .= ' · unpaid';
+        }
+        $status = ucfirst(str_replace('_', ' ', (string) ($order->shipment?->status ?: $order->status ?: 'pending')));
+
+        $message = TelegramBotTexts::get($locale, 'driver_job_title', [
+            'label' => $label,
+            'total' => number_format((float) $order->total, 2),
+            'payment' => $payment,
+            'status' => $status,
+        ]);
+
+        $this->sendMessage((string) $chatId, $message, $this->buildDriverOrderKeyboard($order));
     }
 
     public function sendPaymentQrToChat(int $chatId, Order $order, ?string $locale = null): bool

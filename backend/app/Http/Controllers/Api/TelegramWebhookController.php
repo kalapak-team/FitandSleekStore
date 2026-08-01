@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\TelegramUser;
 use App\Services\DatabaseBackupService;
+use App\Services\TelegramBotAuthService;
 use App\Services\TelegramService;
 use App\Support\TelegramBotTexts;
 use Illuminate\Http\JsonResponse;
@@ -14,8 +15,10 @@ use Illuminate\Support\Facades\Log;
 
 class TelegramWebhookController extends Controller
 {
-    public function __construct(private TelegramService $telegram)
-    {
+    public function __construct(
+        private TelegramService $telegram,
+        private TelegramBotAuthService $botAuth,
+    ) {
     }
 
     public function handle(Request $request, ?string $secret = null): JsonResponse
@@ -77,7 +80,7 @@ class TelegramWebhookController extends Controller
             } elseif (str_starts_with($text, '/chatid')) {
                 $this->handleChatId($chat, $chatId);
             } elseif (str_starts_with($text, '/backup')) {
-                $this->handleBackup($chatId);
+                $this->handleBackup($telegramUser, $chatId);
             }
         } catch (\Throwable $e) {
             Log::error('Telegram webhook handler failed', [
@@ -89,9 +92,6 @@ class TelegramWebhookController extends Controller
     }
 
     /**
-     * Report the chat id so staff can wire up new groups (backups, alerts)
-     * without pulling in a third-party "get id" bot.
-     *
      * @param  array<string, mixed>  $chat
      */
     private function handleChatId(array $chat, int $chatId): void
@@ -115,15 +115,25 @@ class TelegramWebhookController extends Controller
         $this->telegram->sendMessage((string) $chatId, implode("\n", $lines), null, 'HTML');
     }
 
-    /**
-     * Manual backup trigger for staff chats (no Render shell required).
-     */
-    private function handleBackup(int $chatId): void
+    private function handleBackup(TelegramUser $telegramUser, int $chatId): void
     {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+
         if (! $this->isAllowedBackupChat($chatId)) {
             $this->telegram->sendMessage(
                 (string) $chatId,
                 '⛔ Backup command is only available in the backup / admin group.',
+                null,
+                null
+            );
+
+            return;
+        }
+
+        if (! $this->botAuth->resolveSuperAdminActor($telegramUser)) {
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'backup_superadmin_only'),
                 null,
                 null
             );
@@ -138,7 +148,6 @@ class TelegramWebhookController extends Controller
             null
         );
 
-        // Finish the Telegram webhook quickly; Neon dumps can exceed webhook timeouts.
         dispatch(function () {
             try {
                 app(DatabaseBackupService::class)->run();
@@ -170,6 +179,18 @@ class TelegramWebhookController extends Controller
 
         if ($payload === '') {
             $this->sendWelcome($telegramUser, $chatId);
+
+            return;
+        }
+
+        if (preg_match('/^(staff|driver)_/i', $payload)) {
+            $this->handleStaffOrDriverLink($telegramUser, $payload, $chatId, $locale);
+
+            return;
+        }
+
+        if (str_starts_with($payload, 'job_')) {
+            $this->handleDriverJobStart($telegramUser, substr($payload, 4), $chatId, $locale);
 
             return;
         }
@@ -233,6 +254,78 @@ class TelegramWebhookController extends Controller
         $this->sendWelcome($telegramUser, $chatId);
     }
 
+    private function handleStaffOrDriverLink(
+        TelegramUser $telegramUser,
+        string $payload,
+        int $chatId,
+        string $locale
+    ): void {
+        $result = $this->botAuth->redeemStartPayload($payload, $telegramUser);
+        $isDriver = str_starts_with(strtolower($payload), 'driver_');
+
+        if (! $result['ok'] || ! $result['user']) {
+            $reason = match ($result['message']) {
+                'expired' => 'expired',
+                'used' => 'already used',
+                'inactive' => 'account inactive',
+                'telegram_busy' => 'this Telegram is linked to another staff/driver',
+                'role_mismatch' => 'role mismatch',
+                default => 'invalid or not found',
+            };
+            $key = $isDriver ? 'driver_link_failed' : 'staff_link_failed';
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, $key, ['reason' => $reason])
+            );
+
+            return;
+        }
+
+        $key = $result['user']->isDriver() ? 'driver_linked' : 'staff_linked';
+        $this->telegram->sendMessage(
+            (string) $chatId,
+            TelegramBotTexts::get($locale, $key, ['name' => $result['user']->name ?: ('#'.$result['user']->id)])
+        );
+    }
+
+    private function handleDriverJobStart(
+        TelegramUser $telegramUser,
+        string $orderKey,
+        int $chatId,
+        string $locale
+    ): void {
+        $driver = $this->botAuth->resolveDriverActor($telegramUser);
+        if (! $driver) {
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'driver_link_required')
+            );
+
+            return;
+        }
+
+        $order = Order::findByPublicKey($orderKey)?->load(['shipment', 'user', 'items']);
+        if (! $order) {
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'order_not_found', ['key' => $orderKey])
+            );
+
+            return;
+        }
+
+        if (! $this->botAuth->driverCanOpenJob($driver, $order)) {
+            $this->telegram->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'order_not_found_short')
+            );
+
+            return;
+        }
+
+        $this->telegram->sendDriverJobCard($chatId, $order, $locale);
+    }
+
     private function handleTrack(TelegramUser $telegramUser, string $text, int $chatId): void
     {
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
@@ -260,12 +353,15 @@ class TelegramWebhookController extends Controller
         }
 
         if ($telegramUser->user_id && (int) $telegramUser->user_id !== (int) $order->user_id) {
-            $this->telegram->sendMessage(
-                (string) $chatId,
-                TelegramBotTexts::get($locale, 'order_not_yours')
-            );
+            $linked = $this->botAuth->linkedUser($telegramUser);
+            if (! $linked || (! $linked->isAdmin() && ! $linked->isDriver())) {
+                $this->telegram->sendMessage(
+                    (string) $chatId,
+                    TelegramBotTexts::get($locale, 'order_not_yours')
+                );
 
-            return;
+                return;
+            }
         }
 
         $this->telegram->subscribeChatToOrder($telegramUser, $order);
@@ -378,8 +474,7 @@ class TelegramWebhookController extends Controller
         $chatId = (int) $chat['id'];
         $telegramUser = $this->telegram->upsertTelegramUser($from, $chatId);
 
-        // Dismiss spinner quickly; admin status answers with result text after update.
-        if (! str_starts_with($data, 'adminst_')) {
+        if (! str_starts_with($data, 'adminst_') && ! str_starts_with($data, 'drivest_')) {
             $this->telegram->answerCallbackQuery($callbackId);
         }
 
@@ -417,6 +512,10 @@ class TelegramWebhookController extends Controller
 
             return;
         }
+
+        if (str_starts_with($data, 'drivest_')) {
+            $this->handleDriverStatusCallback($callbackId, $data, $chatId, $telegramUser);
+        }
     }
 
     private function handlePaymentQrCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
@@ -436,7 +535,13 @@ class TelegramWebhookController extends Controller
             return;
         }
 
-        if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
+        $driver = $this->botAuth->resolveDriverActor($telegramUser);
+        $staff = $this->botAuth->resolveStaffActor($telegramUser);
+        $allowed = $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)
+            || ($driver && $this->botAuth->driverCanOpenJob($driver, $order))
+            || ($staff && $this->botAuth->staffCanManageOrders($staff));
+
+        if (! $allowed) {
             $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
 
             return;
@@ -463,9 +568,12 @@ class TelegramWebhookController extends Controller
         }
 
         if (! $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)) {
-            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
+            $staff = $this->botAuth->resolveStaffActor($telegramUser);
+            if (! $staff || ! $this->botAuth->staffCanManageOrders($staff)) {
+                $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
 
-            return;
+                return;
+            }
         }
 
         $this->telegram->sendInvoiceToChat($chatId, $order, $locale);
@@ -474,9 +582,13 @@ class TelegramWebhookController extends Controller
     private function handleAdminStatusCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
     {
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
-        if (! $this->telegram->isAdminChatId($chatId)) {
-            $this->telegram->answerCallbackQuery($callbackId, 'Admin only');
-            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'not_subscribed'));
+
+        $staff = $this->botAuth->resolveStaffActor($telegramUser);
+        $allowed = $staff && $this->botAuth->staffCanManageOrders($staff);
+
+        if (! $allowed || ! $this->telegram->isAdminChatId($chatId)) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Staff link required');
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'staff_action_denied'));
 
             return;
         }
@@ -506,7 +618,7 @@ class TelegramWebhookController extends Controller
             return;
         }
 
-        $result = $this->telegram->updateShipmentStatusFromAdminChat($order, $status);
+        $result = $this->telegram->updateShipmentStatusFromAdminChat($order, $status, $staff);
         $toast = $result['ok']
             ? ('OK · '.str_replace('_', ' ', $status))
             : ('Fail · '.($result['message'] ?? 'error'));
@@ -516,6 +628,72 @@ class TelegramWebhookController extends Controller
             (string) $chatId,
             ($result['ok'] ? '' : '❌ ').$result['message'],
             $this->telegram->keyboardForChat($chatId, $order->fresh(['shipment', 'user', 'items.product'])),
+            null
+        );
+    }
+
+    private function handleDriverStatusCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
+    {
+        $locale = TelegramBotTexts::resolveLocale($telegramUser);
+        $driver = $this->botAuth->resolveDriverActor($telegramUser);
+
+        if (! $driver) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Driver link required');
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'driver_link_required'));
+
+            return;
+        }
+
+        $parts = explode('_', $data);
+        if (count($parts) < 3) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Invalid');
+
+            return;
+        }
+
+        $orderId = (int) ($parts[1] ?? 0);
+        $action = implode('_', array_slice($parts, 2));
+        $order = Order::with('shipment')->find($orderId);
+
+        if ($orderId <= 0 || ! $order || ! $this->botAuth->driverCanOpenJob($driver, $order)) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Not found');
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'order_not_found_short'));
+
+            return;
+        }
+
+        if ($action === 'complete') {
+            if ($order->payment_method === 'cod' && ! $order->isPaymentSuccessful()) {
+                $this->telegram->answerCallbackQuery($callbackId, 'Pay first');
+                $this->telegram->sendMessage(
+                    (string) $chatId,
+                    TelegramBotTexts::get($locale, 'driver_complete_need_pay'),
+                    $this->telegram->buildDriverOrderKeyboard($order)
+                );
+
+                return;
+            }
+            $action = 'delivered';
+        }
+
+        $allowedStatuses = ['shipped', 'in_transit', 'delivered'];
+        if (! in_array($action, $allowedStatuses, true)) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Not allowed');
+
+            return;
+        }
+
+        $result = $this->telegram->updateShipmentStatusFromAdminChat($order, $action, $driver);
+        $toast = $result['ok']
+            ? ('OK · '.str_replace('_', ' ', $action))
+            : ('Fail · '.($result['message'] ?? 'error'));
+        $this->telegram->answerCallbackQuery($callbackId, mb_substr($toast, 0, 180));
+
+        $fresh = $order->fresh(['shipment', 'user', 'items']);
+        $this->telegram->sendMessage(
+            (string) $chatId,
+            ($result['ok'] ? '' : '❌ ').$result['message'],
+            $fresh ? $this->telegram->buildDriverOrderKeyboard($fresh) : null,
             null
         );
     }

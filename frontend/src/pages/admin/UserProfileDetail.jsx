@@ -22,6 +22,7 @@ import { resolveImageUrl } from "../../lib/images";
 import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import AdminModal, { AdminConfirmDialog } from "../../components/admin/AdminModal.jsx";
 import AdminPermissionsPanel from "../../components/admin/AdminPermissionsPanel.jsx";
+import TelegramLinkPanel from "../../components/admin/TelegramLinkPanel.jsx";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -204,7 +205,10 @@ export default function UserProfileDetail() {
   const targetUser = profileData?.user;
   const role = targetUser?.role;
   const isAdminTarget = role === "admin" || role === "superadmin";
+  const isDriverTarget = role === "driver";
   const isCustomerTarget = role === "customer" || role === "driver";
+  const showTelegramLink = isAdminTarget || isDriverTarget;
+  const canManageTelegram = isSuperAdmin || (sessionUser?.role === "admin" && isDriverTarget);
 
   const availableTabs = useMemo(() => {
     const tabs = ["overview"];
@@ -527,6 +531,26 @@ export default function UserProfileDetail() {
                       Manage permissions
                     </button>
                   ) : null}
+                </div>
+              ) : null}
+
+              {showTelegramLink ? (
+                <div className="lg:col-span-2">
+                  <TelegramLinkPanel
+                    userId={targetUser?.id}
+                    telegram={targetUser?.telegram}
+                    canManage={canManageTelegram}
+                    onUpdated={(next) => {
+                      setProfileData((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              user: { ...prev.user, telegram: next },
+                            }
+                          : prev
+                      );
+                    }}
+                  />
                 </div>
               ) : null}
             </div>

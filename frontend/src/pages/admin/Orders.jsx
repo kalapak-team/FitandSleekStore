@@ -19,6 +19,7 @@ import AdminListPaginationBar from "../../components/admin/AdminListPaginationBa
 import { ADMIN_LIST_PAGE_SIZE, ADMIN_LIST_PAGINATE_AT } from "../../lib/adminListQuery.js";
 import { listingStatusLabel, lotTierLabel } from "../../lib/inventoryLotHelpers.js";
 import OrderShipmentPanel from "../../components/admin/OrderShipmentPanel.jsx";
+import OrderDriverTelegramQr from "../../components/admin/OrderDriverTelegramQr.jsx";
 import OrderCodCollectionPanel from "../../components/admin/OrderCodCollectionPanel.jsx";
 import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
@@ -1127,6 +1128,13 @@ export default function AdminOrders() {
  setStatus("shipped");
  refetchOrders();
  }}
+ />
+ ) : null}
+
+ {selected?.id && (canEditShipments || canEditOrders) ? (
+ <OrderDriverTelegramQr
+ orderId={selected.id}
+ orderNumber={selected.order_number}
  />
  ) : null}
 

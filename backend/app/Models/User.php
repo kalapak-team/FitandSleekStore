@@ -146,10 +146,15 @@ class User extends Authenticatable
         return $this->role === 'customer';
     }
 
+    public function isDriver(): bool
+    {
+        return $this->role === 'driver';
+    }
+
     /** Storefront checkout (web/mobile shop) — not in-store POS/admin sales. */
     public function canPlaceStorefrontOrder(): bool
     {
-        return ! $this->isAdmin();
+        return ! $this->isAdmin() && ! $this->isDriver();
     }
 
     public function isActive(): bool
