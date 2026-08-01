@@ -294,16 +294,6 @@ class TelegramWebhookController extends Controller
         int $chatId,
         string $locale
     ): void {
-        $driver = $this->botAuth->resolveDriverActor($telegramUser);
-        if (! $driver) {
-            $this->telegram->sendMessage(
-                (string) $chatId,
-                TelegramBotTexts::get($locale, 'driver_link_required')
-            );
-
-            return;
-        }
-
         $order = Order::findByPublicKey($orderKey)?->load(['shipment', 'user', 'items']);
         if (! $order) {
             $this->telegram->sendMessage(
@@ -314,10 +304,11 @@ class TelegramWebhookController extends Controller
             return;
         }
 
-        if (! $this->botAuth->driverCanOpenJob($driver, $order)) {
+        // External courier: no shop account required — admin must unlock after pickup confirm.
+        if (! $this->botAuth->courierCanOpenJob($order)) {
             $this->telegram->sendMessage(
                 (string) $chatId,
-                TelegramBotTexts::get($locale, 'order_not_found_short')
+                TelegramBotTexts::get($locale, 'courier_job_locked')
             );
 
             return;
@@ -538,6 +529,7 @@ class TelegramWebhookController extends Controller
         $driver = $this->botAuth->resolveDriverActor($telegramUser);
         $staff = $this->botAuth->resolveStaffActor($telegramUser);
         $allowed = $this->telegram->canChatAccessOrder($chatId, $order, $telegramUser)
+            || $this->botAuth->courierCanOpenJob($order)
             || ($driver && $this->botAuth->driverCanOpenJob($driver, $order))
             || ($staff && $this->botAuth->staffCanManageOrders($staff));
 
@@ -635,14 +627,6 @@ class TelegramWebhookController extends Controller
     private function handleDriverStatusCallback(string $callbackId, string $data, int $chatId, TelegramUser $telegramUser): void
     {
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
-        $driver = $this->botAuth->resolveDriverActor($telegramUser);
-
-        if (! $driver) {
-            $this->telegram->answerCallbackQuery($callbackId, 'Driver link required');
-            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'driver_link_required'));
-
-            return;
-        }
 
         $parts = explode('_', $data);
         if (count($parts) < 3) {
@@ -655,9 +639,16 @@ class TelegramWebhookController extends Controller
         $action = implode('_', array_slice($parts, 2));
         $order = Order::with('shipment')->find($orderId);
 
-        if ($orderId <= 0 || ! $order || ! $this->botAuth->driverCanOpenJob($driver, $order)) {
+        if ($orderId <= 0 || ! $order) {
             $this->telegram->answerCallbackQuery($callbackId, 'Not found');
             $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'order_not_found_short'));
+
+            return;
+        }
+
+        if (! $this->botAuth->courierCanOpenJob($order)) {
+            $this->telegram->answerCallbackQuery($callbackId, 'Locked');
+            $this->telegram->sendMessage((string) $chatId, TelegramBotTexts::get($locale, 'courier_job_locked'));
 
             return;
         }
@@ -683,17 +674,47 @@ class TelegramWebhookController extends Controller
             return;
         }
 
-        $result = $this->telegram->updateShipmentStatusFromAdminChat($order, $action, $driver);
+        $courierLabel = trim(implode(' ', array_filter([
+            $telegramUser->first_name,
+            $telegramUser->last_name,
+            $telegramUser->username ? '@'.$telegramUser->username : null,
+        ]))) ?: ('tg:'.$telegramUser->telegram_user_id);
+
+        $result = $this->telegram->updateShipmentStatusFromAdminChat(
+            $order,
+            $action,
+            null,
+            'External courier via Telegram ('.$courierLabel.')'
+        );
+
+        if ($result['ok'] && $action === 'delivered') {
+            // Close the job QR after successful delivery.
+            if ($order->shipment) {
+                $order->shipment->update([
+                    'courier_job_unlocked_at' => null,
+                    'courier_job_unlocked_by' => null,
+                ]);
+            }
+        }
+
         $toast = $result['ok']
             ? ('OK · '.str_replace('_', ' ', $action))
             : ('Fail · '.($result['message'] ?? 'error'));
         $this->telegram->answerCallbackQuery($callbackId, mb_substr($toast, 0, 180));
 
         $fresh = $order->fresh(['shipment', 'user', 'items']);
+        $keyboard = null;
+        $extra = '';
+        if ($fresh && $this->botAuth->courierCanOpenJob($fresh)) {
+            $keyboard = $this->telegram->buildDriverOrderKeyboard($fresh);
+        } elseif ($result['ok'] && $action === 'delivered') {
+            $extra = "\n\n".TelegramBotTexts::get($locale, 'courier_job_done_locked');
+        }
+
         $this->telegram->sendMessage(
             (string) $chatId,
-            ($result['ok'] ? '' : '❌ ').$result['message'],
-            $fresh ? $this->telegram->buildDriverOrderKeyboard($fresh) : null,
+            ($result['ok'] ? '' : '❌ ').$result['message'].$extra,
+            $keyboard,
             null
         );
     }

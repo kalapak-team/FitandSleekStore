@@ -207,8 +207,8 @@ export default function UserProfileDetail() {
   const isAdminTarget = role === "admin" || role === "superadmin";
   const isDriverTarget = role === "driver";
   const isCustomerTarget = role === "customer" || role === "driver";
-  const showTelegramLink = isAdminTarget || isDriverTarget;
-  const canManageTelegram = isSuperAdmin || (sessionUser?.role === "admin" && isDriverTarget);
+  const showTelegramLink = isAdminTarget;
+  const canManageTelegram = isSuperAdmin;
 
   const availableTabs = useMemo(() => {
     const tabs = ["overview"];

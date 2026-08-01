@@ -22,6 +22,8 @@ class Shipment extends Model
         'picked_up_by_name',
         'picked_up_by_phone',
         'picked_up_at',
+        'courier_job_unlocked_at',
+        'courier_job_unlocked_by',
     ];
 
     protected function casts(): array
@@ -30,6 +32,7 @@ class Shipment extends Model
             'shipped_at' => 'datetime',
             'delivered_at' => 'datetime',
             'picked_up_at' => 'datetime',
+            'courier_job_unlocked_at' => 'datetime',
         ];
     }
 
@@ -47,6 +50,16 @@ class Shipment extends Model
     public function deliveredByUser()
     {
         return $this->belongsTo(User::class, 'delivered_by_user_id');
+    }
+
+    public function courierJobUnlockedBy()
+    {
+        return $this->belongsTo(User::class, 'courier_job_unlocked_by');
+    }
+
+    public function isCourierJobUnlocked(): bool
+    {
+        return $this->courier_job_unlocked_at !== null;
     }
 
     public function getTrackingUrlAttribute(): string

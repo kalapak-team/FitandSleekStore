@@ -82,7 +82,7 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">Telegram bot link</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            One-time code (≈10 min). Staff use admin group buttons; drivers scan order job QRs.
+            One-time code (~10 min) for shop staff. External couriers do not need an account — unlock the order job QR after pickup confirm.
           </p>
         </div>
         <span

@@ -205,6 +205,95 @@ class TelegramBotAuthService
         return ! in_array($status, ['cancelled'], true);
     }
 
+    /**
+     * External courier (no shop account): job QR works only after admin unlock.
+     */
+    public function courierCanOpenJob(Order $order): bool
+    {
+        $status = strtolower((string) ($order->status ?? ''));
+        if (in_array($status, ['cancelled'], true)) {
+            return false;
+        }
+
+        $order->loadMissing('shipment');
+        $shipment = $order->shipment;
+        if (! $shipment) {
+            return false;
+        }
+
+        return $shipment->isCourierJobUnlocked();
+    }
+
+    /**
+     * @return array{unlocked: bool, unlocked_at: ?string, unlocked_by: ?int, deep_link: ?string, start_payload: string}
+     */
+    public function courierJobStatus(Order $order): array
+    {
+        $order->loadMissing('shipment');
+        $shipment = $order->shipment;
+        $key = $order->order_number ?: (string) $order->id;
+
+        return [
+            'unlocked' => (bool) $shipment?->isCourierJobUnlocked(),
+            'unlocked_at' => $shipment?->courier_job_unlocked_at?->toIso8601String(),
+            'unlocked_by' => $shipment?->courier_job_unlocked_by,
+            'deep_link' => $this->buildDriverJobDeepLink($order),
+            'start_payload' => 'job_'.$key,
+        ];
+    }
+
+    public function unlockCourierJob(Order $order, User $actor, ?string $pickedUpByName = null, ?string $pickedUpByPhone = null): Order
+    {
+        if (! $actor->isSuperAdmin() && ! $actor->hasAdminPermission('orders', 'edit') && ! $actor->hasAdminPermission('shipments', 'edit')) {
+            throw new RuntimeException('You do not have permission to confirm courier pickup.');
+        }
+
+        $order->loadMissing('shipment');
+        $shipment = $order->shipment;
+        if (! $shipment) {
+            $shipment = $order->shipment()->create([
+                'provider' => 'External',
+                'status' => 'processing',
+            ]);
+        }
+
+        $updates = [
+            'courier_job_unlocked_at' => now(),
+            'courier_job_unlocked_by' => $actor->id,
+        ];
+
+        if (! $shipment->picked_up_at) {
+            $updates['picked_up_at'] = now();
+        }
+        if ($pickedUpByName !== null && trim($pickedUpByName) !== '') {
+            $updates['picked_up_by_name'] = trim($pickedUpByName);
+        }
+        if ($pickedUpByPhone !== null && trim($pickedUpByPhone) !== '') {
+            $updates['picked_up_by_phone'] = trim($pickedUpByPhone);
+        }
+
+        $shipment->update($updates);
+
+        return $order->fresh(['shipment', 'user', 'items']);
+    }
+
+    public function lockCourierJob(Order $order, User $actor): Order
+    {
+        if (! $actor->isSuperAdmin() && ! $actor->hasAdminPermission('orders', 'edit') && ! $actor->hasAdminPermission('shipments', 'edit')) {
+            throw new RuntimeException('You do not have permission to lock courier job.');
+        }
+
+        $order->loadMissing('shipment');
+        if ($order->shipment) {
+            $order->shipment->update([
+                'courier_job_unlocked_at' => null,
+                'courier_job_unlocked_by' => null,
+            ]);
+        }
+
+        return $order->fresh(['shipment', 'user', 'items']);
+    }
+
     public function buildDriverJobDeepLink(Order $order): ?string
     {
         $key = $order->order_number ?: (string) $order->id;

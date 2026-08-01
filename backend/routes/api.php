@@ -409,6 +409,8 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     Route::post('users/{user}/telegram-link-code', [TelegramLinkAdminController::class, 'createCode']);
     Route::delete('users/{user}/telegram-link', [TelegramLinkAdminController::class, 'unlink']);
     Route::get('orders/{order}/driver-telegram-qr', [TelegramLinkAdminController::class, 'driverJobQr']);
+    Route::post('orders/{order}/courier-job/unlock', [TelegramLinkAdminController::class, 'unlockCourierJob']);
+    Route::post('orders/{order}/courier-job/lock', [TelegramLinkAdminController::class, 'lockCourierJob']);
 
     // Customers (full CRUD) - Using explicit routes to avoid implicit model binding
     Route::get('customers', [CustomerAdminController::class, 'index']);

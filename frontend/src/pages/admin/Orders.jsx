@@ -1135,6 +1135,11 @@ export default function AdminOrders() {
  <OrderDriverTelegramQr
  orderId={selected.id}
  orderNumber={selected.order_number}
+ shipment={selected?.shipment}
+ canEdit={canEditShipments || canEditOrders}
+ onShipmentChange={(shipment) => {
+ setSelected((prev) => (prev ? { ...prev, shipment } : prev));
+ }}
  />
  ) : null}
 

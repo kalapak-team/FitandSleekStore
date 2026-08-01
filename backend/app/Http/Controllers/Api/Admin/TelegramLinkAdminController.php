@@ -80,7 +80,7 @@ class TelegramLinkAdminController extends BaseAdminController
     }
 
     /**
-     * Deep link + QR for drivers to open one order job in the Telegram bot.
+     * Deep link + QR for external couriers (works after admin unlock).
      */
     public function driverJobQr(Request $request, Order $order): JsonResponse|Response
     {
@@ -102,15 +102,15 @@ class TelegramLinkAdminController extends BaseAdminController
             return response()->json(['message' => 'Could not build Telegram deep link.'], 422);
         }
 
+        $job = $this->auth->courierJobStatus($order);
+
         if ($request->query('format') === 'json') {
             return response()->json([
-                'message' => 'Driver job Telegram link',
-                'data' => [
-                    'deep_link' => $deepLink,
+                'message' => 'Courier Telegram job link',
+                'data' => array_merge($job, [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
-                    'start_payload' => 'job_'.($order->order_number ?: (string) $order->id),
-                ],
+                ]),
             ]);
         }
 
@@ -129,21 +129,67 @@ class TelegramLinkAdminController extends BaseAdminController
             ->header('Cache-Control', 'no-store');
     }
 
+    public function unlockCourierJob(Request $request, Order $order): JsonResponse
+    {
+        /** @var User $viewer */
+        $viewer = $request->user();
+
+        $validated = $request->validate([
+            'picked_up_by_name' => ['nullable', 'string', 'max:150'],
+            'picked_up_by_phone' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        try {
+            $order = $this->auth->unlockCourierJob(
+                $order,
+                $viewer,
+                $validated['picked_up_by_name'] ?? null,
+                $validated['picked_up_by_phone'] ?? null,
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        }
+
+        return response()->json([
+            'message' => 'Courier Telegram job unlocked. Courier can scan the QR now.',
+            'data' => [
+                'order' => $order,
+                'courier_job' => $this->auth->courierJobStatus($order),
+            ],
+        ]);
+    }
+
+    public function lockCourierJob(Request $request, Order $order): JsonResponse
+    {
+        /** @var User $viewer */
+        $viewer = $request->user();
+
+        try {
+            $order = $this->auth->lockCourierJob($order, $viewer);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        }
+
+        return response()->json([
+            'message' => 'Courier Telegram job locked.',
+            'data' => [
+                'order' => $order,
+                'courier_job' => $this->auth->courierJobStatus($order),
+            ],
+        ]);
+    }
+
     private function canManageTelegramLink(?User $viewer, User $target): bool
     {
         if (! $viewer) {
             return false;
         }
 
-        if ($this->auth->purposeForUser($target) === null) {
+        // Staff Telegram linking only (admin / superadmin). External couriers do not need accounts.
+        if (! $target->isAdmin()) {
             return false;
         }
 
-        if ($viewer->isSuperAdmin()) {
-            return true;
-        }
-
-        // Shop admins may only manage driver Telegram links.
-        return $viewer->isAdmin() && $target->isDriver();
+        return $viewer->isSuperAdmin();
     }
 }

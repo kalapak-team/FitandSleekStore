@@ -545,7 +545,12 @@ class TelegramService
     /**
      * @return array{ok: bool, message: string, customer_notified: bool}
      */
-    public function updateShipmentStatusFromAdminChat(Order $order, string $status, ?User $actor = null): array
+    public function updateShipmentStatusFromAdminChat(
+        Order $order,
+        string $status,
+        ?User $actor = null,
+        ?string $actorNote = null
+    ): array
     {
         $status = strtolower(trim($status));
         $allowed = ['pending', 'processing', 'shipped', 'in_transit', 'delivered', 'failed', 'returned'];
@@ -583,9 +588,10 @@ class TelegramService
 
         $shipment->update($shipmentUpdate);
 
-        $actorLabel = $actor
-            ? trim(($actor->name ?: 'user').' #'.$actor->id.' ('.$actor->role.')')
-            : 'unknown';
+        $actorLabel = $actorNote
+            ?: ($actor
+                ? trim(($actor->name ?: 'user').' #'.$actor->id.' ('.$actor->role.')')
+                : 'unknown');
 
         ShipmentTrackingEvent::create([
             'shipment_id' => $shipment->id,
