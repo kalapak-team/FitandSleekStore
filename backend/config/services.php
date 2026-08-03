@@ -137,7 +137,23 @@ return [
     ],
 
     /*
-    | Own Chat AI — Ollama (local or VPS). Replaces Dify + Gemini for admin/customer chat.
+    | Chat AI provider for Admin Ask AI + storefront chatbot.
+    | - huggingface: trained Gradio Space (https://huggingface.co/spaces/Kalapak/fitandsleekAIchat)
+    | - ollama: local / VPS Ollama
+    */
+    'chat_ai' => [
+        'provider' => env('CHAT_AI_PROVIDER', 'huggingface'),
+    ],
+
+    'hf_chat' => [
+        'base_url' => env('HF_CHAT_BASE_URL', 'https://kalapak-fitandsleekaichat.hf.space'),
+        'space_id' => env('HF_CHAT_SPACE_ID', 'Kalapak/fitandsleekAIchat'),
+        'token' => env('HF_TOKEN', env('HUGGING_FACE_HUB_TOKEN')),
+        'timeout' => (int) env('HF_CHAT_TIMEOUT', 180),
+    ],
+
+    /*
+    | Own Chat AI — Ollama (local or VPS). Optional when CHAT_AI_PROVIDER=ollama.
     | Docs: docs/own-chat-ai-plan.md
     */
     'ollama' => [

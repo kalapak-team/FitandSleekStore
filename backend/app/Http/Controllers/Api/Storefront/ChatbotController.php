@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\ChatAiService;
 use App\Services\ChatFaqContextService;
-use App\Services\OllamaChatService;
 use App\Services\StorefrontChatContextService;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -16,7 +16,7 @@ class ChatbotController extends Controller
 {
     public function __construct(
         private readonly StorefrontChatContextService $storeContext,
-        private readonly OllamaChatService $ollama,
+        private readonly ChatAiService $chatAi,
         private readonly ChatFaqContextService $faqContext,
     ) {
     }
@@ -53,26 +53,39 @@ class ChatbotController extends Controller
             'history.*.content' => 'required_with:history|string',
         ]);
 
-        if (! $this->ollama->isConfigured()) {
+        if (! $this->chatAi->isConfigured()) {
             return response()->json([
-                'error' => 'AI chatbot is not configured. Set OLLAMA_BASE_URL and OLLAMA_MODEL, then start Ollama.',
+                'error' => 'AI chatbot is not configured. Set CHAT_AI_PROVIDER=huggingface and HF_CHAT_BASE_URL (or OLLAMA_*).',
             ], 503);
         }
 
         $user = $this->resolveUser($request);
-        $context = $this->storeContext->toPromptContext($validated['message'], $user);
-        $faq = $this->faqContext->toPromptBlock($validated['message'], 4);
+        $provider = $this->chatAi->provider();
 
-        $systemText = 'You are Fit & Sleek customer support assistant. Be friendly, professional, and concise (1–3 sentences). '
-            . 'Help with products, orders, shipping, returns, sizing, discounts, and store navigation. '
-            . 'If the user writes in Khmer, respond in Khmer. Otherwise respond in English. '
-            . 'Do NOT use markdown tables — product cards appear in the chat UI.';
+        // Hugging Face Space already has FAQ / RAG / store logic — keep Laravel context light.
+        // Ollama still gets the full live storefront snapshot.
+        if ($provider === 'ollama') {
+            $context = $this->storeContext->toPromptContext($validated['message'], $user);
+            $faq = $this->faqContext->toPromptBlock($validated['message'], 4);
+            $systemText = 'You are Fit & Sleek customer support assistant. Be friendly, professional, and concise (1–3 sentences). '
+                . 'Help with products, orders, shipping, returns, sizing, discounts, and store navigation. '
+                . 'If the user writes in Khmer, respond in Khmer. Otherwise respond in English. '
+                . 'Do NOT use markdown tables — product cards appear in the chat UI.';
 
-        if ($context) {
-            $systemText .= "\n\n[Live store database — use ONLY this data]\n" . $context;
-        }
-        if ($faq !== '') {
-            $systemText .= "\n\n" . $faq;
+            if ($context) {
+                $systemText .= "\n\n[Live store database — use ONLY this data]\n" . $context;
+            }
+            if ($faq !== '') {
+                $systemText .= "\n\n" . $faq;
+            }
+        } else {
+            $systemText = 'You are Fit & Sleek customer support on the Fitandsleek website. '
+                . 'Be friendly and concise. Match the customer language (Khmer or English). '
+                . 'Do NOT use markdown tables — product cards appear in the chat UI.';
+
+            if ($user !== null) {
+                $systemText .= "\nSigned-in customer id: {$user->id}; email: {$user->email}.";
+            }
         }
 
         $messages = [['role' => 'system', 'content' => $systemText]];
@@ -88,7 +101,6 @@ class ChatbotController extends Controller
 
         $messages[] = ['role' => 'user', 'content' => $validated['message']];
 
-        // Keep prompt size reasonable for local models.
         if (count($messages) > 13) {
             $messages = array_merge(
                 [$messages[0]],
@@ -97,7 +109,7 @@ class ChatbotController extends Controller
         }
 
         try {
-            $result = $this->ollama->chat($messages, [
+            $result = $this->chatAi->chat($messages, [
                 'temperature' => 0.55,
                 'num_predict' => 512,
             ]);
@@ -106,7 +118,10 @@ class ChatbotController extends Controller
 
             return response()->json([
                 'error' => $e->getMessage(),
-            ], str_contains(strtolower($e->getMessage()), 'not reachable') ? 503 : 502);
+            ], str_contains(strtolower($e->getMessage()), 'not reachable')
+                || str_contains(strtolower($e->getMessage()), 'timed out')
+                ? 503
+                : 502);
         } catch (\Throwable $e) {
             report($e);
 
@@ -121,7 +136,7 @@ class ChatbotController extends Controller
         return response()->json([
             'reply' => $reply,
             'products' => $products,
-            'provider' => 'ollama',
+            'provider' => $result['provider'] ?? $provider,
             'model' => $result['model'],
         ]);
     }

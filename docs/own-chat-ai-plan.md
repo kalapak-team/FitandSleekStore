@@ -21,7 +21,9 @@
 | Colab fine-tune | ⏳ ក្រោយ chat ដំណើរការ |
 | Qdrant for chat RAG | ⏭ មិនចាំបាច់ឥឡូវ (FAQ keyword OK; Qdrant នៅ image search) |
 
-**Setup guide:** [own-chat-ai-setup.md](./own-chat-ai-setup.md)
+**Setup guide:** [own-chat-ai-setup.md](./own-chat-ai-setup.md)  
+**Production chat (trained Space):** [huggingface-chat-space.md](./huggingface-chat-space.md)  
+**VPS (Backend + Ollama optional):** [vps-backend-ollama.md](./vps-backend-ollama.md)
 
 ---
 

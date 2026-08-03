@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\AdminDashboardContextService;
 use App\Services\AiConversationStore;
+use App\Services\ChatAiService;
 use App\Services\ChatFaqContextService;
-use App\Services\OllamaChatService;
 use Illuminate\Http\Request;
 use RuntimeException;
 
@@ -14,7 +14,7 @@ class AdminAiChatController extends Controller
 {
     public function __construct(
         private readonly AdminDashboardContextService $dashboardContext,
-        private readonly OllamaChatService $ollama,
+        private readonly ChatAiService $chatAi,
         private readonly AiConversationStore $conversations,
         private readonly ChatFaqContextService $faqContext,
     ) {
@@ -27,10 +27,10 @@ class AdminAiChatController extends Controller
             'conversation_id' => 'nullable|string|max:128',
         ]);
 
-        if (! $this->ollama->isConfigured()) {
+        if (! $this->chatAi->isConfigured()) {
             return response()->json([
                 'error' => 'ai_not_configured',
-                'message' => 'Admin AI is not configured. Set OLLAMA_BASE_URL and OLLAMA_MODEL in your backend .env file, then start Ollama.',
+                'message' => 'Admin AI is not configured. Set CHAT_AI_PROVIDER=huggingface and HF_CHAT_BASE_URL (or OLLAMA_* for local).',
             ], 503);
         }
 
@@ -49,7 +49,7 @@ class AdminAiChatController extends Controller
         );
 
         try {
-            $result = $this->ollama->chat($messages, [
+            $result = $this->chatAi->chat($messages, [
                 'temperature' => 0.35,
                 'num_predict' => $isFollowUp ? 320 : 512,
             ]);
@@ -57,7 +57,8 @@ class AdminAiChatController extends Controller
             report($e);
 
             $unreachable = str_contains(strtolower($e->getMessage()), 'not reachable')
-                || str_contains(strtolower($e->getMessage()), 'not configured');
+                || str_contains(strtolower($e->getMessage()), 'not configured')
+                || str_contains(strtolower($e->getMessage()), 'timed out');
 
             return response()->json([
                 'error' => $unreachable ? 'ai_unreachable' : 'ai_upstream_error',
@@ -92,7 +93,7 @@ class AdminAiChatController extends Controller
             'tables' => $tables,
             'conversation_id' => $conversation['id'],
             'message_id' => null,
-            'provider' => 'ollama',
+            'provider' => $result['provider'] ?? $this->chatAi->provider(),
             'model' => $result['model'],
         ]);
     }
