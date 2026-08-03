@@ -3,7 +3,7 @@
 $socialiteVerify = filter_var(env('SOCIALITE_VERIFY_SSL', true), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 $socialiteVerify = $socialiteVerify ?? true;
 
-$socialiteCaBundle = env('SOCIALITE_CA_BUNDLE', env('GEMINI_CA_BUNDLE'));
+$socialiteCaBundle = env('SOCIALITE_CA_BUNDLE', env('CURL_CA_BUNDLE'));
 
 $socialiteGuzzle = [
     'verify' => $socialiteVerify,
@@ -93,15 +93,6 @@ return [
         'broadcast_retention_days' => (int) env('TELEGRAM_BROADCAST_RETENTION_DAYS', 30),
     ],
 
-    'gemini' => [
-        'api_key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-1.0-pro'),
-        // Optional: path to a CA bundle (PEM). Example: E:\\certs\\cacert.pem
-        'ca_bundle' => env('GEMINI_CA_BUNDLE'),
-        // Optional: set to false to skip SSL verification (not recommended for prod)
-        'verify' => env('GEMINI_VERIFY_SSL', true),
-    ],
-
     'rielpay' => [
         'api_url' => env('RIELPAY_API_URL', 'https://api-norng-rielpay.fitandsleek.online'),
         'api_key' => env('RIELPAY_API_KEY'),
@@ -137,42 +128,15 @@ return [
     ],
 
     /*
-    | Chat AI provider for Admin Ask AI + storefront chatbot.
-    | - huggingface: trained Gradio Space (https://huggingface.co/spaces/Kalapak/fitandsleekAIchat)
-    | - ollama: local / VPS Ollama
+    | Chat AI — trained Gradio Space
+    | https://huggingface.co/spaces/Kalapak/fitandsleekAIchat
+    | Docs: docs/huggingface-chat-space.md
     */
-    'chat_ai' => [
-        'provider' => env('CHAT_AI_PROVIDER', 'huggingface'),
-    ],
-
     'hf_chat' => [
         'base_url' => env('HF_CHAT_BASE_URL', 'https://kalapak-fitandsleekaichat.hf.space'),
         'space_id' => env('HF_CHAT_SPACE_ID', 'Kalapak/fitandsleekAIchat'),
         'token' => env('HF_TOKEN', env('HUGGING_FACE_HUB_TOKEN')),
         'timeout' => (int) env('HF_CHAT_TIMEOUT', 180),
-    ],
-
-    /*
-    | Own Chat AI — Ollama (local or VPS). Optional when CHAT_AI_PROVIDER=ollama.
-    | Docs: docs/own-chat-ai-plan.md
-    */
-    'ollama' => [
-        'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
-        'model' => env('OLLAMA_MODEL', 'qwen2.5:7b'),
-        'timeout' => (int) env('OLLAMA_TIMEOUT', 120),
-        'temperature' => (float) env('OLLAMA_TEMPERATURE', 0.4),
-        'num_predict' => (int) env('OLLAMA_NUM_PREDICT', 512),
-    ],
-
-    /*
-    | Legacy Dify (unused by chat controllers — kept so old .env keys do not break config:cache).
-    */
-    'dify' => [
-        'base_url' => env('DIFY_BASE_URL', ''),
-        'api_key' => env('DIFY_API_KEY'),
-        'app_id' => env('DIFY_APP_ID', ''),
-        'timeout' => (int) env('DIFY_TIMEOUT', 120),
-        'use_inputs_only' => filter_var(env('DIFY_USE_INPUTS_ONLY', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
 ];

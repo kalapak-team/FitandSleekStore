@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\AdminDashboardContextService;
 use App\Services\AiConversationStore;
-use App\Services\ChatAiService;
 use App\Services\ChatFaqContextService;
+use App\Services\HuggingFaceSpaceChatService;
 use Illuminate\Http\Request;
 use RuntimeException;
 
@@ -14,7 +14,7 @@ class AdminAiChatController extends Controller
 {
     public function __construct(
         private readonly AdminDashboardContextService $dashboardContext,
-        private readonly ChatAiService $chatAi,
+        private readonly HuggingFaceSpaceChatService $chatAi,
         private readonly AiConversationStore $conversations,
         private readonly ChatFaqContextService $faqContext,
     ) {
@@ -30,7 +30,7 @@ class AdminAiChatController extends Controller
         if (! $this->chatAi->isConfigured()) {
             return response()->json([
                 'error' => 'ai_not_configured',
-                'message' => 'Admin AI is not configured. Set CHAT_AI_PROVIDER=huggingface and HF_CHAT_BASE_URL (or OLLAMA_* for local).',
+                'message' => 'Admin AI is not configured. Set HF_CHAT_BASE_URL in your backend .env (Hugging Face Space).',
             ], 503);
         }
 
@@ -49,10 +49,7 @@ class AdminAiChatController extends Controller
         );
 
         try {
-            $result = $this->chatAi->chat($messages, [
-                'temperature' => 0.35,
-                'num_predict' => $isFollowUp ? 320 : 512,
-            ]);
+            $result = $this->chatAi->chat($messages);
         } catch (RuntimeException $e) {
             report($e);
 
@@ -76,7 +73,7 @@ class AdminAiChatController extends Controller
         $reply = $this->substituteUnresolvedPlaceholders(
             $result['reply'],
             array_merge(
-                $this->dashboardContext->toDifyInputs(),
+                $this->dashboardContext->toFlatInputs(),
                 $this->dashboardContext->enrichInputsForMessage($validated['message']),
             ),
         );
@@ -93,7 +90,7 @@ class AdminAiChatController extends Controller
             'tables' => $tables,
             'conversation_id' => $conversation['id'],
             'message_id' => null,
-            'provider' => $result['provider'] ?? $this->chatAi->provider(),
+            'provider' => $result['provider'] ?? 'huggingface',
             'model' => $result['model'],
         ]);
     }
@@ -124,7 +121,6 @@ class AdminAiChatController extends Controller
             . ($faq !== '' ? "\n\n" . $faq : '');
     }
 
-    /** If the model echoes unreplaced {{total_users}}, fill from live inputs. */
     private function substituteUnresolvedPlaceholders(string $reply, array $inputs): string
     {
         return (string) preg_replace_callback(

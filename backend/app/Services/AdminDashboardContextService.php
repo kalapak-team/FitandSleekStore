@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Builds a compact JSON snapshot of live admin-console metrics for Dify `inputs`.
+ * Builds a compact JSON snapshot of live admin-console metrics for Chat AI prompts.
  */
 class AdminDashboardContextService
 {
@@ -38,9 +38,9 @@ class AdminDashboardContextService
     }
 
     /**
-     * Flat string inputs for Dify prompt variables (must match names in your Chatflow).
+     * Flat string inputs for Chat AI prompt substitution (e.g. {{total_users}}).
      */
-    public function toDifyInputs(): array
+    public function toFlatInputs(): array
     {
         $ctx = $this->build();
         $dash = $ctx['dashboard'] ?? [];

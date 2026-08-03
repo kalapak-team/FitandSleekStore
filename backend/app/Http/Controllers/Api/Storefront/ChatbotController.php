@@ -5,8 +5,7 @@ namespace App\Http\Controllers\Api\Storefront;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\User;
-use App\Services\ChatAiService;
-use App\Services\ChatFaqContextService;
+use App\Services\HuggingFaceSpaceChatService;
 use App\Services\StorefrontChatContextService;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -16,8 +15,7 @@ class ChatbotController extends Controller
 {
     public function __construct(
         private readonly StorefrontChatContextService $storeContext,
-        private readonly ChatAiService $chatAi,
-        private readonly ChatFaqContextService $faqContext,
+        private readonly HuggingFaceSpaceChatService $chatAi,
     ) {
     }
 
@@ -55,37 +53,19 @@ class ChatbotController extends Controller
 
         if (! $this->chatAi->isConfigured()) {
             return response()->json([
-                'error' => 'AI chatbot is not configured. Set CHAT_AI_PROVIDER=huggingface and HF_CHAT_BASE_URL (or OLLAMA_*).',
+                'error' => 'AI chatbot is not configured. Set HF_CHAT_BASE_URL in backend .env.',
             ], 503);
         }
 
         $user = $this->resolveUser($request);
-        $provider = $this->chatAi->provider();
 
-        // Hugging Face Space already has FAQ / RAG / store logic — keep Laravel context light.
-        // Ollama still gets the full live storefront snapshot.
-        if ($provider === 'ollama') {
-            $context = $this->storeContext->toPromptContext($validated['message'], $user);
-            $faq = $this->faqContext->toPromptBlock($validated['message'], 4);
-            $systemText = 'You are Fit & Sleek customer support assistant. Be friendly, professional, and concise (1–3 sentences). '
-                . 'Help with products, orders, shipping, returns, sizing, discounts, and store navigation. '
-                . 'If the user writes in Khmer, respond in Khmer. Otherwise respond in English. '
-                . 'Do NOT use markdown tables — product cards appear in the chat UI.';
+        // Space already has FAQ / RAG / store logic — keep Laravel system prompt light.
+        $systemText = 'You are Fit & Sleek customer support on the Fitandsleek website. '
+            . 'Be friendly and concise. Match the customer language (Khmer or English). '
+            . 'Do NOT use markdown tables — product cards appear in the chat UI.';
 
-            if ($context) {
-                $systemText .= "\n\n[Live store database — use ONLY this data]\n" . $context;
-            }
-            if ($faq !== '') {
-                $systemText .= "\n\n" . $faq;
-            }
-        } else {
-            $systemText = 'You are Fit & Sleek customer support on the Fitandsleek website. '
-                . 'Be friendly and concise. Match the customer language (Khmer or English). '
-                . 'Do NOT use markdown tables — product cards appear in the chat UI.';
-
-            if ($user !== null) {
-                $systemText .= "\nSigned-in customer id: {$user->id}; email: {$user->email}.";
-            }
+        if ($user !== null) {
+            $systemText .= "\nSigned-in customer id: {$user->id}; email: {$user->email}.";
         }
 
         $messages = [['role' => 'system', 'content' => $systemText]];
@@ -109,10 +89,7 @@ class ChatbotController extends Controller
         }
 
         try {
-            $result = $this->chatAi->chat($messages, [
-                'temperature' => 0.55,
-                'num_predict' => 512,
-            ]);
+            $result = $this->chatAi->chat($messages);
         } catch (RuntimeException $e) {
             report($e);
 
@@ -136,7 +113,7 @@ class ChatbotController extends Controller
         return response()->json([
             'reply' => $reply,
             'products' => $products,
-            'provider' => $result['provider'] ?? $provider,
+            'provider' => $result['provider'] ?? 'huggingface',
             'model' => $result['model'],
         ]);
     }

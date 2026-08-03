@@ -2,47 +2,34 @@
 
 namespace App\Console\Commands;
 
-use App\Services\ChatAiService;
+use App\Services\HuggingFaceSpaceChatService;
 use Illuminate\Console\Command;
 
 class ChatAiDiagnoseCommand extends Command
 {
     protected $signature = 'chat-ai:diagnose {--ping-chat : Also send a tiny chat request}';
 
-    protected $description = 'Check the configured Fitandsleek chat AI provider (Hugging Face Space or Ollama)';
+    protected $description = 'Check the Fitandsleek Hugging Face chat Space';
 
-    public function handle(ChatAiService $chatAi): int
+    public function handle(HuggingFaceSpaceChatService $chatAi): int
     {
-        $provider = $chatAi->provider();
-        $this->info('CHAT_AI_PROVIDER = '.$provider);
-        $this->info('Active label     = '.$chatAi->label());
-
-        if ($provider === 'huggingface') {
-            $this->line('HF_CHAT_BASE_URL = '.(string) config('services.hf_chat.base_url'));
-            $this->line('HF_CHAT_SPACE_ID = '.(string) config('services.hf_chat.space_id'));
-        } else {
-            $this->line('OLLAMA_BASE_URL  = '.(string) config('services.ollama.base_url'));
-            $this->line('OLLAMA_MODEL     = '.(string) config('services.ollama.model'));
-        }
+        $this->info('HF_CHAT_BASE_URL = '.($chatAi->baseUrl() !== '' ? $chatAi->baseUrl() : '(empty)'));
+        $this->info('HF_CHAT_SPACE_ID = '.$chatAi->spaceId());
 
         if (! $chatAi->isConfigured()) {
-            $this->error('Provider is not configured.');
+            $this->error('Not configured. Set HF_CHAT_BASE_URL in backend/.env');
 
             return self::FAILURE;
         }
 
         if (! $chatAi->ping()) {
-            $this->error('Cannot reach '.$chatAi->label());
-            if ($provider === 'huggingface') {
-                $this->line('→ Open https://huggingface.co/spaces/'.config('services.hf_chat.space_id').' and ensure status is Running.');
-            } else {
-                $this->line('→ Start Ollama and pull the model.');
-            }
+            $this->error('Cannot reach Hugging Face Space at '.$chatAi->baseUrl());
+            $this->line('→ Open https://huggingface.co/spaces/'.$chatAi->spaceId().' and ensure status is Running.');
 
             return self::FAILURE;
         }
 
-        $this->info('✓ '.$chatAi->label().' is reachable');
+        $this->info('✓ Hugging Face Space is reachable');
 
         if ($this->option('ping-chat')) {
             $this->line('Sending test chat…');
@@ -60,7 +47,7 @@ class ChatAiDiagnoseCommand extends Command
         }
 
         $this->newLine();
-        $this->info('Admin + storefront chat are ready to use '.$chatAi->label().'.');
+        $this->info('Admin + storefront chat are ready to use the Hugging Face Space.');
 
         return self::SUCCESS;
     }

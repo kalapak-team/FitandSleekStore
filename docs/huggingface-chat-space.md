@@ -2,35 +2,35 @@
 
 > Space: https://huggingface.co/spaces/Kalapak/fitandsleekAIchat  
 > Host: https://kalapak-fitandsleekaichat.hf.space  
-> កាលបរិច្ឆេទ: 2026-08-03
+> Updated: 2026-08-03
 
-## Overview
-
-Admin Ask AI + storefront chatbot call the **trained Gradio Space** (default), not Ollama/Dify/Gemini.
+## Current stack (only)
 
 ```
-Admin / Customer UI
+Admin Ask AI / Customer chatbot
         ↓
 Laravel API
         ↓
-Hugging Face Space (Gradio /chat)
-        ↓
-Trained Fitandsleek model + Space FAQ/RAG/DB
+Hugging Face Gradio Space (trained Fitandsleek model + FAQ/RAG)
 ```
 
-Ollama remains optional: set `CHAT_AI_PROVIDER=ollama`.
+**Removed (do not use):** Dify · Gemini chatbot · Ollama chat provider.
 
-## Env (backend/.env)
+## Env
 
 ```env
-CHAT_AI_PROVIDER=huggingface
 HF_CHAT_BASE_URL=https://kalapak-fitandsleekaichat.hf.space
 HF_CHAT_SPACE_ID=Kalapak/fitandsleekAIchat
 HF_CHAT_TIMEOUT=180
 # HF_TOKEN=   # only if Space is private
 ```
 
-On **Render** dashboard: add the same keys (remove reliance on `OLLAMA_BASE_URL=127.0.0.1`).
+Set the same on **Render** Environment. Remove old keys if present:
+
+- `CHAT_AI_PROVIDER`
+- `OLLAMA_*`
+- `DIFY_*`
+- `GEMINI_*` (unless you still use them for something else outside chat)
 
 ## Verify
 
@@ -40,21 +40,18 @@ php artisan config:clear
 php artisan chat-ai:diagnose --ping-chat
 ```
 
-## API used by Laravel
+## Code kept (still used)
 
-1. `POST {HF_CHAT_BASE_URL}/gradio_api/call/chat`  
-   Body: `{"data":["message text", null]}`
-2. `GET {HF_CHAT_BASE_URL}/gradio_api/call/chat/{event_id}` (SSE)  
-   Wait for `event: complete` → `data: ["reply", …]`
+| File | Role |
+|---|---|
+| `HuggingFaceSpaceChatService` | Calls Gradio `/gradio_api/call/chat` |
+| `AdminAiChatController` | Admin Ask AI + live DB context |
+| `ChatbotController` | Storefront chatbot |
+| `AiConversationStore` | Admin conversation history (cache) |
+| `ChatFaqContextService` | Extra FAQ snippets for admin prompts |
+| `AdminDashboardContextService` | Live admin metrics |
 
-## Notes
+## Related docs
 
-- Keep the Space **Running** on Hugging Face (CPU basic is fine for FAQ paths; LLM may be slow/cold).
-- Admin chat still injects live Laravel dashboard facts into the prompt.
-- Customer chat leans on the Space’s own store/FAQ/RAG; Laravel still attaches product cards when useful.
-- Free HF Spaces can sleep — first request after idle may take longer (raise `HF_CHAT_TIMEOUT` if needed).
-
-## Related
-
-- [own-chat-ai-plan.md](./own-chat-ai-plan.md)
-- [vps-backend-ollama.md](./vps-backend-ollama.md) — only if you switch provider back to Ollama on a VPS
+- [vps-backend-ollama.md](./vps-backend-ollama.md) — VPS for **Laravel backend** only (chat stays on HF Space)
+- Archive notes: older Ollama/Dify plans were superseded by this Space
