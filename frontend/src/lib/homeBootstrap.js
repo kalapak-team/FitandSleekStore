@@ -44,7 +44,7 @@ async function fetchBootstrapDirect() {
   }
   // Same-origin already failed via axios; only useful when page is proxied host.
   if (origin === window.location.origin) {
-    const direct = "https://fitandsleek-official.onrender.com";
+    const direct = "https://fitandsleek-official-production.up.railway.app";
     const res = await fetch(`${direct}/api/homepage/bootstrap`, {
       method: "GET",
       mode: "cors",

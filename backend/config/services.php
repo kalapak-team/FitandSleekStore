@@ -115,17 +115,35 @@ return [
         'payment_link' => env('ABA_PAYWAY_PAYMENT_LINK'),
     ],
 
-    'image_search' => [
-        'clip_endpoint' => env('FITANDSLEEK_CLIP_ENDPOINT', env('IMAGE_VECTORIZE_URL', 'http://localhost:9000/vectorize')),
-        'clip_vector_size' => (int) env('FITANDSLEEK_CLIP_VECTOR_SIZE', env('QDRANT_VECTOR_SIZE', 512)),
-        'ai_service_key' => env('AI_SERVICE_KEY'),
-        'vector_provider' => env('VECTOR_PROVIDER', 'local_clip'),
-        'qdrant_url' => env('QDRANT_URL', 'http://localhost:6333'),
-        'qdrant_api_key' => env('QDRANT_API_KEY'),
-        'qdrant_collection' => env('QDRANT_COLLECTION', 'products_fitandsleek_512'),
-        'vector_size' => (int) env('QDRANT_VECTOR_SIZE', 512),
-        'timeout' => (int) env('IMAGE_SEARCH_TIMEOUT', 25),
-    ],
+    'image_search' => (static function () {
+        // Own Fitandsleek Vector Space (Qdrant-compatible + /embed/image)
+        // https://huggingface.co/spaces/Kalapak/fitandsleek-vector
+        $defaultHost = 'https://kalapak-fitandsleek-vector.hf.space';
+        $vectorBase = rtrim((string) (env('FITANDSLEEK_VECTOR_URL') ?: $defaultHost), '/');
+        $apiKey = env('FITANDSLEEK_VECTOR_API_KEY') ?: env('QDRANT_API_KEY') ?: env('AI_SERVICE_KEY');
+
+        // Prefer Vector Space host over legacy QDRANT_URL (e.g. host.docker.internal).
+        // Use QDRANT_URL_OVERRIDE only for a different Qdrant host while keeping embed on the Space.
+        $qdrantUrl = rtrim((string) (
+            env('QDRANT_URL_OVERRIDE')
+            ?: env('FITANDSLEEK_VECTOR_URL')
+            ?: env('QDRANT_URL')
+            ?: $defaultHost
+        ), '/');
+
+        return [
+            'vector_base_url' => $vectorBase,
+            'clip_endpoint' => env('FITANDSLEEK_CLIP_ENDPOINT', $vectorBase.'/embed/image'),
+            'clip_vector_size' => (int) env('FITANDSLEEK_CLIP_VECTOR_SIZE', env('QDRANT_VECTOR_SIZE', 512)),
+            'ai_service_key' => $apiKey,
+            'vector_provider' => env('VECTOR_PROVIDER', 'fitandsleek_vector'),
+            'qdrant_url' => $qdrantUrl,
+            'qdrant_api_key' => $apiKey,
+            'qdrant_collection' => env('QDRANT_COLLECTION', 'products_fitandsleek_512'),
+            'vector_size' => (int) env('QDRANT_VECTOR_SIZE', 512),
+            'timeout' => (int) env('IMAGE_SEARCH_TIMEOUT', 90),
+        ];
+    })(),
 
     /*
     | Chat AI — trained Gradio Space

@@ -7,6 +7,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class ImageSearchService
@@ -30,8 +31,20 @@ class ImageSearchService
 
     public function __construct()
     {
-        $this->clipEndpoint = rtrim((string) config('services.image_search.clip_endpoint', 'http://localhost:9000/vectorize'), '/');
-        $this->qdrantUrl = rtrim((string) config('services.image_search.qdrant_url', 'http://localhost:6333'), '/');
+        $vectorBase = rtrim((string) config('services.image_search.vector_base_url', ''), '/');
+
+        $clipDefault = $vectorBase !== ''
+            ? $vectorBase.'/embed/image'
+            : 'http://localhost:9000/vectorize';
+
+        $this->clipEndpoint = rtrim((string) config('services.image_search.clip_endpoint', $clipDefault), '/');
+        $this->qdrantUrl = rtrim(
+            (string) config(
+                'services.image_search.qdrant_url',
+                $vectorBase !== '' ? $vectorBase : 'http://localhost:6333'
+            ),
+            '/'
+        );
         $this->collection = (string) config('services.image_search.qdrant_collection', 'products_fitandsleek_512');
         $this->vectorSize = (int) config('services.image_search.vector_size', 512);
         $this->aiServiceKey = filled(config('services.image_search.ai_service_key'))
@@ -40,8 +53,9 @@ class ImageSearchService
         $this->qdrantApiKey = filled(config('services.image_search.qdrant_api_key'))
             ? (string) config('services.image_search.qdrant_api_key')
             : null;
-        $this->clipUsesFileField = (bool) preg_match('#/embed/?$#i', $this->clipEndpoint);
-        $this->timeout = max(1, (int) config('services.image_search.timeout', 25));
+        // Fitandsleek Vector (/embed/image) and legacy HF /embed use multipart field `file`.
+        $this->clipUsesFileField = (bool) preg_match('#/(embed|embed/image)/?$#i', $this->clipEndpoint);
+        $this->timeout = max(1, (int) config('services.image_search.timeout', 90));
 
         $bufferSeconds = 15;
         $desiredLimit = $this->timeout + $bufferSeconds;
@@ -87,7 +101,9 @@ class ImageSearchService
         }
 
         if ($response->failed()) {
-            throw new RuntimeException('CLIP embedding service error: ' . $response->status() . ' ' . $response->body());
+            throw new RuntimeException(
+                'CLIP embedding service error: '.$response->status().' '.Str::limit(trim($response->body()), 400)
+            );
         }
 
         $vector = $this->parseVectorFromResponse($response);
@@ -233,9 +249,14 @@ class ImageSearchService
     private function clipHttp(): PendingRequest
     {
         $request = Http::timeout($this->timeout);
+        $apiKey = $this->resolveApiKey();
 
-        if ($this->aiServiceKey !== null) {
-            $request = $request->withHeaders(['x-api-key' => $this->aiServiceKey]);
+        if ($apiKey !== null) {
+            // Fitandsleek Vector accepts Qdrant-style `api-key` and legacy `x-api-key`.
+            $request = $request->withHeaders([
+                'api-key' => $apiKey,
+                'x-api-key' => $apiKey,
+            ]);
         }
 
         return $request;
@@ -244,12 +265,29 @@ class ImageSearchService
     private function qdrantHttp(): PendingRequest
     {
         $request = Http::timeout($this->timeout);
+        $apiKey = $this->resolveApiKey();
 
-        if ($this->qdrantApiKey !== null) {
-            $request = $request->withHeaders(['api-key' => $this->qdrantApiKey]);
+        if ($apiKey !== null) {
+            $request = $request->withHeaders([
+                'api-key' => $apiKey,
+                'x-api-key' => $apiKey,
+            ]);
         }
 
         return $request;
+    }
+
+    private function resolveApiKey(): ?string
+    {
+        if ($this->qdrantApiKey !== null && $this->qdrantApiKey !== '') {
+            return $this->qdrantApiKey;
+        }
+
+        if ($this->aiServiceKey !== null && $this->aiServiceKey !== '') {
+            return $this->aiServiceKey;
+        }
+
+        return null;
     }
 
     /**
@@ -257,10 +295,14 @@ class ImageSearchService
      */
     private function parseVectorFromResponse(Response $response): array
     {
-        $vector = $response->json('vector') ?? $response->json('embedding');
+        $vector = $response->json('vector')
+            ?? $response->json('embedding')
+            ?? $response->json('result.vector');
 
         if (! is_array($vector)) {
-            throw new RuntimeException('Invalid vector returned from CLIP service. Expected a numeric array in `vector` or `embedding`.');
+            throw new RuntimeException(
+                'Invalid vector returned from embedding service. Expected `vector`, `embedding`, or `result.vector`.'
+            );
         }
 
         return array_map(static fn ($v) => (float) $v, $vector);

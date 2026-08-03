@@ -127,8 +127,8 @@ class ProductQdrantIndexer
             throw new \RuntimeException('Failed reading image bytes for: '.$imageUrl);
         }
 
-        $ext = pathinfo($filename, PATHINFO_EXTENSION);
-        if (! $ext) {
+        $ext = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        if ($ext === '') {
             $ext = $this->extensionFromMime((string) $mime);
             $filename .= '.'.$ext;
         }
@@ -138,6 +138,11 @@ class ProductQdrantIndexer
             mkdir($tempDir, 0775, true);
         }
 
+        // Fitandsleek Vector embed accepts common raster formats; AVIF often 500s on the Space.
+        if ($this->needsJpegConversion($ext, (string) $mime)) {
+            [$content, $mime, $filename, $ext] = $this->convertToJpeg($content, $filename);
+        }
+
         $tempPath = $tempDir.'/'.uniqid('img_', true).'.'.$ext;
         file_put_contents($tempPath, $content);
 
@@ -145,6 +150,52 @@ class ProductQdrantIndexer
             new UploadedFile($tempPath, $filename, $mime ?: 'image/jpeg', null, true),
             $tempPath,
         ];
+    }
+
+    private function needsJpegConversion(string $ext, string $mime): bool
+    {
+        $mime = strtolower(trim(explode(';', $mime)[0]));
+
+        return in_array($ext, ['avif', 'heic', 'heif'], true)
+            || in_array($mime, ['image/avif', 'image/heic', 'image/heif'], true);
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string, 3: string} content, mime, filename, ext
+     */
+    private function convertToJpeg(string $content, string $filename): array
+    {
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
+            throw new \RuntimeException('Cannot convert AVIF/HEIC: GD JPEG support missing.');
+        }
+
+        $image = @imagecreatefromstring($content);
+        if ($image === false) {
+            throw new \RuntimeException('Cannot decode image for JPEG conversion ('.$filename.').');
+        }
+
+        if (function_exists('imagepalettetotruecolor')) {
+            @imagepalettetotruecolor($image);
+        }
+        if (function_exists('imagealphablending')) {
+            @imagealphablending($image, true);
+        }
+        if (function_exists('imagesavealpha')) {
+            @imagesavealpha($image, false);
+        }
+
+        ob_start();
+        $ok = imagejpeg($image, null, 90);
+        imagedestroy($image);
+        $jpeg = ob_get_clean();
+
+        if (! $ok || $jpeg === false || $jpeg === '') {
+            throw new \RuntimeException('Failed converting image to JPEG ('.$filename.').');
+        }
+
+        $base = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
+
+        return [$jpeg, 'image/jpeg', $base.'.jpg', 'jpg'];
     }
 
     private function extensionFromMime(string $mime): string

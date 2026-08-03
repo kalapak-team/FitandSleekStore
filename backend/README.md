@@ -1,8 +1,10 @@
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-## Fit & Sleek — production backend (Render)
+## Fit & Sleek — production backend (Railway)
 
-Deploy and Free-tier tuning: **[docs/render-free.md](docs/render-free.md)** · Blueprint: **[render.yaml](render.yaml)**
+Deploy: **[docs/railway.md](docs/railway.md)** · Config: **[railway.toml](railway.toml)**
+
+Legacy Render Free notes (reference only): **[docs/render-free.md](docs/render-free.md)** · **[render.yaml](render.yaml)**
 
 <p align="center">
 <a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>

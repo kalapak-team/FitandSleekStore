@@ -13,50 +13,46 @@ class QdrantDiagnoseCommand extends Command
 {
     protected $signature = 'qdrant:diagnose';
 
-    protected $description = 'Check CLIP embed + Qdrant connectivity, collection point counts, and product indexing stats';
+    protected $description = 'Check Fitandsleek Vector Space (embed + Qdrant-compatible) connectivity and product indexing stats';
 
     public function handle(): int
     {
+        $vectorBase = rtrim((string) config('services.image_search.vector_base_url', ''), '/');
         $clip = rtrim((string) config('services.image_search.clip_endpoint', ''), '/');
         $qdrant = rtrim((string) config('services.image_search.qdrant_url', ''), '/');
         $collection = (string) config('services.image_search.qdrant_collection', 'products_fitandsleek_512');
         $vectorSize = (int) config('services.image_search.vector_size', 512);
-        $timeout = (int) config('services.image_search.timeout', 25);
-        $hasClipKey = filled(config('services.image_search.ai_service_key'));
-        $hasQdrantKey = filled(config('services.image_search.qdrant_api_key'));
+        $timeout = (int) config('services.image_search.timeout', 90);
+        $apiKey = (string) (config('services.image_search.qdrant_api_key')
+            ?: config('services.image_search.ai_service_key')
+            ?: '');
+        $hasApiKey = $apiKey !== '';
 
         $this->info('Resolved configuration');
-        $this->line('  FITANDSLEEK_CLIP_ENDPOINT → '.$clip);
+        $this->line('  FITANDSLEEK_VECTOR_URL → '.($vectorBase !== '' ? $vectorBase : '(empty)'));
+        $this->line('  embed endpoint → '.$clip);
         $this->line('  QDRANT_URL → '.$qdrant);
         $this->line('  QDRANT_COLLECTION → '.$collection);
         $this->line('  QDRANT_VECTOR_SIZE → '.$vectorSize);
         $this->line('  IMAGE_SEARCH_TIMEOUT → '.$timeout.' s');
-        $this->line('  AI_SERVICE_KEY configured → '.($hasClipKey ? 'yes' : 'no'));
-        $this->line('  QDRANT_API_KEY configured → '.($hasQdrantKey ? 'yes' : 'no'));
+        $this->line('  API key (FITANDSLEEK_VECTOR_API_KEY / QDRANT_API_KEY) → '.($hasApiKey ? 'yes' : 'no'));
 
-        $healthUrl = preg_replace('#/embed/?$#i', '', $clip);
-        if ($healthUrl === $clip) {
-            $healthUrl = preg_replace('#/vectorize/?$#i', '/health', $clip);
-            if ($healthUrl === $clip) {
-                $healthUrl = rtrim(dirname($clip), '/').'/health';
-            }
-        }
-        if ($healthUrl === '') {
-            $healthUrl = $clip;
-        }
+        // Fitandsleek Vector uses /healthz; strip /embed/image or legacy /vectorize.
+        $healthBase = preg_replace('#/(embed(/image)?|vectorize)/?$#i', '', $clip) ?: $qdrant ?: $vectorBase;
+        $healthUrl = rtrim((string) $healthBase, '/').'/healthz';
 
-        $clipHeaders = $hasClipKey
-            ? ['x-api-key' => (string) config('services.image_search.ai_service_key')]
-            : [];
-        $qdrantHeaders = $hasQdrantKey
-            ? ['api-key' => (string) config('services.image_search.qdrant_api_key')]
+        $authHeaders = $hasApiKey
+            ? [
+                'api-key' => $apiKey,
+                'x-api-key' => $apiKey,
+            ]
             : [];
 
         $this->newLine();
-        $this->info('CLIP embedding service');
+        $this->info('Vector Space health');
         $this->line('  GET '.$healthUrl);
         try {
-            $h = Http::timeout(min(15, $timeout))->withHeaders($clipHeaders)->get($healthUrl);
+            $h = Http::timeout(min(15, $timeout))->withHeaders($authHeaders)->get($healthUrl);
             if ($h->successful()) {
                 $this->line('  OK '.$h->status().' — '.Str::limit(trim($h->body()), 180));
             } else {
@@ -66,14 +62,20 @@ class QdrantDiagnoseCommand extends Command
             $this->error('  Unreachable: '.$e->getMessage());
         }
 
+        if (! $hasApiKey) {
+            $this->newLine();
+            $this->error('Missing API key. Register on the Space, then set FITANDSLEEK_VECTOR_API_KEY=fsv_…');
+            $this->comment('  https://huggingface.co/spaces/Kalapak/fitandsleek-vector');
+        }
+
         $pointsCount = null;
 
         $this->newLine();
-        $this->info('Qdrant collection');
+        $this->info('Vector collection (Qdrant-compatible)');
         $metaUrl = $qdrant.'/collections/'.rawurlencode($collection);
         $this->line('  GET '.$metaUrl);
         try {
-            $c = Http::timeout(min(15, $timeout))->withHeaders($qdrantHeaders)->get($metaUrl);
+            $c = Http::timeout(min(15, $timeout))->withHeaders($authHeaders)->get($metaUrl);
             if ($c->successful()) {
                 $result = $c->json('result', []);
                 $pointsCount = (int) (data_get($result, 'points_count') ?? 0);
@@ -85,6 +87,8 @@ class QdrantDiagnoseCommand extends Command
                 }
             } elseif ($c->status() === 404) {
                 $this->warn('  Collection missing (404). Run: php artisan qdrant:setup');
+            } elseif ($c->status() === 401) {
+                $this->warn('  Unauthorized (401). Set FITANDSLEEK_VECTOR_API_KEY (fsv_…)');
             } else {
                 $this->warn('  HTTP '.$c->status().' — '.Str::limit(trim($c->body()), 300));
             }
@@ -161,10 +165,10 @@ class QdrantDiagnoseCommand extends Command
         }
 
         $this->newLine();
-        $this->comment('Run this command inside the backend container if DB_HOST=db (Docker network):');
-        $this->comment('  docker compose exec backend php artisan qdrant:diagnose');
-        $this->comment('Then index a few products:');
-        $this->comment('  docker compose exec backend php artisan qdrant:index-products --limit=5 -v');
+        $this->comment('Then set FITANDSLEEK_VECTOR_API_KEY and index products:');
+        $this->comment('  php artisan qdrant:setup');
+        $this->comment('  php artisan qdrant:index-products --limit=5 -v');
+        $this->comment('Docs: docs/huggingface-vector-space.md');
 
         return self::SUCCESS;
     }
