@@ -10,7 +10,8 @@ const TOKEN_KEY = import.meta.env.VITE_TOKEN_KEY || "fs_token";
 
 const api = axios.create({
   baseURL,
-  timeout: 25000,
+  // Railway+Neon cold can exceed 25s; Netlify proxy used to 504 at ~26s — SPA now hits Railway directly.
+  timeout: 45000,
   headers: {
     Accept: "application/json",
   },

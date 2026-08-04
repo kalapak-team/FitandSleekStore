@@ -14,13 +14,16 @@ function getConfiguredValues() {
 }
 
 /**
- * Split-host map: storefront SPA and Laravel API use different Cloudflare tunnel hostnames.
+ * Split-host map: storefront SPA and Laravel API use different hostnames.
  * fitandsleek.kalapak-team.space → frontend only; fitandsleekapp.kalapak-team.space → backend.
- * Do NOT call /api on the storefront host — it returns the SPA HTML shell, not JSON.
  *
- * Netlify production hosts proxy `/api/*` → Render (see netlify.toml), so those map to
- * the same origin as the SPA (no cross-origin CORS).
+ * Production Netlify (fitandsleek.online) must NOT use same-origin `/api` for the SPA:
+ * Netlify's edge proxy times out around ~26s (504) while Railway+Neon cold/bootstrap
+ * can take longer. Browser calls Railway directly (CORS + Bearer auth).
+ * netlify.toml `/api/*` redirects remain for non-browser / legacy clients.
  */
+const RAILWAY_API_ORIGIN = "https://fitandsleek-official-production.up.railway.app";
+
 const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
     "fitandsleek.kalapak-team.space": "https://fitandsleekapp.kalapak-team.space",
     "www.fitandsleek.kalapak-team.space": "https://fitandsleekapp.kalapak-team.space",
@@ -28,27 +31,40 @@ const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
     "www.web-fitandsleek.onrender.com": "https://api-fitandsleek.onrender.com",
     "norng-fitandsleek-store.vercel.app": "https://norng-fitandsleek-backend.onrender.com",
     "www.norng-fitandsleek-store.vercel.app": "https://norng-fitandsleek-backend.onrender.com",
-    "fitandsleek-official.vercel.app": "https://fitandsleek-official-production.up.railway.app",
-    "www.fitandsleek-official.vercel.app": "https://fitandsleek-official-production.up.railway.app",
-    "fitandsleek-official-frontend.netlify.app": "https://fitandsleek-official-frontend.netlify.app",
-    "www.fitandsleek-official-frontend.netlify.app": "https://fitandsleek-official-frontend.netlify.app",
-    "fitandsleek.online": "https://fitandsleek.online",
-    "www.fitandsleek.online": "https://www.fitandsleek.online",
+    "fitandsleek-official.vercel.app": RAILWAY_API_ORIGIN,
+    "www.fitandsleek-official.vercel.app": RAILWAY_API_ORIGIN,
+    "fitandsleek-official-frontend.netlify.app": RAILWAY_API_ORIGIN,
+    "www.fitandsleek-official-frontend.netlify.app": RAILWAY_API_ORIGIN,
+    "fitandsleek.online": RAILWAY_API_ORIGIN,
+    "www.fitandsleek.online": RAILWAY_API_ORIGIN,
 };
 
-/** Hosts where `/api` is proxied by the static host (Netlify) — always same-origin. */
-const SAME_ORIGIN_API_HOSTS = new Set([
-    "fitandsleek.online",
-    "www.fitandsleek.online",
-    "fitandsleek-official-frontend.netlify.app",
-    "www.fitandsleek-official-frontend.netlify.app",
-]);
-
-function sameOriginApiBaseIfProxied() {
+/**
+ * Netlify-hosted SPAs: call Railway `/api` directly (avoid edge proxy 504).
+ * Returns null when the current host should keep whatever normalizeConfiguredOrigin says.
+ */
+function railwayApiBaseForNetlifyStorefront() {
     if (typeof window === "undefined" || !window.location?.hostname) return null;
     const host = String(window.location.hostname).toLowerCase();
-    if (!SAME_ORIGIN_API_HOSTS.has(host)) return null;
-    return `${window.location.origin}/api`;
+    const origin = PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN[host];
+    if (!origin || origin === window.location.origin) return null;
+    if (!origin.includes("railway.app") && !origin.includes("onrender.com") && !origin.includes("kalapak-team.space")) {
+        return null;
+    }
+    // Only force-direct for Netlify production hostnames (the ones that used to proxy).
+    if (
+        host !== "fitandsleek.online" &&
+        host !== "www.fitandsleek.online" &&
+        !host.endsWith(".netlify.app")
+    ) {
+        return null;
+    }
+    return `${origin.replace(/\/$/, "")}/api`;
+}
+
+function sameOriginApiBaseIfProxied() {
+    // Deprecated path: previously forced same-origin Netlify proxy (caused Admin/profile 504s).
+    return railwayApiBaseForNetlifyStorefront();
 }
 
 function laravelOriginForPublicStorefrontHostname(hostname) {
@@ -140,7 +156,8 @@ function normalizeConfiguredOrigin() {
 export function resolveBackendOrigin() {
     const proxied = sameOriginApiBaseIfProxied();
     if (proxied) {
-        return window.location.origin;
+        // proxied is now a full `…/api` URL for Netlify→Railway; origin is without /api.
+        return proxied.replace(/\/api\/?$/, "");
     }
     const configuredOrigin = normalizeConfiguredOrigin();
     return configuredOrigin;
