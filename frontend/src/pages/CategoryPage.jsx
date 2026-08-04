@@ -18,6 +18,19 @@ import {
   filtersFromSearchParams,
   toggleListParamValue,
 } from "../lib/storefrontProductFilters.js";
+import { readProductListCache, writeProductListCache } from "../lib/storefrontListCache.js";
+
+function applyListPayload(data, safeSlug, setters) {
+  const productList = data?.data || [];
+  setters.setProducts(productList);
+  setters.setTotalPages(data?.last_page || 1);
+  setters.setTotalItems(data?.total ?? productList.length);
+  if (productList.length > 0) {
+    setters.setCategoryName(productList[0]?.category?.name || safeSlug);
+  } else {
+    setters.setCategoryName(safeSlug.replace(/[-_]+/g, " "));
+  }
+}
 
 export default function CategoryPage() {
   const { slug } = useParams();
@@ -31,13 +44,33 @@ export default function CategoryPage() {
   const listFilters = useStorefrontFilterDrawer(appliedFilters);
   const browse = useStorefrontBrowseDraft(searchParams, appliedFilters, priceBounds);
 
-  const [products, setProducts] = useState([]);
-  const [categoryName, setCategoryName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [totalItems, setTotalItems] = useState(null);
-  const [totalPages, setTotalPages] = useState(1);
-
   const page = Number(searchParams.get("page") || 1);
+
+  const listParams = useMemo(
+    () =>
+      buildProductApiParams({
+        page,
+        categorySlug: safeSlug,
+        applied: appliedFilters,
+        browse: browseFromUrl,
+      }),
+    [page, safeSlug, appliedFilters, browseFromUrl],
+  );
+
+  const cachedList = useMemo(
+    () => (safeSlug ? readProductListCache(listParams) : null),
+    [safeSlug, listParams],
+  );
+
+  const [products, setProducts] = useState(() => cachedList?.data || []);
+  const [categoryName, setCategoryName] = useState(() => {
+    const list = cachedList?.data || [];
+    if (list[0]?.category?.name) return list[0].category.name;
+    return safeSlug ? safeSlug.replace(/[-_]+/g, " ") : "";
+  });
+  const [loading, setLoading] = useState(() => Boolean(safeSlug) && !cachedList);
+  const [totalItems, setTotalItems] = useState(() => cachedList?.total ?? null);
+  const [totalPages, setTotalPages] = useState(() => cachedList?.last_page || 1);
 
   const facetsParams = useMemo(
     () =>
@@ -65,6 +98,8 @@ export default function CategoryPage() {
   }, [safeSlug]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchCategoryProducts = async () => {
       if (!safeSlug) {
         setProducts([]);
@@ -72,38 +107,48 @@ export default function CategoryPage() {
         return;
       }
 
+      const cached = readProductListCache(listParams);
+      if (cached) {
+        if (!cancelled) {
+          applyListPayload(cached, safeSlug, {
+            setProducts,
+            setTotalPages,
+            setTotalItems,
+            setCategoryName,
+          });
+          setLoading(false);
+        }
+        return;
+      }
+
       setLoading(true);
       try {
-        const params = buildProductApiParams({
-          page,
-          categorySlug: safeSlug,
-          applied: appliedFilters,
-          browse: browseFromUrl,
+        const { data } = await api.get("/products", { params: listParams });
+        if (cancelled) return;
+        applyListPayload(data, safeSlug, {
+          setProducts,
+          setTotalPages,
+          setTotalItems,
+          setCategoryName,
         });
-        const { data } = await api.get("/products", { params });
-
-        const productList = data?.data || [];
-        setProducts(productList);
-        setTotalPages(data?.last_page || 1);
-        setTotalItems(data?.total ?? productList.length);
-
-        if (productList.length > 0) {
-          setCategoryName(productList[0]?.category?.name || safeSlug);
-        } else {
+        writeProductListCache(listParams, data || { data: [] });
+      } catch {
+        if (!cancelled) {
+          setProducts([]);
+          setTotalPages(1);
+          setTotalItems(0);
           setCategoryName(safeSlug.replace(/[-_]+/g, " "));
         }
-      } catch {
-        setProducts([]);
-        setTotalPages(1);
-        setTotalItems(0);
-        setCategoryName(safeSlug.replace(/[-_]+/g, " "));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchCategoryProducts();
-  }, [safeSlug, page, appliedFilters, browseFromUrl]);
+    return () => {
+      cancelled = true;
+    };
+  }, [safeSlug, listParams]);
 
   const pushParams = (mutator) => {
     const next = new URLSearchParams(searchParams);

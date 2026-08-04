@@ -213,9 +213,10 @@ export default function Search() {
       if (cached && !cancelled) {
         setData(cached);
         setLoading(false);
-      } else if (!cancelled) {
-        setLoading(true);
+        // Trust session cache for this query; skip blocking refetch on revisit.
+        return;
       }
+      if (!cancelled) setLoading(true);
 
       try {
         const res = await api.get("/products", { params });

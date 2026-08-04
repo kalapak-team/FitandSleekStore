@@ -152,14 +152,66 @@ TELEGRAM_ADMIN_CHAT_ID=
 
 Then: `php artisan telegram:set-webhook`
 
-## After deploy is Live
+## Performance (slow storefront)
 
-1. Health: `curl -sS "$APP_URL/api/health"` → `{"ok":true}`
-2. Confirm Netlify proxy → Railway URL.
-3. Confirm mobile `API_BASE_URL` → Railway.
-4. Update Google / Facebook OAuth console redirect URIs to Railway callbacks.
-5. Set Chat + Vector env vars above; index products once for image search.
-6. Suspend or delete the old Render service once traffic is confirmed.
+Measured pattern: `/api/health` ~0.3s, but first `/api/homepage/bootstrap` or `/api/products` after idle can be **2–9s** while Neon wakes and cache rebuilds. After warm: ~0.5–0.7s.
+
+### 1) Neon Free (biggest cold delay)
+
+Free projects **suspend** after idle. Every storefront click then waits for DB wake.
+
+Do one of:
+
+- **Upgrade Neon** (Launch/Pro) and keep the compute endpoint **active** (disable scale-to-zero / set min CU > 0), **or**
+- Stay on Free and accept cold spikes; mitigate with keep-warm (below) — never as good as paid Neon.
+
+Prefer Neon region **Singapore / ap-southeast-1** (already used if host contains `ap-southeast-1`).
+
+### 2) Railway Trial / Hobby
+
+- Keep the service **deployed and awake** (Hobby does not sleep like old free tiers if the project has credit).
+- Deploy region as close to Neon as possible (**Southeast Asia** if offered).
+- Required vars:
+
+```env
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+```
+
+Then once (Railway shell / one-off):
+
+```bash
+php artisan migrate --force   # only if cache/sessions tables missing
+php artisan storefront:warm
+php artisan qdrant:diagnose   # optional
+```
+
+Confirm:
+
+```bash
+curl -sS -o /dev/null -w 'bootstrap %{http_code} %{time_total}s\n' \
+  https://fitandsleek-official-production.up.railway.app/api/homepage/bootstrap
+# second run should be clearly faster than the first after a long idle
+```
+
+### 3) Keep-warm (optional)
+
+Ping health + bootstrap every ~10 minutes (GitHub Actions `workflow` scope required to add `.github/workflows/keep-warm.yml`). This reduces Neon suspends and keeps bootstrap cache hot. It does **not** replace a paid Neon compute that never sleeps.
+
+### 4) Do not move for speed (yet)
+
+- Netlify (static) — fine  
+- R2 — fine  
+- Hugging Face chat/vector — only affect those features  
+
+VPS is optional later (Laravel+Redis in Singapore). Fix Neon + `CACHE_STORE=database` first.
+
+### 5) Frontend (already in repo when deployed)
+
+Shorter `wakeBackend`, session cache for PLP/PDP, lazy product images. Redeploy Netlify after pushing those commits.
+
+
 
 ## Verify
 

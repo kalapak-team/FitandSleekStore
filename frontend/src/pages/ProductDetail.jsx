@@ -196,45 +196,29 @@ export default function ProductDetail() {
   // useEffect hook
   useEffect(() => {
     let active = true;
-    (async () => {
-      setLoading(true);
-      setSimilarProducts([]);
-      let product = readProductDetailCache(slug);
-      if (product && active) {
-        setP(product);
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
-      try {
-        const { data } = await api.get(`/products/${slug}`);
-        product = data;
-        if (!active) return;
-        setP(data);
-        writeProductDetailCache(slug, data);
-        setActiveImage(0);
 
-        const vm = parseVariantMatrix(data.variant_matrix);
-        if (vm.length > 0) {
-          const inStock = vm.filter((r) => r.qty > 0);
-          const pick = inStock[0] || vm[0];
-          setSelectedColor(pick.color);
-          setSelectedSize(pick.size);
-        } else {
-          if (data?.colors) {
-            const cv = parseColorVariants(data.colors);
-            if (cv.length > 0) setSelectedColor(cv[0].name);
-          }
-          if (data?.sizes) {
-            const sz = parseSizes(data.sizes);
-            if (sz.length > 0) setSelectedSize(sz[0]);
-          }
-        }
-      } finally {
-        if (active) setLoading(false);
+    const applyVariants = (data) => {
+      setActiveImage(0);
+      const vm = parseVariantMatrix(data.variant_matrix);
+      if (vm.length > 0) {
+        const inStock = vm.filter((r) => r.qty > 0);
+        const pick = inStock[0] || vm[0];
+        setSelectedColor(pick.color);
+        setSelectedSize(pick.size);
+        return;
       }
+      if (data?.colors) {
+        const cv = parseColorVariants(data.colors);
+        if (cv.length > 0) setSelectedColor(cv[0].name);
+      }
+      if (data?.sizes) {
+        const sz = parseSizes(data.sizes);
+        if (sz.length > 0) setSelectedSize(sz[0]);
+      }
+    };
 
-      if (!active || !product?.category_id) return;
+    const loadSimilar = async (product) => {
+      if (!product?.category_id) return;
       try {
         const { data: similar } = await api.get("/products", {
           params: { category_id: product.category_id, limit: 4 },
@@ -244,6 +228,30 @@ export default function ProductDetail() {
         setSimilarProducts(filtered);
       } catch {
         /* similar products are optional */
+      }
+    };
+
+    (async () => {
+      setSimilarProducts([]);
+      const cached = readProductDetailCache(slug);
+      if (cached && active) {
+        setP(cached);
+        setLoading(false);
+        applyVariants(cached);
+        await loadSimilar(cached);
+        return;
+      }
+
+      if (active) setLoading(true);
+      try {
+        const { data } = await api.get(`/products/${slug}`);
+        if (!active) return;
+        setP(data);
+        writeProductDetailCache(slug, data);
+        applyVariants(data);
+        await loadSimilar(data);
+      } finally {
+        if (active) setLoading(false);
       }
     })();
     return () => {
@@ -630,6 +638,8 @@ export default function ProductDetail() {
                   <img
                     src={resolveImageUrl(img)}
                     alt={`${p.name} ${idx + 1}`}
+                    loading={idx === 0 ? "eager" : "lazy"}
+                    decoding="async"
                     className="h-full w-full object-cover"
                   />
                 </button>

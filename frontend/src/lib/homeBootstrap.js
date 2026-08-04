@@ -85,7 +85,7 @@ export async function fetchHomeBootstrap({ preferCache = true, allowStale = fals
     if (!isGatewayTimeout(error)) {
       throw error;
     }
-    await wakeBackend({ force: true });
+    await wakeBackend();
     try {
       const { data } = await api.get("/homepage/bootstrap", { timeout: 55000 });
       writeCachedBootstrap(data);

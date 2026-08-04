@@ -223,10 +223,39 @@ export default function SupportChatWidget() {
   }, [open, messages, loading]);
 
   useEffect(() => {
+    const CACHE_KEY = "fs_chatbot_settings_v1";
+    const CACHE_TTL_MS = 30 * 60 * 1000;
+
     const loadSettings = async () => {
       try {
+        const raw = sessionStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (
+            parsed?.data &&
+            typeof parsed.fetchedAt === "number" &&
+            Date.now() - parsed.fetchedAt < CACHE_TTL_MS
+          ) {
+            setSettings({ ...DEFAULTS, ...parsed.data });
+            return;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+
+      try {
         const { data } = await api.get("/chatbot/settings");
-        setSettings({ ...DEFAULTS, ...(data?.data || {}) });
+        const next = { ...DEFAULTS, ...(data?.data || {}) };
+        setSettings(next);
+        try {
+          sessionStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({ fetchedAt: Date.now(), data: data?.data || {} }),
+          );
+        } catch {
+          /* ignore */
+        }
       } catch {
         setSettings(DEFAULTS);
       }

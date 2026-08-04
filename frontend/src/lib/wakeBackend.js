@@ -1,10 +1,12 @@
 import { resolveApiBaseUrl } from "./backendOrigin";
 
 const WARM_UNTIL_KEY = "fs_backend_warm_until";
-const WARM_TTL_MS = 2 * 60 * 1000;
-/** Render Free cold start can exceed 30s; stagger attempts before catalogue calls. */
-const WAKE_ATTEMPTS = 8;
-const WAKE_DELAYS_MS = [0, 2000, 3000, 5000, 5000, 8000, 8000, 10000];
+/** Railway/Neon stay warm longer than Render Free — avoid re-pinging every couple minutes. */
+const WARM_TTL_MS = 15 * 60 * 1000;
+/** Short probe only; do not block storefront navigation for tens of seconds. */
+const WAKE_ATTEMPTS = 3;
+const WAKE_DELAYS_MS = [0, 800, 2000];
+const PING_TIMEOUT_MS = 8000;
 
 let wakePromise = null;
 
@@ -38,7 +40,7 @@ async function pingHealthOnce() {
     mode: "cors",
     credentials: "omit",
     headers: { Accept: "application/json" },
-    signal: typeof AbortSignal !== "undefined" ? AbortSignal.timeout(28000) : undefined,
+    signal: typeof AbortSignal !== "undefined" ? AbortSignal.timeout(PING_TIMEOUT_MS) : undefined,
   });
   if (!res.ok) return false;
   const ct = res.headers.get("content-type") || "";
@@ -47,7 +49,8 @@ async function pingHealthOnce() {
 }
 
 /**
- * Wait until /api/health succeeds (shared promise). Call before bootstrap on cold Render.
+ * Best-effort health ping before catalogue calls.
+ * Returns quickly when the API is already warm; never waits for a full cold-start budget.
  */
 export function wakeBackend({ force = false } = {}) {
   if (typeof window === "undefined") return Promise.resolve();
@@ -56,7 +59,7 @@ export function wakeBackend({ force = false } = {}) {
   if (!wakePromise) {
     wakePromise = (async () => {
       for (let attempt = 0; attempt < WAKE_ATTEMPTS; attempt += 1) {
-        const delay = WAKE_DELAYS_MS[attempt] ?? 5000;
+        const delay = WAKE_DELAYS_MS[attempt] ?? 2000;
         if (delay > 0) {
           await new Promise((r) => setTimeout(r, delay));
         }
