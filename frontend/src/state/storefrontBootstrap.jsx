@@ -114,13 +114,27 @@ export function StorefrontBootstrapProvider({ children }) {
 
     let cancelled = false;
     (async () => {
-      const needsSpinner = !readCachedBootstrap();
+      const hasFresh = Boolean(readCachedBootstrap());
+      const needsSpinner = !stale;
       if (needsSpinner) setRefreshing(true);
       try {
-        await wakeBackend();
+        // Prefer session cache; only hit the network when TTL expired or empty.
+        // On Netlify hosts, fetchHomeBootstrap uses Railway directly (avoids 504).
+        if (!hasFresh) {
+          await wakeBackend();
+        }
         if (cancelled) return;
-        const data = await fetchHomeBootstrap({ preferCache: false });
+        const data = await fetchHomeBootstrap({ preferCache: true });
         if (!cancelled) applyBootstrap(data);
+
+        // Background refresh when we served a fresh cache — keep homepage warm.
+        if (hasFresh && !cancelled) {
+          fetchHomeBootstrap({ preferCache: false })
+            .then((fresh) => {
+              if (!cancelled) applyBootstrap(fresh);
+            })
+            .catch(() => {});
+        }
       } catch {
         /* keep stale cache */
       } finally {
