@@ -153,10 +153,11 @@ class HuggingFaceSpaceChatService
                 $request = $request->withToken($token);
             }
 
+            // Space `/chat` currently accepts a single `message` string and returns Json
+            // (see GET /gradio_api/info). Extra Gradio history slots cause silent errors.
             $response = $request
                 ->post($this->baseUrl().'/gradio_api/call/chat', [
-                    // Second slot is Gradio ChatInterface history (unused across our HTTP calls).
-                    'data' => [$message, null],
+                    'data' => [$message],
                 ])
                 ->throw();
         } catch (ConnectionException $e) {
@@ -224,8 +225,15 @@ class HuggingFaceSpaceChatService
             }
 
             if (($parsed['event'] ?? '') === 'error') {
+                $detail = $parsed['data'] ?? null;
+                $detailText = is_string($detail) && trim($detail) !== ''
+                    ? trim($detail)
+                    : (is_array($detail) ? Str::limit(json_encode($detail) ?: '', 200) : '');
+
                 throw new RuntimeException(
-                    'Hugging Face Space error while generating a reply. Open the Space UI and retry: '
+                    'Hugging Face Space error while generating a reply'
+                    .($detailText !== '' ? ': '.$detailText : '')
+                    .'. Open the Space UI/logs and retry: '
                     .'https://huggingface.co/spaces/'.$this->spaceId()
                 );
             }
@@ -278,13 +286,21 @@ class HuggingFaceSpaceChatService
      */
     private function extractReply(array $payload): string
     {
-        // Gradio ChatInterface returns [reply_string, history_or_null]
-        if (array_is_list($payload) && isset($payload[0]) && is_string($payload[0])) {
-            return trim($payload[0]);
+        // Current Space returns Json; older ChatInterface returned [reply, history].
+        if (array_is_list($payload) && isset($payload[0])) {
+            $first = $payload[0];
+            if (is_string($first)) {
+                return trim($first);
+            }
+            if (is_array($first)) {
+                return $this->extractReply($first);
+            }
         }
 
-        if (isset($payload['reply']) && is_string($payload['reply'])) {
-            return trim($payload['reply']);
+        foreach (['reply', 'response', 'message', 'text', 'content'] as $key) {
+            if (isset($payload[$key]) && is_string($payload[$key])) {
+                return trim($payload[$key]);
+            }
         }
 
         return '';
