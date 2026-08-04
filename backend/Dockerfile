@@ -4,8 +4,8 @@ FROM php:8.2-fpm-bookworm
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git unzip nginx openssl \
-        libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev \
-    && docker-php-ext-configure gd --with-jpeg --with-webp \
+        libpq-dev libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev libavif-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-webp --with-avif \
     && docker-php-ext-install pdo_pgsql zip gd \
     && rm -f /etc/nginx/sites-enabled/default \
     && rm -rf /var/lib/apt/lists/*

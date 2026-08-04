@@ -97,8 +97,11 @@ class ProductQdrantIndexer
             [$content, $mime, $filename] = $this->decodeDataUrl($imageUrl);
         } elseif (str_starts_with($imageUrl, 'http://') || str_starts_with($imageUrl, 'https://')) {
             $filename = basename(parse_url($imageUrl, PHP_URL_PATH) ?: 'image.jpg');
+            $downloadTimeout = max(30, (int) config('services.image_search.timeout', 90));
 
-            $response = Http::timeout(30)->get($imageUrl);
+            $response = Http::timeout($downloadTimeout)
+                ->withOptions(['connect_timeout' => 15])
+                ->get($imageUrl);
             if ($response->failed()) {
                 throw new \RuntimeException('Cannot download image: '.$imageUrl);
             }
@@ -140,7 +143,11 @@ class ProductQdrantIndexer
 
         // Fitandsleek Vector embed accepts common raster formats; AVIF often 500s on the Space.
         if ($this->needsJpegConversion($ext, (string) $mime)) {
-            [$content, $mime, $filename, $ext] = $this->convertToJpeg($content, $filename);
+            [$content, $mime, $filename, $ext] = $this->convertToJpeg(
+                $content,
+                $filename,
+                str_starts_with($imageUrl, 'http') ? $imageUrl : null,
+            );
         }
 
         $tempPath = $tempDir.'/'.uniqid('img_', true).'.'.$ext;
@@ -163,15 +170,56 @@ class ProductQdrantIndexer
     /**
      * @return array{0: string, 1: string, 2: string, 3: string} content, mime, filename, ext
      */
-    private function convertToJpeg(string $content, string $filename): array
+    private function convertToJpeg(string $content, string $filename, ?string $sourceUrl = null): array
+    {
+        $base = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
+        $errors = [];
+
+        try {
+            return $this->gdBytesToJpeg($content, $base);
+        } catch (\Throwable $e) {
+            $errors[] = 'GD: '.$e->getMessage();
+        }
+
+        try {
+            return $this->imagickBytesToJpeg($content, $base);
+        } catch (\Throwable $e) {
+            $errors[] = 'Imagick: '.$e->getMessage();
+        }
+
+        if ($sourceUrl !== null) {
+            try {
+                return $this->cloudinaryFetchToJpeg($sourceUrl, $base);
+            } catch (\Throwable $e) {
+                $errors[] = 'Cloudinary: '.$e->getMessage();
+            }
+        }
+
+        throw new \RuntimeException(
+            'Cannot decode image for JPEG conversion ('.$filename.'). '.implode(' | ', $errors)
+        );
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string, 3: string}
+     */
+    private function gdBytesToJpeg(string $content, string $base): array
     {
         if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) {
-            throw new \RuntimeException('Cannot convert AVIF/HEIC: GD JPEG support missing.');
+            throw new \RuntimeException('GD JPEG support missing.');
         }
+
+        // PHP GD without --with-avif returns false for AVIF (common on older Docker images).
+        $info = function_exists('gd_info') ? gd_info() : [];
+        $avifSupported = (bool) ($info['AVIF Support'] ?? $info['Avif Support'] ?? false);
 
         $image = @imagecreatefromstring($content);
         if ($image === false) {
-            throw new \RuntimeException('Cannot decode image for JPEG conversion ('.$filename.').');
+            throw new \RuntimeException(
+                $avifSupported
+                    ? 'imagecreatefromstring failed.'
+                    : 'GD built without AVIF support.'
+            );
         }
 
         if (function_exists('imagepalettetotruecolor')) {
@@ -190,10 +238,76 @@ class ProductQdrantIndexer
         $jpeg = ob_get_clean();
 
         if (! $ok || $jpeg === false || $jpeg === '') {
-            throw new \RuntimeException('Failed converting image to JPEG ('.$filename.').');
+            throw new \RuntimeException('imagejpeg failed.');
         }
 
-        $base = pathinfo($filename, PATHINFO_FILENAME) ?: 'image';
+        return [$jpeg, 'image/jpeg', $base.'.jpg', 'jpg'];
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string, 3: string}
+     */
+    private function imagickBytesToJpeg(string $content, string $base): array
+    {
+        if (! class_exists(\Imagick::class)) {
+            throw new \RuntimeException('extension not installed.');
+        }
+
+        $imagick = new \Imagick;
+        $imagick->readImageBlob($content);
+        $imagick->setImageFormat('jpeg');
+        $imagick->setImageCompressionQuality(90);
+        $jpeg = $imagick->getImageBlob();
+        $imagick->clear();
+        $imagick->destroy();
+
+        if ($jpeg === '' || $jpeg === false) {
+            throw new \RuntimeException('empty JPEG blob.');
+        }
+
+        return [$jpeg, 'image/jpeg', $base.'.jpg', 'jpg'];
+    }
+
+    /**
+     * Last resort for public http(s) AVIF/HEIC when the PHP image stack cannot decode.
+     *
+     * @return array{0: string, 1: string, 2: string, 3: string}
+     */
+    private function cloudinaryFetchToJpeg(string $sourceUrl, string $base): array
+    {
+        $cloudName = trim((string) (
+            config('filesystems.disks.cloudinary.cloud')
+            ?? config('filesystems.disks.cloudinary.cloud_name')
+            ?? env('CLOUDINARY_CLOUD_NAME', '')
+        ));
+
+        if ($cloudName === '' && preg_match('#cloudinary://[^@]+@([^/\s]+)#', (string) env('CLOUDINARY_URL', ''), $m)) {
+            $cloudName = $m[1];
+        }
+
+        if ($cloudName === '') {
+            throw new \RuntimeException('CLOUDINARY_CLOUD_NAME not set.');
+        }
+
+        $fetchUrl = 'https://res.cloudinary.com/'.$cloudName.'/image/fetch/f_jpg,q_auto/'
+            .rawurlencode($sourceUrl);
+
+        $timeout = max(30, (int) config('services.image_search.timeout', 90));
+        $response = Http::timeout($timeout)->withOptions(['connect_timeout' => 15])->get($fetchUrl);
+
+        if ($response->failed()) {
+            throw new \RuntimeException('fetch HTTP '.$response->status());
+        }
+
+        $jpeg = $response->body();
+        if ($jpeg === '') {
+            throw new \RuntimeException('empty fetch body.');
+        }
+
+        // Sanity: JPEG magic bytes
+        if (! str_starts_with($jpeg, "\xFF\xD8")) {
+            throw new \RuntimeException('fetch did not return JPEG.');
+        }
 
         return [$jpeg, 'image/jpeg', $base.'.jpg', 'jpg'];
     }
