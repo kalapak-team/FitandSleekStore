@@ -17,11 +17,6 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
     setStatus(telegram || null);
   }, [telegram]);
 
-  useEffect(() => {
-    if (!userId) return;
-    refresh();
-  }, [userId, refresh]);
-
   const refresh = useCallback(async () => {
     if (!userId) return;
     try {
@@ -32,6 +27,10 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
       /* keep local */
     }
   }, [userId, onUpdated]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const createCode = async () => {
     if (!canManage || !userId) return;
