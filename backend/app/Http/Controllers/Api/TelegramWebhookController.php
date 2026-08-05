@@ -281,10 +281,12 @@ class TelegramWebhookController extends Controller
             return;
         }
 
-        $key = $result['user']->isDriver() ? 'driver_linked' : 'staff_linked';
+        $isLinkedDriver = $result['user']->isDriver();
+        $key = $isLinkedDriver ? 'driver_linked' : 'staff_linked';
         $this->telegram->sendMessage(
             (string) $chatId,
-            TelegramBotTexts::get($locale, $key, ['name' => $result['user']->name ?: ('#'.$result['user']->id)])
+            TelegramBotTexts::get($locale, $key, ['name' => $result['user']->name ?: ('#'.$result['user']->id)]),
+            $isLinkedDriver ? null : $this->telegram->buildAdminGroupInviteKeyboard($locale)
         );
     }
 

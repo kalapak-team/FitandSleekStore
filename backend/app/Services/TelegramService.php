@@ -377,6 +377,28 @@ class TelegramService
         ];
     }
 
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}|null
+     */
+    public function buildAdminGroupInviteKeyboard(string $locale): ?array
+    {
+        $url = trim((string) config('services.telegram.admin_group_invite_url'));
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+
+        if (! filter_var($url, FILTER_VALIDATE_URL) || ! in_array($host, ['t.me', 'telegram.me'], true)) {
+            return null;
+        }
+
+        return [
+            'inline_keyboard' => [[
+                [
+                    'text' => TelegramBotTexts::get($locale, 'btn_open_admin_group'),
+                    'url' => $url,
+                ],
+            ]],
+        ];
+    }
+
     public function sendLanguageMenu(int $chatId, ?TelegramUser $telegramUser = null): void
     {
         $locale = TelegramBotTexts::resolveLocale($telegramUser);
