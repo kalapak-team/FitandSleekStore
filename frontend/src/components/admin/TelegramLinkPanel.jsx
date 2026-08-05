@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link2, Unlink, RefreshCw, Copy, Check } from "lucide-react";
 import api from "../../lib/api";
 
@@ -13,6 +13,10 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState(telegram || null);
 
+  // Callers pass inline callbacks; keep them out of refresh deps so the fetch effect runs once per user.
+  const onUpdatedRef = useRef(onUpdated);
+  onUpdatedRef.current = onUpdated;
+
   useEffect(() => {
     setStatus(telegram || null);
   }, [telegram]);
@@ -22,11 +26,11 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
     try {
       const { data } = await api.get(`/admin/users/${userId}/telegram-link`);
       setStatus(data?.data || null);
-      onUpdated?.(data?.data || null);
+      onUpdatedRef.current?.(data?.data || null);
     } catch {
       /* keep local */
     }
-  }, [userId, onUpdated]);
+  }, [userId]);
 
   useEffect(() => {
     refresh();
@@ -57,7 +61,7 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
       const { data } = await api.delete(`/admin/users/${userId}/telegram-link`);
       setStatus(data?.data || null);
       setCodePayload(null);
-      onUpdated?.(data?.data || null);
+      onUpdatedRef.current?.(data?.data || null);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to unlink Telegram");
     } finally {

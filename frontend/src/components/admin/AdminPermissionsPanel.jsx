@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import api from "../../lib/api";
 import AdminModal from "./AdminModal.jsx";
@@ -37,6 +37,10 @@ export default function AdminPermissionsPanel({ open, adminUser, onClose, onSave
   const [matrix, setMatrix] = useState(null);
   const [permissions, setPermissions] = useState({});
 
+  // Callers pass an inline onClose; keep it out of the load deps so a parent re-render cannot refetch.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open || !adminUser?.id) return;
     let cancelled = false;
@@ -55,7 +59,7 @@ export default function AdminPermissionsPanel({ open, adminUser, onClose, onSave
             title: "Failed to load permissions",
             detail: err?.response?.data?.message || "Please try again.",
           });
-          onClose?.();
+          onCloseRef.current?.();
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -66,7 +70,7 @@ export default function AdminPermissionsPanel({ open, adminUser, onClose, onSave
     return () => {
       cancelled = true;
     };
-  }, [open, adminUser?.id, onClose]);
+  }, [open, adminUser?.id]);
 
   const actions = useMemo(() => matrix?.actions || ["view", "create", "edit", "delete"], [matrix]);
 
