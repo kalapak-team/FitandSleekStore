@@ -37,14 +37,15 @@ function isGatewayTimeout(error) {
   return status === 504 || status === 502 || status === 503;
 }
 
-/** Netlify edge proxy to Railway times out around ~26s — avoid it for heavy bootstrap. */
-function isNetlifyProxiedStorefront() {
+/** Edge-hosted SPA (Vercel / Netlify / custom domain) — prefer direct Railway for heavy bootstrap. */
+function isSplitHostStorefront() {
   if (typeof window === "undefined") return false;
   const host = String(window.location.hostname || "").toLowerCase();
   return (
     host === "fitandsleek.online" ||
     host === "www.fitandsleek.online" ||
-    host.endsWith(".netlify.app")
+    host.endsWith(".netlify.app") ||
+    host.endsWith(".vercel.app")
   );
 }
 
@@ -91,8 +92,8 @@ export async function fetchHomeBootstrap({ preferCache = true, allowStale = fals
     return cached;
   }
 
-  // Production Netlify hosts: never wait on the short proxy timeout for this endpoint.
-  if (isNetlifyProxiedStorefront()) {
+  // Production split hosts: never wait on a short edge proxy timeout for this endpoint.
+  if (isSplitHostStorefront()) {
     try {
       await wakeBackend();
       const data = await fetchBootstrapDirect();

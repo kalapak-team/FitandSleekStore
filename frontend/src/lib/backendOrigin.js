@@ -15,12 +15,9 @@ function getConfiguredValues() {
 
 /**
  * Split-host map: storefront SPA and Laravel API use different hostnames.
- * fitandsleek.kalapak-team.space → frontend only; fitandsleekapp.kalapak-team.space → backend.
- *
- * Production Netlify (fitandsleek.online) must NOT use same-origin `/api` for the SPA:
- * Netlify's edge proxy times out around ~26s (504) while Railway+Neon cold/bootstrap
- * can take longer. Browser calls Railway directly (CORS + Bearer auth).
- * netlify.toml `/api/*` redirects remain for non-browser / legacy clients.
+ * Production SPA (Vercel / formerly Netlify) must NOT rely on same-origin `/api` proxy:
+ * edge proxies time out while Railway cold/bootstrap can take longer.
+ * Browser calls Railway directly (CORS + Bearer auth).
  */
 const RAILWAY_API_ORIGIN = "https://fitandsleek-official-production.up.railway.app";
 
@@ -40,10 +37,10 @@ const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
 };
 
 /**
- * Netlify-hosted SPAs: call Railway `/api` directly (avoid edge proxy 504).
+ * Production storefront hosts: call Railway `/api` directly (avoid edge proxy 504).
  * Returns null when the current host should keep whatever normalizeConfiguredOrigin says.
  */
-function railwayApiBaseForNetlifyStorefront() {
+function railwayApiBaseForSplitStorefront() {
     if (typeof window === "undefined" || !window.location?.hostname) return null;
     const host = String(window.location.hostname).toLowerCase();
     const origin = PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN[host];
@@ -51,11 +48,12 @@ function railwayApiBaseForNetlifyStorefront() {
     if (!origin.includes("railway.app") && !origin.includes("onrender.com") && !origin.includes("kalapak-team.space")) {
         return null;
     }
-    // Only force-direct for Netlify production hostnames (the ones that used to proxy).
+    // Custom domain + Vercel / Netlify preview hosts.
     if (
         host !== "fitandsleek.online" &&
         host !== "www.fitandsleek.online" &&
-        !host.endsWith(".netlify.app")
+        !host.endsWith(".netlify.app") &&
+        !host.endsWith(".vercel.app")
     ) {
         return null;
     }
@@ -63,8 +61,7 @@ function railwayApiBaseForNetlifyStorefront() {
 }
 
 function sameOriginApiBaseIfProxied() {
-    // Deprecated path: previously forced same-origin Netlify proxy (caused Admin/profile 504s).
-    return railwayApiBaseForNetlifyStorefront();
+    return railwayApiBaseForSplitStorefront();
 }
 
 function laravelOriginForPublicStorefrontHostname(hostname) {
