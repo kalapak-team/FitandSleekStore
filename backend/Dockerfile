@@ -1,3 +1,13 @@
+# Neon is Postgres 18; stage matching pg_dump + libpq (path differs by arch).
+# Multi-stage avoids BuildKit bind mounts (Railway image builds reject those).
+FROM postgres:18-bookworm AS pg18-tools
+RUN mkdir -p /out/bin /out/lib \
+    && cp /usr/lib/postgresql/18/bin/pg_dump /usr/lib/postgresql/18/bin/pg_restore /out/bin/ \
+    && (cp -a /usr/lib/x86_64-linux-gnu/libpq.so.5* /out/lib/ \
+        || cp -a /usr/lib/aarch64-linux-gnu/libpq.so.5* /out/lib/) \
+    && chmod +x /out/bin/pg_dump /out/bin/pg_restore \
+    && test -e /out/lib/libpq.so.5
+
 FROM php:8.2-fpm-bookworm
 
 # Keep Debian libpq-dev for PHP — do NOT add PGDG apt (breaks libldap / libpq resolution).
@@ -10,23 +20,9 @@ RUN apt-get update \
     && rm -f /etc/nginx/sites-enabled/default \
     && rm -rf /var/lib/apt/lists/*
 
-# Neon is Postgres 18; ship a matching pg_dump from the official image (private libs).
-# lib path differs by arch (x86_64-linux-gnu vs aarch64-linux-gnu on Apple Silicon).
 RUN mkdir -p /opt/pg18/bin /opt/pg18/lib
-COPY --from=postgres:18-bookworm /usr/lib/postgresql/18/bin/pg_dump /opt/pg18/bin/pg_dump
-COPY --from=postgres:18-bookworm /usr/lib/postgresql/18/bin/pg_restore /opt/pg18/bin/pg_restore
-RUN --mount=type=bind,from=postgres:18-bookworm,source=/usr/lib,target=/pg18lib \
-    set -eux; \
-    copied=0; \
-    for dir in x86_64-linux-gnu aarch64-linux-gnu; do \
-      if [ -e "/pg18lib/${dir}/libpq.so.5" ]; then \
-        cp -a "/pg18lib/${dir}"/libpq.so.5* /opt/pg18/lib/; \
-        copied=1; \
-        break; \
-      fi; \
-    done; \
-    test "$copied" = 1; \
-    chmod +x /opt/pg18/bin/pg_dump /opt/pg18/bin/pg_restore
+COPY --from=pg18-tools /out/bin/ /opt/pg18/bin/
+COPY --from=pg18-tools /out/lib/ /opt/pg18/lib/
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
