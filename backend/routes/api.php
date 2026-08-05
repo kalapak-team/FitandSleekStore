@@ -96,6 +96,45 @@ Route::get('/health', function () {
     ]);
 });
 
+// Lightweight dependency probe (outside throttle) — helps diagnose storefront 500s on Render.
+Route::get('/health/deps', function () {
+    $db = ['ok' => false];
+    $cache = ['ok' => false, 'store' => config('cache.default')];
+
+    try {
+        \Illuminate\Support\Facades\DB::select('select 1 as ok');
+        $db['ok'] = true;
+        try {
+            $db['driver'] = \Illuminate\Support\Facades\DB::connection()->getDriverName();
+            $db['has_cache_table'] = \Illuminate\Support\Facades\Schema::hasTable('cache');
+            $db['has_collections_placement'] = \Illuminate\Support\Facades\Schema::hasColumn('collections', 'placement');
+        } catch (\Throwable $e) {
+            $db['schema_error'] = class_basename($e).': '.$e->getMessage();
+        }
+    } catch (\Throwable $e) {
+        $db['error'] = class_basename($e).': '.$e->getMessage();
+    }
+
+    try {
+        $key = 'health:deps:'.uniqid('', true);
+        \Illuminate\Support\Facades\Cache::put($key, 1, 10);
+        $cache['ok'] = \Illuminate\Support\Facades\Cache::pull($key) === 1;
+        if (! $cache['ok']) {
+            $cache['error'] = 'put/get mismatch';
+        }
+    } catch (\Throwable $e) {
+        $cache['error'] = class_basename($e).': '.$e->getMessage();
+    }
+
+    $ok = ($db['ok'] ?? false) && ($cache['ok'] ?? false);
+
+    return response()->json([
+        'ok' => $ok,
+        'db' => $db,
+        'cache' => $cache,
+    ], $ok ? 200 : 503);
+});
+
 Route::get('/media/probe', function () {
     return response()->json([
         'media' => \App\Support\Media::diagnostics(),
