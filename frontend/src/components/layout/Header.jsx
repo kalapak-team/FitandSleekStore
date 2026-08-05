@@ -6,7 +6,7 @@ import { useWishlist } from "../../state/wishlist.jsx";
 import { useLanguage } from "../../lib/i18n.jsx";
 import { useHomepageSettings } from "../../state/homepageSettings.jsx";
 import { resolveImageUrl } from "../../lib/images.js";
-import { Camera, X, Bell, Menu, Search, User, Heart, ShoppingBag, Moon, Sun } from "lucide-react";
+import { Camera, X, Bell, Menu, Search, User, Heart, ShoppingBag, Moon, Sun, LayoutDashboard, ClipboardList } from "lucide-react";
 import { useTheme } from "../../state/theme.jsx";
 import Logo from "../Logo.jsx";
 import LoginDialog from "../dialogs/LoginDialog.jsx";
@@ -19,6 +19,7 @@ import { mergeTopNavDropdowns } from "../../lib/defaultTopNavDropdowns.js";
 import { mergeHeaderSettings } from "../../lib/defaultHeaderSettings.js";
 import { resolveHeaderChromeStyle } from "../../lib/storefrontChrome.js";
 import { useStorefrontBootstrap } from "../../state/storefrontBootstrap.jsx";
+import { isAdminUser } from "../../app/redirectAfterAuth.js";
 
 function cn(...xs) {
   return xs.filter(Boolean).join(" ");
@@ -98,6 +99,7 @@ function ProfileMenu({ user, onLogout, t, className = "" }) {
     ? resolveImageUrl(user.profile_image_url || user.profile_image_path)
     : null;
   const initials = getInitials(user?.name || user?.email || "");
+  const admin = isAdminUser(user);
 
   useEffect(() => {
     if (!open) return;
@@ -116,12 +118,23 @@ function ProfileMenu({ user, onLogout, t, className = "" }) {
 
   if (!user) return null;
 
+  const menuLinks = admin
+    ? [
+        { to: "/admin", label: t("navDashboard"), Icon: LayoutDashboard },
+        { to: "/admin/orders", label: t("navOrders"), Icon: ClipboardList },
+        { to: "/admin/profile", label: t("adminProfile"), Icon: User },
+      ]
+    : [
+        { to: "/profile", label: t("account"), Icon: User },
+        { to: "/profile?tab=orders", label: t("orders"), Icon: ClipboardList },
+      ];
+
   return (
     <div className={cn("relative shrink-0 overflow-visible", className)} ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="fs-avatar-ring"
-        aria-label={t("account")}
+        aria-label={admin ? t("navDashboard") : t("account")}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -160,29 +173,25 @@ function ProfileMenu({ user, onLogout, t, className = "" }) {
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-slate-800 truncate">{user?.name || t("account")}</p>
               <p className="text-sm text-slate-500 truncate">{user?.email}</p>
+              {admin ? (
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 mt-0.5">
+                  {String(user?.role || "admin").replace(/_/g, " ")}
+                </p>
+              ) : null}
             </div>
           </div>
           <div className="py-2">
-            <Link
-              to="/profile"
-              onClick={() => setOpen(false)}
-              className="w-full px-4 py-2.5 flex items-center gap-3 text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span className="text-sm">{t("account")}</span>
-            </Link>
-            <Link
-              to="/profile?tab=orders"
-              onClick={() => setOpen(false)}
-              className="w-full px-4 py-2.5 flex items-center gap-3 text-slate-700 hover:bg-slate-50 transition-colors"
-            >
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <span className="text-sm">{t("orders")}</span>
-            </Link>
+            {menuLinks.map(({ to, label, Icon: ItemIcon }) => (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setOpen(false)}
+                className="w-full px-4 py-2.5 flex items-center gap-3 text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <ItemIcon className="w-5 h-5 text-slate-400" strokeWidth={2} />
+                <span className="text-sm">{label}</span>
+              </Link>
+            ))}
           </div>
           <div className="py-2 border-t border-slate-100">
             <button

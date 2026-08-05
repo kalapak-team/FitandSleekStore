@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Store, Bell, ShoppingBag, User, Heart } from "lucide-react";
+import { Home, Store, Bell, ShoppingBag, User, Heart, LayoutDashboard } from "lucide-react";
 import { useCart } from "../../state/cart.jsx";
 import { useWishlist } from "../../state/wishlist.jsx";
 import { useAuth } from "../../state/auth.jsx";
 import { useHomepageSettings } from "../../state/homepageSettings.jsx";
 import NotificationDrawer from "./NotificationDrawer.jsx";
+import { isAdminUser } from "../../app/redirectAfterAuth.js";
 
 function Badge({ value }) {
   if (!value) return null;
@@ -55,7 +56,11 @@ export default function MobileBottomNav({
       base.push({ key: "wishlist", label: "Wishlist", to: "/search?tab=wishlist", icon: Heart, isLink: true, badge: wishlist.count });
     }
 
-    base.push({ key: "account", label: user ? "Account" : "Login", to: user ? "/profile" : "/login", icon: User, isLink: true });
+    base.push(
+      isAdminUser(user)
+        ? { key: "account", label: "Dashboard", to: "/admin", icon: LayoutDashboard, isLink: true }
+        : { key: "account", label: user ? "Account" : "Login", to: user ? "/profile" : "/login", icon: User, isLink: true }
+    );
     return base;
   }, [count, showWishlist, wishlist.count, user, notificationsUnread, onOpenNotifications]);
 
@@ -65,7 +70,7 @@ export default function MobileBottomNav({
     if (key === "notifications") return showNotifications;
     if (key === "cart") return pathname === "/cart";
     if (key === "wishlist") return pathname === "/search" && tab === "wishlist";
-    if (key === "account") return pathname === "/profile" || pathname === "/login";
+    if (key === "account") return pathname === "/profile" || pathname === "/login" || pathname.startsWith("/admin");
     return false;
   };
 

@@ -600,6 +600,7 @@ const translations = {
 
     // Admin Sidebar
     navDashboard: 'Dashboard',
+    adminProfile: 'Admin profile',
     navGroupSales: 'Sales',
     navGroupCatalog: 'Catalog',
     navGroupInventory: 'Inventory',
@@ -1277,6 +1278,7 @@ const translations = {
 
     // Admin Sidebar
     navDashboard: 'ផ្ទាំងគ្រប់គ្រង',
+    adminProfile: 'ប្រវត្តិរូប Admin',
     navGroupSales: 'លក់',
     navGroupCatalog: 'កាតាឡុក',
     navGroupInventory: 'ស្តុក',
