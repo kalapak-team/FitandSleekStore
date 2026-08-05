@@ -6,11 +6,13 @@ import Logo from "../Logo.jsx";
 import { useLanguage } from "../../lib/i18n.jsx";
 import { resolveFooterChromeStyle } from "../../lib/storefrontChrome.js";
 import { orderFooterSectionEntries } from "../../lib/footerSections.js";
+import { resolveInfoModalKey, useInfoPageModal } from "../../state/infoPageModal.jsx";
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
   const { settings } = useHomepageSettings();
   const { t } = useLanguage();
+  const { openInfoPageFromHref } = useInfoPageModal();
 
   // Get footer settings with fallback defaults
   const footerSettings = settings?.footer || {
@@ -142,30 +144,50 @@ export default function Footer() {
               {section.title || sectionKey.toUpperCase()}
             </div>
             <div className="grid gap-2 text-sm">
-              {(section.items || []).map((item, idx) => (
-                item?.label && item?.link ? (
+              {(section.items || []).map((item, idx) => {
+                if (!item?.label || !item?.link) return null;
+                const modalKey = resolveInfoModalKey(item.link);
+                const linkClass =
+                  "fs-chrome-link group flex items-center gap-1 w-fit bg-transparent border-0 p-0 cursor-pointer text-left font-inherit";
+                const chevron = (
+                  <svg
+                    className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                );
+                if (modalKey) {
+                  return (
+                    <button
+                      key={`${sectionKey}-${idx}`}
+                      type="button"
+                      className={linkClass}
+                      onClick={() => openInfoPageFromHref(item.link)}
+                    >
+                      {item.label}
+                      {chevron}
+                    </button>
+                  );
+                }
+                return (
                   <Link
                     key={`${sectionKey}-${idx}`}
-                    className="fs-chrome-link group flex items-center gap-1 w-fit"
+                    className={linkClass}
                     to={item.link}
                   >
                     {item.label}
-                    <svg
-                      className="w-3 h-3 transition-transform duration-300 group-hover:translate-x-1"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                    {chevron}
                   </Link>
-                ) : null
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
@@ -250,18 +272,20 @@ export default function Footer() {
           <div className="flex items-center gap-6">
             {footerSettings.privacy_enabled && (
               <>
-                <Link
-                  to="/terms"
-                  className="fs-chrome-link"
+                <button
+                  type="button"
+                  className="fs-chrome-link bg-transparent border-0 p-0 cursor-pointer font-inherit"
+                  onClick={() => openInfoPageFromHref("/terms")}
                 >
                   {t('terms')}
-                </Link>
-                <Link
-                  to="/privacy"
-                  className="fs-chrome-link"
+                </button>
+                <button
+                  type="button"
+                  className="fs-chrome-link bg-transparent border-0 p-0 cursor-pointer font-inherit"
+                  onClick={() => openInfoPageFromHref("/privacy")}
                 >
                   {t('privacy')}
-                </Link>
+                </button>
               </>
             )}
           </div>

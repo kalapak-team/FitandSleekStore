@@ -185,7 +185,9 @@ export default function HomePageManager() {
 
  const [collectionForm, setCollectionForm] = useState({
  name: "",
+ subtitle: "",
  gender: "women",
+ placement: "home",
  link: "",
  text_position: "overlay",
  is_active: true,
@@ -218,7 +220,9 @@ export default function HomePageManager() {
  setCollectionPreview("");
  setCollectionForm({
  name: "",
+ subtitle: "",
  gender: "women",
+ placement: "home",
  link: "",
  text_position: "overlay",
  is_active: true,
@@ -345,7 +349,9 @@ export default function HomePageManager() {
  try {
  const fd = new FormData();
  fd.append("name", collectionForm.name || "");
+ fd.append("subtitle", collectionForm.subtitle || "");
  fd.append("gender", collectionForm.gender || "women");
+ fd.append("placement", collectionForm.placement || "home");
  fd.append("text_position", collectionForm.text_position || "overlay");
  fd.append("link", collectionForm.link || "");
  fd.append("is_active", collectionForm.is_active ? "1" : "0");
@@ -443,7 +449,9 @@ export default function HomePageManager() {
  setCollectionPreview(resolveImageUrl(c.image_url || c.image || c.image_path || ""));
  setCollectionForm({
  name: c.name || "",
+ subtitle: c.subtitle || "",
  gender: c.gender || "women",
+ placement: c.placement || "home",
  link: c.link || "",
  text_position: c.text_position || "overlay",
  is_active: !!c.is_active,
@@ -1021,7 +1029,18 @@ Priority map: {BANNER_PRIORITY_SEGMENTS.map((segment) => `${segment}:${normalize
  onChange={(e) => setCollectionForm((s) => ({ ...s, name: e.target.value }))}
  required
  className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
- placeholder="Collection name"
+ placeholder="e.g. New Season, Women Essentials"
+ />
+ <p className="mt-1 text-xs text-slate-500">Shown on homepage tiles and the collection landing page hero.</p>
+ </div>
+
+ <div>
+ <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Subtitle (Khmer / second line)</label>
+ <input
+ value={collectionForm.subtitle}
+ onChange={(e) => setCollectionForm((s) => ({ ...s, subtitle: e.target.value }))}
+ className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
+ placeholder="e.g. សម្លៀកបំពាក់ស្ត្រី"
  />
  </div>
 
@@ -1039,13 +1058,27 @@ Priority map: {BANNER_PRIORITY_SEGMENTS.map((segment) => `${segment}:${normalize
  </div>
 
  <div>
- <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Link (optional)</label>
+ <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Homepage placement *</label>
+ <select
+ value={collectionForm.placement || "home"}
+ onChange={(e) => setCollectionForm((s) => ({ ...s, placement: e.target.value }))}
+ className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
+ >
+ <option value="home">Home grid (top — existing 2 tiles)</option>
+ <option value="explore">Explore (below Discounts — 3 tiles)</option>
+ </select>
+ <p className="mt-1 text-xs text-slate-500">Explore shows under Discounts as 1 large + 2 small tiles.</p>
+ </div>
+
+ <div>
+ <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">Custom link (optional)</label>
  <input
  value={collectionForm.link}
  onChange={(e) => setCollectionForm((s) => ({ ...s, link: e.target.value }))}
  className="w-full h-11 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-sm focus:border-[var(--admin-primary)] focus:ring-1 focus:ring-[rgba(var(--admin-primary-rgb),0.18)] outline-none bg-white dark:bg-slate-900/60 text-slate-900 dark:text-slate-100"
- placeholder="/search?parent_category=Women"
+ placeholder="Leave empty → /collections/{slug}"
  />
+ <p className="mt-1 text-xs text-slate-500">Empty = open Fit&amp;Sleek collection page (hero image + products by gender).</p>
  </div>
 
  <div>

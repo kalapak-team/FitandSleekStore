@@ -58,7 +58,9 @@ export default function CollectionTiles({ initialCollections, skipFetch = false 
   const [fetchFailed, setFetchFailed] = useState(false);
 
   const mapCollections = (items) =>
-    (items || []).map((c) => ({
+    (items || [])
+      .filter((c) => (c.placement || "home") === "home")
+      .map((c) => ({
       id: c.id,
       name: c.name,
       link: c.link || toParentCategoryLink(c.gender),

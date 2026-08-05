@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Hero from "../components/home/Hero.jsx";
 import BrandRow from "../components/home/BrandRow.jsx";
 import CollectionTiles from "../components/home/CollectionTiles.jsx";
+import ExploreCollectionTiles from "../components/home/ExploreCollectionTiles.jsx";
 import PromoBannerSlider from "../components/home/PromoBannerSlider.jsx";
 import Section from "../components/shop/Section.jsx";
 import { useHomepageSettings } from "../state/homepageSettings.jsx";
@@ -185,6 +186,12 @@ export default function Home() {
 
       {enabledSections.map((section, index) => (
         <div key={section.key} className={`animate-fade-in-up delay-${(index + 2) * 100}`}>
+          {section.key === "discounts" && (
+            <PromoBannerSlider
+              initialBanners={promoBanners}
+              skipFetch={Array.isArray(promoBanners) && promoBanners.length > 0}
+            />
+          )}
           <Section
             title={section.title}
             to={getSectionLink(section)}
@@ -193,10 +200,12 @@ export default function Home() {
             showDiscount={section.key === "discounts"}
           />
           {section.key === "discounts" && (
-            <PromoBannerSlider
-              initialBanners={promoBanners}
-              skipFetch={Array.isArray(promoBanners) && promoBanners.length > 0}
-            />
+            <div className="animate-fade-in-up">
+              <ExploreCollectionTiles
+                initialCollections={collectionItems}
+                skipFetch={Array.isArray(collectionItems) && collectionItems.length > 0}
+              />
+            </div>
           )}
         </div>
       ))}

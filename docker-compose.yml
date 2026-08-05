@@ -90,6 +90,9 @@ services:
       QDRANT_VECTOR_SIZE: "512"
       IMAGE_SEARCH_TIMEOUT: "120"
       # Same DB name/user/password as backend/.env; host/port are the Compose network (not 127.0.0.1:5433).
+      # Clear URL-based DSN so a host/Neon/Railway DATABASE_URL in backend/.env cannot bypass DB_HOST=db.
+      DATABASE_URL: ""
+      DB_URL: ""
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: "5432"

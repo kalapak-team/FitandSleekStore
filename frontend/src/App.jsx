@@ -23,6 +23,7 @@ import TermsPage from "./pages/Terms.jsx";
 import CookiesPage from "./pages/Cookies.jsx";
 import NotificationsPage from "./pages/Notifications.jsx";
 import BrandDetail from "./pages/BrandDetail.jsx";
+import CollectionDetail from "./pages/CollectionDetail.jsx";
 import CategoryPage from "./pages/CategoryPage.jsx";
 import CustomerProfile from "./pages/CustomerProfile.jsx";
 import AdminLayout from "./pages/admin/AdminLayout.jsx";
@@ -239,6 +240,7 @@ export default function App() {
           <Route path="/shop" element={<ShopToSearchRedirect />} />
           <Route path="/image-search" element={<ImageSearch />} />
           <Route path="/brands/:slug" element={<BrandDetail />} />
+          <Route path="/collections/:slug" element={<CollectionDetail />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/discounts" element={<Discounts />} />
           <Route path="/discounts/:categorySlug" element={<DiscountCategory />} />

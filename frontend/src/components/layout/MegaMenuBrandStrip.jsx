@@ -34,8 +34,6 @@ export default function MegaMenuBrandStrip({ items = [], onItemClick, emptyMessa
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const canScroll = items.length > 4;
-
   const updateArrows = () => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -75,43 +73,23 @@ export default function MegaMenuBrandStrip({ items = [], onItemClick, emptyMessa
   }
 
   return (
-    <div className="relative mt-1">
-      {canScroll && (
-        <>
-          <button
-            type="button"
-            onClick={() => scrollBy(-1)}
-            className={`fs-carousel-nav-btn absolute left-0 top-1/2 z-10 -translate-y-1/2 ${
-              canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"
-            }`}
-            aria-label="Scroll left"
-            aria-hidden={!canScrollLeft}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollBy(1)}
-            className={`fs-carousel-nav-btn absolute right-0 top-1/2 z-10 -translate-y-1/2 ${
-              canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"
-            }`}
-            aria-label="Scroll right"
-            aria-hidden={!canScrollRight}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </>
-      )}
+    <div className="fs-brand-row mt-1">
+      <button
+        type="button"
+        onClick={() => scrollBy(-1)}
+        className="fs-carousel-nav-btn fs-carousel-nav-btn--simple fs-brand-row__arrow"
+        aria-label="Scroll left"
+        disabled={!canScrollLeft}
+        aria-hidden={!canScrollLeft}
+      >
+        ‹
+      </button>
 
       <div
         ref={scrollerRef}
         data-hide-scrollbar
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        className="brand-scroll scrollbar-hide flex items-center gap-8 overflow-x-auto scroll-smooth px-8 pb-2 md:gap-10 md:px-10"
+        className="fs-brand-row__track brand-scroll scrollbar-hide scroll-smooth"
       >
         {items.map((item, i) => (
           <div key={`${item.to}-${item.label}-${i}`} className="shrink-0">
@@ -125,6 +103,17 @@ export default function MegaMenuBrandStrip({ items = [], onItemClick, emptyMessa
           </div>
         ))}
       </div>
+
+      <button
+        type="button"
+        onClick={() => scrollBy(1)}
+        className="fs-carousel-nav-btn fs-carousel-nav-btn--simple fs-brand-row__arrow"
+        aria-label="Scroll right"
+        disabled={!canScrollRight}
+        aria-hidden={!canScrollRight}
+      >
+        ›
+      </button>
     </div>
   );
 }

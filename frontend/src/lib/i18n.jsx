@@ -676,6 +676,8 @@ const translations = {
     sectionDegradedVisibleHint: "Couldn't load this section right now.",
     collectionsEmpty: "No collections to show yet.",
     collectionsEmptyHint: "Add collections in admin when your store is ready.",
+    exploreInspire: "Explore & Inspire",
+    exploreInspireHint: "Discover Fit & Sleek looks",
   },
   km: {
     // Header
@@ -1351,6 +1353,8 @@ const translations = {
     sectionDegradedVisibleHint: 'មិនអាចផ្ទុកផ្នែកនេះបានទេនៅពេលនេះ។',
     collectionsEmpty: 'មិនមានការប្រមូលផលបង្ហាញទេនៅពេលនេះ។',
     collectionsEmptyHint: 'បន្ថែមការប្រមូលផលក្នុងផ្ទាំងគ្រប់គ្រង នៅពេលហាងរបស់អ្នករួចរាល់។',
+    exploreInspire: 'Explore & Inspire',
+    exploreInspireHint: 'ស្វែងរក និងបំផុសគំនិត',
   }
 };
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import StorefrontPlpSortMenu from "./StorefrontPlpSortMenu.jsx";
 
 export default function ProductListingToolbar({
@@ -69,16 +69,16 @@ export default function ProductListingToolbar({
 
         {showBrandRail ? (
             <div className="fs-plp-toolbar__brands-wrap">
-              {canScrollLeft ? (
-                <button
-                  type="button"
-                  className="fs-carousel-nav-btn absolute left-0 top-1/2 z-10 -translate-y-1/2"
-                  onClick={() => scrollBrands(-1)}
-                  aria-label="Scroll brands left"
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="fs-plp-toolbar__scroll-btn fs-plp-toolbar__scroll-btn--left"
+                onClick={() => scrollBrands(-1)}
+                aria-label="Scroll brands left"
+                disabled={!canScrollLeft}
+                aria-hidden={!canScrollLeft}
+              >
+                ‹
+              </button>
 
               <div ref={scrollRef} className="fs-plp-toolbar__brands brand-scroll scrollbar-hide">
                 {facetsLoading && brandFacets.length === 0
@@ -103,16 +103,16 @@ export default function ProductListingToolbar({
                     })}
               </div>
 
-              {canScrollRight ? (
-                <button
-                  type="button"
-                  className="fs-carousel-nav-btn absolute right-0 top-1/2 z-10 -translate-y-1/2"
-                  onClick={() => scrollBrands(1)}
-                  aria-label="Scroll brands right"
-                >
-                  <ChevronRight className="h-4 w-4" aria-hidden />
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="fs-plp-toolbar__scroll-btn fs-plp-toolbar__scroll-btn--right"
+                onClick={() => scrollBrands(1)}
+                aria-label="Scroll brands right"
+                disabled={!canScrollRight}
+                aria-hidden={!canScrollRight}
+              >
+                ›
+              </button>
             </div>
           ) : null}
 

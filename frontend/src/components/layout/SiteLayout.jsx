@@ -11,6 +11,7 @@ import ApiDegradedBanner from "./ApiDegradedBanner.jsx";
 import api from "../../lib/api.js";
 import { useAuth } from "../../state/auth.jsx";
 import { wakeBackend } from "../../lib/wakeBackend.js";
+import { InfoPageModalProvider } from "../../state/infoPageModal.jsx";
 
 export default function SiteLayout() {
   const [cartOpen, setCartOpen] = useState(false);
@@ -101,40 +102,42 @@ export default function SiteLayout() {
   };
 
   return (
-    <div className="fs-site min-h-screen flex flex-col">
-      <Topbar />
-      <ApiDegradedBanner />
-      <Header
-        onOpenCart={() => setCartOpen(true)}
-        onOpenNotifications={() => setNotificationsOpen(true)}
-        notificationsUnread={notificationsUnread}
-      />
-      <main className="fs-main-content flex-1 fs-page-enter pb-28 sm:pb-24 lg:pb-0 text-base leading-relaxed text-slate-800 antialiased dark:text-slate-100">
-        <Outlet />
-      </main>
-      <Footer />
-      <MobileBottomNav
-        onOpenNotifications={() => setNotificationsOpen(true)}
-        notificationsUnread={notificationsUnread}
-        notifications={notifications}
-        notificationsLoading={notificationsLoading}
-        onMarkNotificationRead={markNotificationRead}
-        onMarkAllNotificationsRead={markAllNotificationsRead}
-        formatTime={formatNotifTime}
-      />
-      <SupportChatWidget />
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
-      <NotificationDrawer
-        open={notificationsOpen}
-        onClose={() => setNotificationsOpen(false)}
-        notifications={notifications}
-        loading={notificationsLoading}
-        unreadCount={notificationsUnread}
-        onMarkRead={markNotificationRead}
-        onMarkAllRead={markAllNotificationsRead}
-        user={user}
-        formatTime={formatNotifTime}
-      />
-    </div>
+    <InfoPageModalProvider>
+      <div className="fs-site min-h-screen flex flex-col">
+        <Topbar />
+        <ApiDegradedBanner />
+        <Header
+          onOpenCart={() => setCartOpen(true)}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          notificationsUnread={notificationsUnread}
+        />
+        <main className="fs-main-content flex-1 fs-page-enter pb-28 sm:pb-24 lg:pb-0 text-base leading-relaxed text-slate-800 antialiased dark:text-slate-100">
+          <Outlet />
+        </main>
+        <Footer />
+        <MobileBottomNav
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          notificationsUnread={notificationsUnread}
+          notifications={notifications}
+          notificationsLoading={notificationsLoading}
+          onMarkNotificationRead={markNotificationRead}
+          onMarkAllNotificationsRead={markAllNotificationsRead}
+          formatTime={formatNotifTime}
+        />
+        <SupportChatWidget />
+        <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
+        <NotificationDrawer
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          notifications={notifications}
+          loading={notificationsLoading}
+          unreadCount={notificationsUnread}
+          onMarkRead={markNotificationRead}
+          onMarkAllRead={markAllNotificationsRead}
+          user={user}
+          formatTime={formatNotifTime}
+        />
+      </div>
+    </InfoPageModalProvider>
   );
 }

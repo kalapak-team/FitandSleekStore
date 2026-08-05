@@ -19,3 +19,9 @@
 /storage/*.key
 /storage/pail
 /storage/credentials
+
+# DB trial dumps (do not commit)
+/storage/backups/
+*.dump
+
+.railway-public-url

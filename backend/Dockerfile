@@ -11,12 +11,22 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Neon is Postgres 18; ship a matching pg_dump from the official image (private libs).
+# lib path differs by arch (x86_64-linux-gnu vs aarch64-linux-gnu on Apple Silicon).
 RUN mkdir -p /opt/pg18/bin /opt/pg18/lib
 COPY --from=postgres:18-bookworm /usr/lib/postgresql/18/bin/pg_dump /opt/pg18/bin/pg_dump
 COPY --from=postgres:18-bookworm /usr/lib/postgresql/18/bin/pg_restore /opt/pg18/bin/pg_restore
-COPY --from=postgres:18-bookworm /usr/lib/x86_64-linux-gnu/libpq.so.5 /opt/pg18/lib/
-COPY --from=postgres:18-bookworm /usr/lib/x86_64-linux-gnu/libpq.so.5.* /opt/pg18/lib/
-RUN chmod +x /opt/pg18/bin/pg_dump /opt/pg18/bin/pg_restore
+RUN --mount=type=bind,from=postgres:18-bookworm,source=/usr/lib,target=/pg18lib \
+    set -eux; \
+    copied=0; \
+    for dir in x86_64-linux-gnu aarch64-linux-gnu; do \
+      if [ -e "/pg18lib/${dir}/libpq.so.5" ]; then \
+        cp -a "/pg18lib/${dir}"/libpq.so.5* /opt/pg18/lib/; \
+        copied=1; \
+        break; \
+      fi; \
+    done; \
+    test "$copied" = 1; \
+    chmod +x /opt/pg18/bin/pg_dump /opt/pg18/bin/pg_restore
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 

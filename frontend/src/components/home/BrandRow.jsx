@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../lib/api";
 import { resolveImageUrl } from "../../lib/images";
@@ -50,8 +50,6 @@ export default function BrandRow({ initialItems, skipFetch = false }) {
     load();
   }, [skipFetch, initialItems]);
 
-  const canScroll = items.length > 0;
-
   const scrollBy = (dir) => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -89,52 +87,29 @@ export default function BrandRow({ initialItems, skipFetch = false }) {
     };
   }, [items]);
 
-  const viewAllHref = useMemo(() => "/search", []);
-
   if (items.length === 0) {
     return null;
   }
 
   return (
     <section className="container-safe mt-8">
-      <div className="mt-4 relative">
-        {/* Left / Right Controls */}
-        {canScroll && (
-          <>
-            <button
-              type="button"
-              onClick={() => scrollBy(-1)}
-              className={`fs-carousel-nav-btn absolute left-2 top-1/2 z-10 -translate-y-1/2 transition-opacity duration-200 ease-out ${
-                canScrollLeft ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
-              }`}
-              aria-label="Scroll left"
-              aria-hidden={!canScrollLeft}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollBy(1)}
-              className={`fs-carousel-nav-btn absolute right-2 top-1/2 z-10 -translate-y-1/2 transition-opacity duration-200 ease-out ${
-                canScrollRight ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
-              }`}
-              aria-label="Scroll right"
-              aria-hidden={!canScrollRight}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </>
-        )}
+      <div className="fs-brand-row mt-4">
+        <button
+          type="button"
+          onClick={() => scrollBy(-1)}
+          className="fs-carousel-nav-btn fs-carousel-nav-btn--simple fs-brand-row__arrow"
+          aria-label="Scroll left"
+          disabled={!canScrollLeft}
+          aria-hidden={!canScrollLeft}
+        >
+          ‹
+        </button>
 
         <div
           ref={scrollerRef}
           data-hide-scrollbar
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          className="flex items-center gap-10 overflow-x-auto pb-2 px-10 md:px-12 brand-scroll scrollbar-hide scroll-smooth"
+          className="fs-brand-row__track brand-scroll scrollbar-hide scroll-smooth"
         >
           {items.map((b) => (
             <div key={b.id} className="shrink-0">
@@ -147,6 +122,17 @@ export default function BrandRow({ initialItems, skipFetch = false }) {
             </div>
           ))}
         </div>
+
+        <button
+          type="button"
+          onClick={() => scrollBy(1)}
+          className="fs-carousel-nav-btn fs-carousel-nav-btn--simple fs-brand-row__arrow"
+          aria-label="Scroll right"
+          disabled={!canScrollRight}
+          aria-hidden={!canScrollRight}
+        >
+          ›
+        </button>
       </div>
     </section>
   );
