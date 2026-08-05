@@ -18,6 +18,8 @@ export default function Profile() {
  const { user: sessionUser, can, permissionsReady } = useAdminPermissions();
  const canViewProfile = can("profile", "view");
  const canEditProfile = can("profile", "edit");
+ const canViewTelegram = can("telegram", "view");
+ const canManageTelegram = can("telegram", "edit");
  const { primaryColor, mode } = useTheme();
  const accentColor = primaryColor;
  const [form, setForm] = useState({
@@ -485,12 +487,12 @@ export default function Profile() {
  </form>
  ) : null}
  {canEditProfile ? <TwoFactorSettings variant="admin" accentColor={accentColor} /> : null}
- {user?.id && (user?.role === "admin" || user?.role === "superadmin") ? (
+ {user?.id && (user?.role === "admin" || user?.role === "superadmin") && canViewTelegram ? (
  <div className="mt-6 max-w-2xl">
  <TelegramLinkPanel
  userId={user.id}
  telegram={user?.telegram}
- canManage
+ canManage={canManageTelegram}
  showSuperAdminHint={user?.role === "superadmin"}
  />
  </div>

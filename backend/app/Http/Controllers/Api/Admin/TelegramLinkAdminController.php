@@ -26,7 +26,7 @@ class TelegramLinkAdminController extends BaseAdminController
 
     public function status(Request $request, User $user): JsonResponse
     {
-        if (! $this->canManageTelegramLink($request->user(), $user)) {
+        if (! $this->canSeeTelegramLink($request->user(), $user)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -179,7 +179,17 @@ class TelegramLinkAdminController extends BaseAdminController
         ]);
     }
 
+    private function canSeeTelegramLink(?User $viewer, User $target): bool
+    {
+        return $this->canReachTelegramLink($viewer, $target, 'view');
+    }
+
     private function canManageTelegramLink(?User $viewer, User $target): bool
+    {
+        return $this->canReachTelegramLink($viewer, $target, 'edit');
+    }
+
+    private function canReachTelegramLink(?User $viewer, User $target, string $action): bool
     {
         if (! $viewer) {
             return false;
@@ -190,12 +200,13 @@ class TelegramLinkAdminController extends BaseAdminController
             return false;
         }
 
-        // Own My Profile: staff can link/unlink their own Telegram.
-        if ((int) $viewer->id === (int) $target->id) {
+        // Superadmin manages every staff link, and can revoke the telegram toggle at any time.
+        if ($viewer->isSuperAdmin()) {
             return true;
         }
 
-        // Superadmin can manage other admins' links.
-        return $viewer->isSuperAdmin();
+        // Own My Profile, as long as Superadmin left the telegram permission on.
+        return (int) $viewer->id === (int) $target->id
+            && $viewer->hasAdminPermission('telegram', $action);
     }
 }

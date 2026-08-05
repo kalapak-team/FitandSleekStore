@@ -185,6 +185,16 @@ class AdminPermissionService
                 || $this->has($user, 'stock', 'edit');
         }
 
+        // Staff Telegram link: reading status is view, generating a code or unlinking is edit.
+        if (
+            Str::is('admin/users/*/telegram-link', $relativePath)
+            || Str::is('admin/users/*/telegram-link-code', $relativePath)
+        ) {
+            return $request->isMethod('GET')
+                ? $this->has($user, 'telegram', 'view')
+                : $this->has($user, 'telegram', 'edit');
+        }
+
         // Stock Received reads PO detail when expanding rows or opening the drawer.
         if (
             $request->isMethod('GET')

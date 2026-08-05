@@ -48,6 +48,7 @@ return [
                 'contacts' => ['label' => 'Contacts'],
                 'messages' => ['label' => 'Messages'],
                 'notifications' => ['label' => 'Notifications', 'actions' => ['view', 'edit', 'delete']],
+                'telegram' => ['label' => 'Telegram Bot Link', 'actions' => ['view', 'edit']],
             ],
         ],
         'delivery' => [
@@ -129,6 +130,8 @@ return [
         'notifications.view' => true,
         'notifications.edit' => true,
         'notifications.delete' => true,
+        'telegram.view' => true,
+        'telegram.edit' => true,
         'shipments.view' => true,
         'shipments.create' => true,
         'shipments.edit' => true,

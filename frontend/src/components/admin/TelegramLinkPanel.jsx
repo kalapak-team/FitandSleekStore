@@ -96,8 +96,9 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
           </p>
           {showSuperAdminHint ? (
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Superadmin can unlink this Telegram anytime, or turn off <span className="font-semibold">orders → edit</span> in
-              Admin access to block order buttons immediately (even if still linked).
+              Superadmin can unlink this Telegram anytime, turn off{" "}
+              <span className="font-semibold">Telegram Bot Link → edit</span> to stop an admin from re-linking, or turn
+              off <span className="font-semibold">orders → edit</span> to block order buttons even while linked.
             </p>
           ) : null}
         </div>
@@ -172,7 +173,10 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">You can manage your own link on My Profile. Superadmin can manage other staff links.</p>
+        <p className="text-sm text-slate-500">
+          Linking is turned off for this account (Operations → Telegram Bot Link). Ask a Superadmin to enable it, or
+          manage other staff links from their profile as Superadmin.
+        </p>
       )}
     </div>
   );

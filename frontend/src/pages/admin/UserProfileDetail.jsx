@@ -207,11 +207,11 @@ export default function UserProfileDetail() {
   const isAdminTarget = role === "admin" || role === "superadmin";
   const isDriverTarget = role === "driver";
   const isCustomerTarget = role === "customer" || role === "driver";
-  const showTelegramLink = isAdminTarget;
-  // Superadmin can manage any staff link; admins can manage their own from this page / My Profile.
-  const canManageTelegram =
-    isSuperAdmin ||
-    (Boolean(sessionUser?.id) && Boolean(targetUser?.id) && Number(sessionUser.id) === Number(targetUser.id));
+  // Superadmin can manage any staff link; admins manage their own only while telegram → edit stays on.
+  const isOwnAccount =
+    Boolean(sessionUser?.id) && Boolean(targetUser?.id) && Number(sessionUser.id) === Number(targetUser.id);
+  const showTelegramLink = isAdminTarget && (isSuperAdmin || (isOwnAccount && can("telegram", "view")));
+  const canManageTelegram = isSuperAdmin || (isOwnAccount && can("telegram", "edit"));
 
   const availableTabs = useMemo(() => {
     const tabs = ["overview"];
