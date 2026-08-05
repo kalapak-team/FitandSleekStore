@@ -190,6 +190,12 @@ class TelegramLinkAdminController extends BaseAdminController
             return false;
         }
 
+        // Own My Profile: staff can link/unlink their own Telegram.
+        if ((int) $viewer->id === (int) $target->id) {
+            return true;
+        }
+
+        // Superadmin can manage other admins' links.
         return $viewer->isSuperAdmin();
     }
 }

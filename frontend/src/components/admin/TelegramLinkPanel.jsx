@@ -4,8 +4,9 @@ import api from "../../lib/api";
 
 /**
  * Generate / revoke one-time Telegram deep-link codes for staff & drivers.
+ * @param {boolean} [showSuperAdminHint] — show that Superadmin can revoke anytime
  */
-export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdated }) {
+export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdated, showSuperAdminHint = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [codePayload, setCodePayload] = useState(null);
@@ -15,6 +16,11 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
   useEffect(() => {
     setStatus(telegram || null);
   }, [telegram]);
+
+  useEffect(() => {
+    if (!userId) return;
+    refresh();
+  }, [userId, refresh]);
 
   const refresh = useCallback(async () => {
     if (!userId) return;
@@ -82,8 +88,15 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">Telegram bot link</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            One-time code (~10 min) for shop staff. External couriers do not need an account — unlock the order job QR after pickup confirm.
+            Link your personal Telegram so you can press order buttons in the admin group. One-time code (~10 min).
+            External couriers do not need an account — unlock the order job QR after pickup confirm.
           </p>
+          {showSuperAdminHint ? (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Superadmin can unlink this Telegram anytime, or turn off <span className="font-semibold">orders → edit</span> in
+              Admin access to block order buttons immediately (even if still linked).
+            </p>
+          ) : null}
         </div>
         <span
           className={
@@ -156,7 +169,7 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">Only Superadmin (or admin for drivers) can manage this link.</p>
+        <p className="text-sm text-slate-500">You can manage your own link on My Profile. Superadmin can manage other staff links.</p>
       )}
     </div>
   );

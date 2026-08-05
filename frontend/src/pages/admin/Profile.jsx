@@ -9,6 +9,7 @@ import { AdminContentSkeleton, AdminDashboardLoader } from "@/components/admin/A
 import AdminSaveToast, { AdminFormErrorBanner, flashAdminMessage } from "../../components/admin/AdminFormToast.jsx";
 import TrustedDeviceSessionsList from "../../components/security/TrustedDeviceSessionsList.jsx";
 import TwoFactorSettings from "../../components/security/TwoFactorSettings.jsx";
+import TelegramLinkPanel from "../../components/admin/TelegramLinkPanel.jsx";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 
@@ -484,6 +485,16 @@ export default function Profile() {
  </form>
  ) : null}
  {canEditProfile ? <TwoFactorSettings variant="admin" accentColor={accentColor} /> : null}
+ {user?.id && (user?.role === "admin" || user?.role === "superadmin") ? (
+ <div className="mt-6 max-w-2xl">
+ <TelegramLinkPanel
+ userId={user.id}
+ telegram={user?.telegram}
+ canManage
+ showSuperAdminHint={user?.role === "superadmin"}
+ />
+ </div>
+ ) : null}
  </div>
  )}
 

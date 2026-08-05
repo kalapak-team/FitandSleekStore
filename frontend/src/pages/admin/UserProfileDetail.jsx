@@ -208,7 +208,10 @@ export default function UserProfileDetail() {
   const isDriverTarget = role === "driver";
   const isCustomerTarget = role === "customer" || role === "driver";
   const showTelegramLink = isAdminTarget;
-  const canManageTelegram = isSuperAdmin;
+  // Superadmin can manage any staff link; admins can manage their own from this page / My Profile.
+  const canManageTelegram =
+    isSuperAdmin ||
+    (Boolean(sessionUser?.id) && Boolean(targetUser?.id) && Number(sessionUser.id) === Number(targetUser.id));
 
   const availableTabs = useMemo(() => {
     const tabs = ["overview"];
@@ -540,6 +543,7 @@ export default function UserProfileDetail() {
                     userId={targetUser?.id}
                     telegram={targetUser?.telegram}
                     canManage={canManageTelegram}
+                    showSuperAdminHint={isSuperAdmin}
                     onUpdated={(next) => {
                       setProfileData((prev) =>
                         prev
