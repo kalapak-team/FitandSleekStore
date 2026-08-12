@@ -30,7 +30,7 @@ class AdminAiChatController extends Controller
         if (! $this->chatAi->isConfigured()) {
             return response()->json([
                 'error' => 'ai_not_configured',
-                'message' => 'Admin AI is not configured. Set HF_CHAT_BASE_URL in your backend .env (Hugging Face Space).',
+                'message' => 'Admin AI is not configured. Set CHATBOT_HF_URL in your backend .env (Hugging Face Space).',
             ], 503);
         }
 

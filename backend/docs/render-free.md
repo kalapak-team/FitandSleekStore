@@ -32,7 +32,7 @@ curl -sS "https://fitandsleek.online/api/health"
 | `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY` | Or `AWS_*` aliases |
 | `FITANDSLEEK_VECTOR_URL` | `https://kalapak-fitandsleek-vector.hf.space` (image scan search) |
 | `FITANDSLEEK_VECTOR_API_KEY` | `fsv_…` from the Vector Space (or `QDRANT_API_KEY`) |
-| `HF_CHAT_BASE_URL` / `HF_CHAT_SPACE_ID` | Own Chat AI Space |
+| `CHATBOT_HF_URL` (+ optional `CHATBOT_HF_*`) | Own Chat AI Space |
 
 Set **`APP_URL`** to your Render service URL (no trailing slash), e.g. `https://fitandsleek-official.onrender.com`.
 

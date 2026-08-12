@@ -150,12 +150,20 @@ return [
     | Chat AI — trained Gradio Space
     | https://huggingface.co/spaces/Kalapak/fitandsleekAIchat
     | Docs: docs/huggingface-chat-space.md
+    |
+    | Prefer CHATBOT_* keys. HF_CHAT_* / HF_TOKEN remain as fallbacks.
     */
     'hf_chat' => [
-        'base_url' => env('HF_CHAT_BASE_URL', 'https://kalapak-fitandsleekaichat.hf.space'),
+        'provider' => env('CHATBOT_PROVIDER', 'huggingface'),
+        'base_url' => env('CHATBOT_HF_URL', env('HF_CHAT_BASE_URL', 'https://kalapak-fitandsleekaichat.hf.space')),
         'space_id' => env('HF_CHAT_SPACE_ID', 'Kalapak/fitandsleekAIchat'),
-        'token' => env('HF_TOKEN', env('HUGGING_FACE_HUB_TOKEN')),
-        'timeout' => (int) env('HF_CHAT_TIMEOUT', 180),
+        'token' => env('CHATBOT_HF_TOKEN', env('HF_TOKEN', env('HUGGING_FACE_HUB_TOKEN'))),
+        'protocol' => strtolower((string) env('CHATBOT_HF_PROTOCOL', 'call')),
+        'fn_index' => (int) env('CHATBOT_HF_FN_INDEX', 7),
+        'api_name' => trim((string) env('CHATBOT_HF_API_NAME', 'chat'), '/'),
+        'send_history' => filter_var(env('CHATBOT_HF_SEND_HISTORY', true), FILTER_VALIDATE_BOOLEAN),
+        'history_turns' => max(0, (int) env('CHATBOT_HF_HISTORY_TURNS', 6)),
+        'timeout' => (int) env('CHATBOT_HF_TIMEOUT', env('HF_CHAT_TIMEOUT', 120)),
     ],
 
 ];

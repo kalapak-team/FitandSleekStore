@@ -19,11 +19,18 @@ Hugging Face Gradio Space (trained Fitandsleek model + FAQ/RAG)
 ## Env
 
 ```env
-HF_CHAT_BASE_URL=https://kalapak-fitandsleekaichat.hf.space
+CHATBOT_PROVIDER=huggingface
+CHATBOT_HF_URL=https://kalapak-fitandsleekaichat.hf.space
+CHATBOT_HF_TOKEN=
+CHATBOT_HF_PROTOCOL=call
+CHATBOT_HF_FN_INDEX=7
+CHATBOT_HF_SEND_HISTORY=true
+CHATBOT_HF_TIMEOUT=120
+CHATBOT_HF_HISTORY_TURNS=6
 HF_CHAT_SPACE_ID=Kalapak/fitandsleekAIchat
-HF_CHAT_TIMEOUT=180
-# HF_TOKEN=   # only if Space is private
 ```
+
+Gradio `chat` expects `data=[message, history, product_focus]`. With `CHATBOT_HF_PROTOCOL=call`, Laravel posts to `/gradio_api/call/chat` (UI dependency `fn_index=7`).
 
 Set the same on **Render** Environment. Remove old keys if present:
 
