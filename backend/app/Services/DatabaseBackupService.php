@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\ConfigurationUrlParser;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
@@ -116,7 +117,9 @@ class DatabaseBackupService
 
     private function dumpDatabase(string $sqlPath): void
     {
-        $db = config('database.connections.pgsql');
+        // Eloquent parses DATABASE_URL when connecting; pg_dump must do the same.
+        // Raw config keeps DB_HOST=127.0.0.1 even when only DATABASE_URL is set (Railway).
+        $db = $this->resolvedPgsqlConfig();
         $host = (string) ($db['host'] ?? '');
         $port = (string) ($db['port'] ?? '5432');
         $database = (string) ($db['database'] ?? '');
@@ -298,6 +301,19 @@ class DatabaseBackupService
         } catch (Throwable $e) {
             Log::warning('Backup prune failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolvedPgsqlConfig(): array
+    {
+        $config = config('database.connections.pgsql');
+        if (! is_array($config)) {
+            return [];
+        }
+
+        return (new ConfigurationUrlParser)->parseConfiguration($config);
     }
 
     private function resolveBinary(string $name): string
