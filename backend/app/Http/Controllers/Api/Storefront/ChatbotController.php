@@ -53,7 +53,7 @@ class ChatbotController extends Controller
 
         if (! $this->chatAi->isConfigured()) {
             return response()->json([
-                'error' => 'AI chatbot is not configured. Set HF_CHAT_BASE_URL in backend .env.',
+                'error' => 'AI chatbot is not configured. Set CHATBOT_HF_URL in backend .env.',
             ], 503);
         }
 

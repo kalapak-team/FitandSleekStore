@@ -108,10 +108,15 @@ RIELPAY_DEEPLINK_CALLBACK=fitandsleek://payment/callback
 https://huggingface.co/spaces/Kalapak/fitandsleekAIchat
 
 ```env
-HF_CHAT_BASE_URL=https://kalapak-fitandsleekaichat.hf.space
+CHATBOT_PROVIDER=huggingface
+CHATBOT_HF_URL=https://kalapak-fitandsleekaichat.hf.space
+CHATBOT_HF_TOKEN=
+CHATBOT_HF_PROTOCOL=call
+CHATBOT_HF_FN_INDEX=7
+CHATBOT_HF_SEND_HISTORY=true
+CHATBOT_HF_TIMEOUT=120
+CHATBOT_HF_HISTORY_TURNS=6
 HF_CHAT_SPACE_ID=Kalapak/fitandsleekAIchat
-HF_CHAT_TIMEOUT=180
-# HF_TOKEN=   # only if the Space is private
 ```
 
 ### Image scan search — Vector Space

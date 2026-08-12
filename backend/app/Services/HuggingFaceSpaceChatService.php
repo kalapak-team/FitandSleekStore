@@ -14,14 +14,18 @@ use RuntimeException;
  * Space: https://huggingface.co/spaces/Kalapak/fitandsleekAIchat
  * Host:  https://kalapak-fitandsleekaichat.hf.space
  *
- * Gradio 5 API: POST /gradio_api/call/chat  data=["message", null]
- * then GET /gradio_api/call/chat/{event_id} (SSE) until event: complete.
+ * Gradio ChatInterface (fn chat / api_name=chat, UI fn_index=7):
+ *   data = [message, history, product_focus]
+ * Protocol "call": POST /gradio_api/call/chat then GET SSE until event: complete.
+ * Protocol "queue": POST /gradio_api/queue/join (fn_index) then GET /queue/data.
  */
 class HuggingFaceSpaceChatService
 {
     public function isConfigured(): bool
     {
-        return $this->baseUrl() !== '';
+        $provider = strtolower(trim((string) config('services.hf_chat.provider', 'huggingface')));
+
+        return $provider === 'huggingface' && $this->baseUrl() !== '';
     }
 
     public function baseUrl(): string
@@ -31,12 +35,41 @@ class HuggingFaceSpaceChatService
 
     public function timeout(): int
     {
-        return max(30, (int) config('services.hf_chat.timeout', 180));
+        return max(30, (int) config('services.hf_chat.timeout', 120));
     }
 
     public function spaceId(): string
     {
         return trim((string) config('services.hf_chat.space_id', 'Kalapak/fitandsleekAIchat'));
+    }
+
+    public function protocol(): string
+    {
+        $protocol = strtolower(trim((string) config('services.hf_chat.protocol', 'call')));
+
+        return in_array($protocol, ['call', 'queue'], true) ? $protocol : 'call';
+    }
+
+    public function fnIndex(): int
+    {
+        return max(0, (int) config('services.hf_chat.fn_index', 7));
+    }
+
+    public function apiName(): string
+    {
+        $name = trim((string) config('services.hf_chat.api_name', 'chat'), '/');
+
+        return $name !== '' ? $name : 'chat';
+    }
+
+    public function sendHistory(): bool
+    {
+        return (bool) config('services.hf_chat.send_history', true);
+    }
+
+    public function historyTurns(): int
+    {
+        return max(0, (int) config('services.hf_chat.history_turns', 6));
     }
 
     /**
@@ -47,17 +80,19 @@ class HuggingFaceSpaceChatService
     {
         if (! $this->isConfigured()) {
             throw new RuntimeException(
-                'Hugging Face chat Space is not configured. Set HF_CHAT_BASE_URL in backend .env.'
+                'Hugging Face chat Space is not configured. Set CHATBOT_HF_URL (or HF_CHAT_BASE_URL) in backend .env.'
             );
         }
 
-        $prompt = $this->messagesToPrompt($messages);
-        if ($prompt === '') {
+        [$message, $history] = $this->buildGradioPayload($messages);
+        if ($message === '') {
             throw new RuntimeException('Empty chat message.');
         }
 
-        $eventId = $this->enqueue($prompt);
-        $payload = $this->waitForResult($eventId);
+        $payload = $this->protocol() === 'queue'
+            ? $this->chatViaQueue($message, $history)
+            : $this->chatViaCall($message, $history);
+
         $reply = $this->extractReply($payload);
 
         if ($reply === '') {
@@ -79,22 +114,29 @@ class HuggingFaceSpaceChatService
         }
 
         try {
-            $response = Http::timeout(15)->get($this->baseUrl().'/gradio_api/info');
+            $request = Http::timeout(15);
+            $token = $this->token();
+            if ($token !== '') {
+                $request = $request->withToken($token);
+            }
+
+            $response = $request->get($this->baseUrl().'/gradio_api/info');
 
             return $response->successful()
-                && is_array($response->json('named_endpoints./chat'));
+                && is_array($response->json('named_endpoints./'.$this->apiName()));
         } catch (\Throwable) {
             return false;
         }
     }
 
     /**
-     * Flatten OpenAI-style messages into one Gradio ChatInterface prompt.
-     * The Space API only accepts a single message string (+ unused history slot).
+     * Build Gradio ChatInterface inputs: [message, history, product_focus].
+     * System prompts are prepended to the current user message.
      *
      * @param  list<array{role: string, content: string}>  $messages
+     * @return array{0: string, 1: list<array{role: string, content: string}>}
      */
-    private function messagesToPrompt(array $messages): string
+    private function buildGradioPayload(array $messages): array
     {
         $systemParts = [];
         $turns = [];
@@ -111,53 +153,64 @@ class HuggingFaceSpaceChatService
                 continue;
             }
 
-            $label = $role === 'assistant' ? 'Assistant' : 'User';
-            $turns[] = $label.': '.$content;
+            $turns[] = [
+                'role' => $role === 'assistant' ? 'assistant' : 'user',
+                'content' => $content,
+            ];
         }
 
         if ($turns === []) {
-            return '';
+            return ['', []];
         }
 
-        $prompt = '';
+        $last = array_pop($turns);
+        $userMessage = $last['role'] === 'user' ? $last['content'] : '';
+        if ($userMessage === '') {
+            return ['', []];
+        }
+
         if ($systemParts !== []) {
-            $prompt .= "[Context — follow strictly]\n"
+            $userMessage = "[Context — follow strictly]\n"
                 .implode("\n\n", $systemParts)
-                ."\n\n";
+                ."\n\n[Question]\n"
+                .$userMessage;
         }
 
-        // Single turn: send only the user text (Space already has FAQ/RAG/store logic).
-        if (count($turns) === 1 && str_starts_with($turns[0], 'User: ')) {
-            $userOnly = substr($turns[0], strlen('User: '));
-
-            return $prompt !== ''
-                ? $prompt."[Question]\n".$userOnly
-                : $userOnly;
+        $history = [];
+        if ($this->sendHistory() && $turns !== []) {
+            $maxMessages = $this->historyTurns() * 2;
+            if ($maxMessages > 0 && count($turns) > $maxMessages) {
+                $turns = array_slice($turns, -$maxMessages);
+            }
+            $history = array_values($turns);
         }
 
-        $prompt .= "[Conversation]\n".implode("\n", $turns)."\nAssistant:";
-
-        return $prompt;
+        return [$userMessage, $history];
     }
 
-    private function enqueue(string $message): string
+    /**
+     * @param  list<array{role: string, content: string}>  $history
+     * @return list<mixed>|array<string, mixed>
+     */
+    private function chatViaCall(string $message, array $history): array
     {
-        $token = trim((string) config('services.hf_chat.token', ''));
+        $eventId = $this->enqueueCall($message, $history);
 
+        return $this->waitForCallResult($eventId);
+    }
+
+    /**
+     * @param  list<array{role: string, content: string}>  $history
+     */
+    private function enqueueCall(string $message, array $history): string
+    {
         try {
-            $request = Http::timeout(30)
+            $response = $this->http(30)
                 ->acceptJson()
-                ->asJson();
-
-            if ($token !== '') {
-                $request = $request->withToken($token);
-            }
-
-            // Space `/chat` currently accepts a single `message` string and returns Json
-            // (see GET /gradio_api/info). Extra Gradio history slots cause silent errors.
-            $response = $request
-                ->post($this->baseUrl().'/gradio_api/call/chat', [
-                    'data' => [$message],
+                ->asJson()
+                ->post($this->baseUrl().'/gradio_api/call/'.$this->apiName(), [
+                    // Space chat(message, history, product_focus=None) — omit history/focus and Gradio errors.
+                    'data' => [$message, $history, null],
                 ])
                 ->throw();
         } catch (ConnectionException $e) {
@@ -185,22 +238,16 @@ class HuggingFaceSpaceChatService
     /**
      * @return list<mixed>|array<string, mixed>
      */
-    private function waitForResult(string $eventId): array
+    private function waitForCallResult(string $eventId): array
     {
-        $token = trim((string) config('services.hf_chat.token', ''));
         $deadline = microtime(true) + $this->timeout();
-        $url = $this->baseUrl().'/gradio_api/call/chat/'.$eventId;
+        $url = $this->baseUrl().'/gradio_api/call/'.$this->apiName().'/'.$eventId;
 
         while (microtime(true) < $deadline) {
             try {
-                $request = Http::timeout(min(60, max(10, (int) ($deadline - microtime(true)))))
-                    ->withHeaders(['Accept' => 'text/event-stream']);
-
-                if ($token !== '') {
-                    $request = $request->withToken($token);
-                }
-
-                $response = $request->get($url);
+                $response = $this->http(min(60, max(10, (int) ($deadline - microtime(true)))))
+                    ->withHeaders(['Accept' => 'text/event-stream'])
+                    ->get($url);
             } catch (ConnectionException $e) {
                 throw new RuntimeException(
                     'Lost connection while waiting for Hugging Face Space reply.',
@@ -247,6 +294,117 @@ class HuggingFaceSpaceChatService
     }
 
     /**
+     * @param  list<array{role: string, content: string}>  $history
+     * @return list<mixed>|array<string, mixed>
+     */
+    private function chatViaQueue(string $message, array $history): array
+    {
+        $sessionHash = Str::lower(Str::random(12));
+
+        try {
+            $response = $this->http(30)
+                ->acceptJson()
+                ->asJson()
+                ->post($this->baseUrl().'/gradio_api/queue/join', [
+                    'data' => [$message, $history, null],
+                    'fn_index' => $this->fnIndex(),
+                    'session_hash' => $sessionHash,
+                ])
+                ->throw();
+        } catch (ConnectionException $e) {
+            throw new RuntimeException(
+                'Hugging Face Space is not reachable at '.$this->baseUrl()
+                .'. Check that the Space is Running: https://huggingface.co/spaces/'.$this->spaceId(),
+                previous: $e,
+            );
+        } catch (RequestException $e) {
+            $body = (string) ($e->response?->body() ?? $e->getMessage());
+            throw new RuntimeException(
+                'Hugging Face Space queue join error: '.Str::limit($body, 240),
+                previous: $e,
+            );
+        }
+
+        if (trim((string) ($response->json('event_id') ?? '')) === '') {
+            throw new RuntimeException('Hugging Face Space queue did not return an event_id.');
+        }
+
+        return $this->waitForQueueResult($sessionHash);
+    }
+
+    /**
+     * @return list<mixed>|array<string, mixed>
+     */
+    private function waitForQueueResult(string $sessionHash): array
+    {
+        $deadline = microtime(true) + $this->timeout();
+        $url = $this->baseUrl().'/gradio_api/queue/data?session_hash='.urlencode($sessionHash);
+
+        while (microtime(true) < $deadline) {
+            try {
+                $response = $this->http(min(60, max(10, (int) ($deadline - microtime(true)))))
+                    ->withHeaders(['Accept' => 'text/event-stream'])
+                    ->get($url);
+            } catch (ConnectionException $e) {
+                throw new RuntimeException(
+                    'Lost connection while waiting for Hugging Face Space reply.',
+                    previous: $e,
+                );
+            }
+
+            if ($response->failed()) {
+                throw new RuntimeException(
+                    'Hugging Face Space queue poll failed HTTP '.$response->status()
+                );
+            }
+
+            foreach ($this->parseQueueSseEvents($response->body()) as $event) {
+                $msg = (string) ($event['msg'] ?? '');
+                if ($msg === 'process_completed') {
+                    if (($event['success'] ?? true) === false) {
+                        throw new RuntimeException('Hugging Face Space queue reported failure.');
+                    }
+                    $data = $event['output']['data'] ?? null;
+                    if (is_array($data)) {
+                        return $data;
+                    }
+
+                    throw new RuntimeException('Hugging Face Space queue completed with an unexpected payload.');
+                }
+
+                if ($msg === 'process_failed' || $msg === 'unexpected_error') {
+                    throw new RuntimeException(
+                        'Hugging Face Space queue error. Open the Space UI/logs and retry: '
+                        .'https://huggingface.co/spaces/'.$this->spaceId()
+                    );
+                }
+            }
+
+            usleep(400_000);
+        }
+
+        throw new RuntimeException(
+            'Hugging Face Space timed out after '.$this->timeout().'s. The Space may be cold-starting — retry in a minute.'
+        );
+    }
+
+    private function token(): string
+    {
+        return trim((string) config('services.hf_chat.token', ''));
+    }
+
+    private function http(int $timeout)
+    {
+        $request = Http::timeout($timeout);
+        $token = $this->token();
+        if ($token !== '') {
+            $request = $request->withToken($token);
+        }
+
+        return $request;
+    }
+
+    /**
      * @return array{event?: string, data?: mixed}
      */
     private function parseSse(string $body): array
@@ -282,11 +440,48 @@ class HuggingFaceSpaceChatService
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function parseQueueSseEvents(string $body): array
+    {
+        $events = [];
+        $dataLines = [];
+
+        $flush = function () use (&$events, &$dataLines): void {
+            if ($dataLines === []) {
+                return;
+            }
+            $raw = trim(implode("\n", $dataLines));
+            $dataLines = [];
+            if ($raw === '' || strtolower($raw) === 'null') {
+                return;
+            }
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $events[] = $decoded;
+            }
+        };
+
+        foreach (preg_split("/\r\n|\n|\r/", $body) ?: [] as $line) {
+            if ($line === '') {
+                $flush();
+                continue;
+            }
+            if (str_starts_with($line, 'data:')) {
+                $dataLines[] = substr($line, strlen('data:'));
+            }
+        }
+        $flush();
+
+        return $events;
+    }
+
+    /**
      * @param  list<mixed>|array<string, mixed>  $payload
      */
     private function extractReply(array $payload): string
     {
-        // Current Space returns Json; older ChatInterface returned [reply, history].
+        // Current Space returns [reply, history|null, focus|null]; older APIs returned Json/object.
         if (array_is_list($payload) && isset($payload[0])) {
             $first = $payload[0];
             if (is_string($first)) {
