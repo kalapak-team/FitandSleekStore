@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\ConfigurationUrlParser;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
@@ -17,6 +19,7 @@ class DatabaseBackupService
     /**
      * @return array{
      *     ok: bool,
+     *     skipped?: bool,
      *     message: string,
      *     filename?: string,
      *     bytes?: int,
@@ -24,7 +27,7 @@ class DatabaseBackupService
      *     telegram_sent?: bool
      * }
      */
-    public function run(): array
+    public function run(bool $force = false): array
     {
         if (! config('backup.enabled')) {
             return ['ok' => false, 'message' => 'Backups are disabled (BACKUP_ENABLED=false).'];
@@ -42,6 +45,38 @@ class DatabaseBackupService
 
         if (config('database.default') !== 'pgsql') {
             return ['ok' => false, 'message' => 'Only PostgreSQL backups are supported.'];
+        }
+
+        $fingerprint = null;
+        if (! $force && (bool) config('backup.skip_if_unchanged', true)) {
+            try {
+                $fingerprint = $this->contentFingerprint();
+                $previous = $this->readStoredFingerprint();
+                if ($fingerprint !== '' && $previous !== null && hash_equals($previous, $fingerprint)) {
+                    $message = '⏭️ Database backup skipped — no data changes since the last backup.';
+                    Log::info('Database backup skipped (unchanged fingerprint).');
+
+                    if ((bool) config('backup.notify_skip', false)) {
+                        try {
+                            $this->telegram->sendMessage($chatId, $message, null, null);
+                        } catch (Throwable) {
+                            // ignore notify failure
+                        }
+                    }
+
+                    return [
+                        'ok' => true,
+                        'skipped' => true,
+                        'message' => $message,
+                    ];
+                }
+            } catch (Throwable $e) {
+                // Fingerprint failures must not block backups.
+                Log::warning('Backup fingerprint check failed; continuing with dump.', [
+                    'error' => $e->getMessage(),
+                ]);
+                $fingerprint = null;
+            }
         }
 
         $workDir = storage_path('app/private/backups/tmp');
@@ -70,6 +105,17 @@ class DatabaseBackupService
             $telegramSent = $this->deliverToTelegram($chatId, $encPath, $filename, $bytes, $r2Path);
             $this->pruneRemoteBackups();
 
+            if ($fingerprint === null) {
+                try {
+                    $fingerprint = $this->contentFingerprint();
+                } catch (Throwable) {
+                    $fingerprint = null;
+                }
+            }
+            if (is_string($fingerprint) && $fingerprint !== '') {
+                $this->storeFingerprint($fingerprint);
+            }
+
             $sizeLabel = $this->humanBytes($bytes);
             $message = "✅ Database backup completed\n"
                 ."📅 {$stamp}\n"
@@ -88,6 +134,7 @@ class DatabaseBackupService
 
             return [
                 'ok' => true,
+                'skipped' => false,
                 'message' => $message,
                 'filename' => $filename,
                 'bytes' => $bytes,
@@ -116,7 +163,9 @@ class DatabaseBackupService
 
     private function dumpDatabase(string $sqlPath): void
     {
-        $db = config('database.connections.pgsql');
+        // Eloquent parses DATABASE_URL when connecting; pg_dump must do the same.
+        // Raw config keeps DB_HOST=127.0.0.1 even when only DATABASE_URL is set (Railway).
+        $db = $this->resolvedPgsqlConfig();
         $host = (string) ($db['host'] ?? '');
         $port = (string) ($db['port'] ?? '5432');
         $database = (string) ($db['database'] ?? '');
@@ -298,6 +347,121 @@ class DatabaseBackupService
         } catch (Throwable $e) {
             Log::warning('Backup prune failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Lightweight change detector: insert/update/delete counters per user table.
+     * Survives app redeploys; stored fingerprint lives on R2 (or local meta file).
+     */
+    private function contentFingerprint(): string
+    {
+        $row = DB::selectOne(
+            "SELECT md5(COALESCE(string_agg(
+                format('%s.%s:%s:%s:%s', schemaname, relname, n_tup_ins, n_tup_upd, n_tup_del),
+                '|' ORDER BY schemaname, relname
+            ), '')) AS fingerprint
+            FROM pg_stat_user_tables"
+        );
+
+        return trim((string) ($row->fingerprint ?? ''));
+    }
+
+    private function fingerprintMetaPath(): string
+    {
+        $prefix = trim((string) config('backup.path_prefix'), '/');
+
+        return ($prefix !== '' ? $prefix.'/' : '').'.last-content-fingerprint';
+    }
+
+    private function localFingerprintPath(): string
+    {
+        return storage_path('app/private/backups/last-content-fingerprint');
+    }
+
+    private function readStoredFingerprint(): ?string
+    {
+        $disk = $this->backupDiskOrNull();
+        if ($disk !== null) {
+            try {
+                $path = $this->fingerprintMetaPath();
+                if ($disk->exists($path)) {
+                    $value = trim((string) $disk->get($path));
+                    if ($value !== '') {
+                        return $value;
+                    }
+                }
+            } catch (Throwable $e) {
+                Log::warning('Could not read backup fingerprint from object storage.', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $local = $this->localFingerprintPath();
+        if (is_file($local)) {
+            $value = trim((string) file_get_contents($local));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function storeFingerprint(string $fingerprint): void
+    {
+        $disk = $this->backupDiskOrNull();
+        if ($disk !== null) {
+            try {
+                $disk->put($this->fingerprintMetaPath(), $fingerprint, [
+                    'visibility' => 'private',
+                    'ContentType' => 'text/plain',
+                ]);
+            } catch (Throwable $e) {
+                Log::warning('Could not store backup fingerprint on object storage.', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $local = $this->localFingerprintPath();
+        $dir = dirname($local);
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0750, true);
+        }
+        @file_put_contents($local, $fingerprint);
+    }
+
+    private function backupDiskOrNull(): ?\Illuminate\Contracts\Filesystem\Filesystem
+    {
+        $diskName = trim((string) config('backup.disk'));
+        if ($diskName === '' || $diskName === 'null' || $diskName === 'false') {
+            return null;
+        }
+
+        $diskConfig = config("filesystems.disks.{$diskName}");
+        if (! is_array($diskConfig)) {
+            return null;
+        }
+
+        if (blank($diskConfig['key'] ?? null) || blank($diskConfig['secret'] ?? null) || blank($diskConfig['bucket'] ?? null) || blank($diskConfig['endpoint'] ?? null)) {
+            return null;
+        }
+
+        return Storage::disk($diskName);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolvedPgsqlConfig(): array
+    {
+        $config = config('database.connections.pgsql');
+        if (! is_array($config)) {
+            return [];
+        }
+
+        return (new ConfigurationUrlParser)->parseConfiguration($config);
     }
 
     private function resolveBinary(string $name): string

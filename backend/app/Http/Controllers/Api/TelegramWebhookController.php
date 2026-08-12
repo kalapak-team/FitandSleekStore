@@ -150,7 +150,8 @@ class TelegramWebhookController extends Controller
 
         dispatch(function () {
             try {
-                app(DatabaseBackupService::class)->run();
+                // Manual Telegram /backup always dumps, even if data is unchanged.
+                app(DatabaseBackupService::class)->run(force: true);
             } catch (\Throwable $e) {
                 Log::error('Telegram /backup failed', ['error' => $e->getMessage()]);
             }

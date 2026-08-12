@@ -7,15 +7,23 @@ use Illuminate\Console\Command;
 
 class BackupDatabaseCommand extends Command
 {
-    protected $signature = 'backup:database';
+    protected $signature = 'backup:database
+                            {--force : Backup even when data is unchanged}';
 
     protected $description = 'Dump, encrypt, and store a PostgreSQL backup (R2 + Telegram)';
 
     public function handle(DatabaseBackupService $backups): int
     {
-        $this->info('Starting database backup…');
+        $force = (bool) $this->option('force');
+        $this->info($force ? 'Starting database backup (forced)…' : 'Starting database backup…');
 
-        $result = $backups->run();
+        $result = $backups->run($force);
+
+        if (! empty($result['skipped'])) {
+            $this->comment($result['message']);
+
+            return self::SUCCESS;
+        }
 
         if ($result['ok']) {
             $this->info($result['message']);
