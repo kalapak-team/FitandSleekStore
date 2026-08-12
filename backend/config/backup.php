@@ -37,4 +37,14 @@ return [
 
     'filename_prefix' => env('BACKUP_FILENAME_PREFIX', 'fitandsleek'),
 
+    /*
+    | Skip nightly dump/upload when PostgreSQL user-table change counters match
+    | the fingerprint stored after the last successful backup (R2 meta file).
+    | Manual /backup and `php artisan backup:database --force` always dump.
+    */
+    'skip_if_unchanged' => filter_var(env('BACKUP_SKIP_IF_UNCHANGED', true), FILTER_VALIDATE_BOOLEAN),
+
+    // When true, Telegram gets a short "skipped" message. Default off to reduce noise.
+    'notify_skip' => filter_var(env('BACKUP_NOTIFY_SKIP', false), FILTER_VALIDATE_BOOLEAN),
+
 ];
