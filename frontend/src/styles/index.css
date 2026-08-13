@@ -253,50 +253,125 @@ select:focus {
   padding-inline: clamp(0.75rem, 1.1vw + 0.35rem, 2rem);
 }
 
-/* Desktop header grid — display comes from Tailwind `hidden lg:grid` only (never set display here). */
+/* Desktop header — Zando-style 1fr | logo | 1fr: nav left, logo center, search+tools+auth right. */
 @media (min-width: 1024px) {
   .fs-header-bar--desktop {
+    display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    column-gap: clamp(0.375rem, 1vw, 1rem);
+    column-gap: clamp(0.75rem, 1.5vw, 1.75rem);
+    min-height: 4.5rem;
+  }
+
+  .fs-header-bar__side {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .fs-header-bar__side--left {
+    justify-content: flex-start;
+  }
+
+  .fs-header-bar__side--right {
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+
+  .fs-header-bar__logo-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
   }
 
   .fs-header-bar__logo {
-    height: clamp(3.375rem, 5vw + 1rem, 6.25rem);
-    max-height: 5.75rem;
+    height: clamp(3.25rem, 4.5vw + 1rem, 5.75rem);
+    max-height: 5.5rem;
     width: auto;
-    max-width: min(44vw, 20rem);
+    max-width: min(34vw, 17rem);
   }
 
   .fs-header-bar__search {
-    width: min(100%, 11.5rem);
+    width: min(100%, 8.5rem);
     max-width: 100%;
+    flex: 0 1 8.5rem;
+    min-width: 7rem;
+  }
+
+  .fs-header-bar__tools {
+    margin-inline-start: 0.15rem;
+  }
+
+  .fs-header-auth-link {
+    background: transparent;
+    border: 0;
+    padding: 0.25rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fs-chrome-text, #ffffff);
+    opacity: 0.92;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: Helvetica, sans-serif;
+  }
+
+  .fs-header-auth-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .fs-header-actions {
     padding-inline-end: clamp(0.125rem, 0.35vw, 0.375rem);
   }
+
+  /* Nav — match Login/Register size */
+  .fs-header-bar__side--left .fs-nav-link {
+    padding-inline: 0.15rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+    font-family: Helvetica, sans-serif;
+  }
 }
 
 @media (min-width: 1280px) {
+  .fs-header-bar__side--right {
+    gap: 0.9rem;
+  }
+
   .fs-header-bar__logo {
-    max-height: 6.25rem;
-    max-width: 22rem;
+    max-height: 6rem;
+    max-width: 19rem;
   }
 
   .fs-header-bar__search {
-    width: min(100%, 13rem);
+    width: min(100%, 9.5rem);
+    flex-basis: 9.5rem;
+  }
+
+  .fs-header-bar__side--left .fs-nav-link,
+  .fs-header-auth-link {
+    font-size: 1.1rem;
   }
 }
 
 @media (min-width: 1536px) {
   .fs-header-bar__logo {
-    max-height: 6.75rem;
-    max-width: 24rem;
+    max-height: 6.5rem;
+    max-width: 21rem;
   }
 
   .fs-header-bar__search {
-    width: min(100%, 15rem);
+    width: min(100%, 10.5rem);
+    flex-basis: 10.5rem;
+  }
+
+  .fs-header-bar__side--left .fs-nav-link,
+  .fs-header-auth-link {
+    font-size: 1.15rem;
   }
 }
 

@@ -1,43 +1,26 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../state/auth.jsx";
 import { useCart } from "../../state/cart.jsx";
 import { useWishlist } from "../../state/wishlist.jsx";
 import { useLanguage } from "../../lib/i18n.jsx";
 import { useHomepageSettings } from "../../state/homepageSettings.jsx";
 import { resolveImageUrl } from "../../lib/images.js";
-import { Camera, X, Bell, Menu, Search, User, Heart, ShoppingBag, Moon, Sun, LayoutDashboard, ClipboardList } from "lucide-react";
+import { Camera, X, Bell, Search, User, Heart, ShoppingBag, Moon, Sun, Settings2, LayoutDashboard, ClipboardList } from "lucide-react";
 import { useTheme } from "../../state/theme.jsx";
 import Logo from "../Logo.jsx";
 import LoginDialog from "../dialogs/LoginDialog.jsx";
 import RegisterDialog from "../dialogs/RegisterDialog.jsx";
 import SmartSearchModal from "../search/SmartSearchModal.jsx";
-import MegaMenuEmptyState from "./MegaMenuEmptyState.jsx";
-import MegaMenuScrollArea from "./MegaMenuScrollArea.jsx";
 import { storefrontSearchUrl as navSearch } from "../../lib/storefrontNavLinks.js";
 import { mergeTopNavDropdowns } from "../../lib/defaultTopNavDropdowns.js";
 import { mergeHeaderSettings } from "../../lib/defaultHeaderSettings.js";
 import { resolveHeaderChromeStyle } from "../../lib/storefrontChrome.js";
-import { useStorefrontBootstrap } from "../../state/storefrontBootstrap.jsx";
 import { isAdminUser } from "../../app/redirectAfterAuth.js";
 
 function cn(...xs) {
   return xs.filter(Boolean).join(" ");
 }
-
-const LEFT_MENU_SECTION = {
-  newProduct: "newProduct",
-  productTrending: "productTrending",
-  productDiscounts: "productDiscounts",
-  brands: "brands",
-};
-
-const LEFT_MENU_LABEL_KEYS = {
-  [LEFT_MENU_SECTION.newProduct]: "newProduct",
-  [LEFT_MENU_SECTION.productTrending]: "productTrending",
-  [LEFT_MENU_SECTION.productDiscounts]: "productDiscounts",
-  [LEFT_MENU_SECTION.brands]: "brandsCategories",
-};
 
 /** Match nav item only when path + query params align (avoids every /search?… link active at once). */
 function isNavItemActive(location, to) {
@@ -91,6 +74,112 @@ function Icon({ name }) {
   return null;
 }
 
+/** Language + theme — hidden until the settings trigger is clicked. */
+function HeaderPrefsMenu({
+  t,
+  language,
+  toggleLanguage,
+  languageEnabled,
+  storefrontMode,
+  toggleStorefrontMode,
+  className = "",
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  return (
+    <div className={cn("relative shrink-0", className)} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="fs-iconbtn-header group"
+        aria-label={t("language")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={t("language")}
+      >
+        <Settings2 className="w-[18px] h-[18px]" strokeWidth={2} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden z-50"
+          role="menu"
+        >
+          {languageEnabled && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => toggleLanguage()}
+              className="w-full px-3.5 py-2.5 flex items-center gap-3 text-left text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <img
+                src={language === "km" ? "https://flagcdn.com/kh.svg" : "https://flagcdn.com/gb.svg"}
+                alt=""
+                className="w-5 h-5 rounded-full object-cover shrink-0 ring-1 ring-slate-200"
+                aria-hidden="true"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  {t("language")}
+                </span>
+                <span className="block text-sm font-semibold">
+                  {language === "km" ? t("khmer") : t("english")}
+                </span>
+              </span>
+              <span className="text-xs font-bold text-slate-500 tabular-nums">
+                {language === "km" ? "KM" : "EN"}
+              </span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => toggleStorefrontMode()}
+            className={cn(
+              "w-full px-3.5 py-2.5 flex items-center gap-3 text-left text-slate-700 hover:bg-slate-50 transition-colors",
+              languageEnabled && "border-t border-slate-100",
+            )}
+          >
+            <span className="w-5 h-5 flex items-center justify-center shrink-0 text-slate-500">
+              {storefrontMode === "dark"
+                ? <Sun className="w-4 h-4" strokeWidth={2} />
+                : <Moon className="w-4 h-4" strokeWidth={2} />}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Theme
+              </span>
+              <span className="block text-sm font-semibold">
+                {storefrontMode === "dark" ? "Light mode" : "Dark mode"}
+              </span>
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileMenu({ user, onLogout, t, className = "" }) {
   const [open, setOpen] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
@@ -120,14 +209,14 @@ function ProfileMenu({ user, onLogout, t, className = "" }) {
 
   const menuLinks = admin
     ? [
-        { to: "/admin", label: t("navDashboard"), Icon: LayoutDashboard },
-        { to: "/admin/orders", label: t("navOrders"), Icon: ClipboardList },
-        { to: "/admin/profile", label: t("adminProfile"), Icon: User },
-      ]
+      { to: "/admin", label: t("navDashboard"), Icon: LayoutDashboard },
+      { to: "/admin/orders", label: t("navOrders"), Icon: ClipboardList },
+      { to: "/admin/profile", label: t("adminProfile"), Icon: User },
+    ]
     : [
-        { to: "/profile", label: t("account"), Icon: User },
-        { to: "/profile?tab=orders", label: t("orders"), Icon: ClipboardList },
-      ];
+      { to: "/profile", label: t("account"), Icon: User },
+      { to: "/profile?tab=orders", label: t("orders"), Icon: ClipboardList },
+    ];
 
   return (
     <div className={cn("relative shrink-0 overflow-visible", className)} ref={ref}>
@@ -301,36 +390,66 @@ function AnimatedNavLink({ to, label, hasDropdown, onHover, index, hoveredIndex,
   );
 }
 
-function NavBar({ navItems }) {
+function NavBar({ navItems, variant = "bar", onActiveDropdownChange, resetToken = 0 }) {
   const { t } = useLanguage();
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [showMore, setShowMore] = useState(false);
+  const inline = variant === "inline";
 
-  const visibleItemsCount = navItems.length > 8 ? 5 : navItems.length > 6 ? 5 : Math.min(6, navItems.length);
+  const visibleItemsCount = inline
+    ? navItems.length
+    : navItems.length > 8
+      ? 5
+      : navItems.length > 6
+        ? 5
+        : Math.min(6, navItems.length);
   const visibleItems = navItems.slice(0, visibleItemsCount);
-  const moreItems = navItems.slice(visibleItemsCount);
+  const moreItems = inline ? [] : navItems.slice(visibleItemsCount);
   const hasMore = moreItems.length > 0;
   const hoveredItem = hoveredIndex != null ? visibleItems[hoveredIndex] : null;
   const panelOpen = Boolean(hoveredItem?.items?.length);
 
+  useEffect(() => {
+    setHoveredIndex(null);
+    setShowMore(false);
+  }, [resetToken]);
+
+  useEffect(() => {
+    if (!onActiveDropdownChange) return undefined;
+    onActiveDropdownChange(panelOpen ? hoveredItem : null);
+    return () => onActiveDropdownChange(null);
+  }, [panelOpen, hoveredItem, onActiveDropdownChange]);
+
   return (
     <div
-      className="relative"
-      onMouseLeave={() => {
-        setHoveredIndex(null);
-        setShowMore(false);
-      }}
+      className={cn("relative", inline && "min-w-0 shrink")}
+      onMouseLeave={
+        inline
+          ? undefined
+          : () => {
+              setHoveredIndex(null);
+              setShowMore(false);
+            }
+      }
     >
-      <nav className="fs-header-bar flex flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:gap-x-5 lg:gap-x-6 xl:gap-x-8 relative z-10 py-2">
+      <nav
+        className={cn(
+          "fs-header-bar relative z-10 flex flex-wrap items-center",
+          inline
+            ? "!px-0 py-0 gap-x-4 xl:gap-x-5 2xl:gap-x-6 justify-start flex-nowrap"
+            : "justify-center gap-x-4 gap-y-1 sm:gap-x-5 lg:gap-x-6 xl:gap-x-8 py-2"
+        )}
+      >
         {visibleItems.map((item, index) => {
           const itemKey = item.to || item.label || `nav-${index}`;
           const hasDropdown = Boolean(item.items?.length);
           return (
             <div
               key={itemKey}
-              className="relative"
+              className="relative shrink-0"
               onMouseEnter={() => {
                 if (hasDropdown) setHoveredIndex(index);
+                else setHoveredIndex(null);
               }}
             >
               <AnimatedNavLink
@@ -374,30 +493,30 @@ function NavBar({ navItems }) {
         )}
       </nav>
 
-      {panelOpen && (
+      {!inline && panelOpen ? (
         <div className="absolute left-0 right-0 top-full z-50 pt-1">
           <NavDropdownPanel items={hoveredItem.items} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
 export default function Header({ onOpenCart, onOpenNotifications, notificationsUnread = 0 }) {
-  const nav = useNavigate();
-  const location = useLocation();
   const { user, logout } = useAuth();
   const { count } = useCart();
   const wishlist = useWishlist();
   const { t, language, toggleLanguage } = useLanguage();
   const { settings } = useHomepageSettings();
-  const { headerMenu: autoLeftMenu } = useStorefrontBootstrap();
   const { storefrontMode, toggleStorefrontMode } = useTheme();
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
-  const [showLeftMenu, setShowLeftMenu] = useState(false);
-  const [activeLeftSection, setActiveLeftSection] = useState(0);
+  const [activeNavDropdown, setActiveNavDropdown] = useState(null);
+  const [navHoverReset, setNavHoverReset] = useState(0);
+  const onActiveDropdownChange = React.useCallback((item) => {
+    setActiveNavDropdown(item);
+  }, []);
 
   useEffect(() => {
     const openLogin = () => {
@@ -439,290 +558,6 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
   const navVisibility = headerSettings.nav_visibility || {};
   const isVisible = (key) => navVisibility[key] !== false;
   const customNavItems = Array.isArray(headerSettings.custom_nav) ? headerSettings.custom_nav : [];
-  const defaultLeftMenu = [
-    {
-      sectionKey: LEFT_MENU_SECTION.newProduct,
-      title: t('newProduct'),
-      items: [
-        { label: t('newArrivals'), to: '/search?tab=new', image: '/placeholder.svg' },
-        { label: t('trendingNow'), to: '/search?tab=trending', image: '/placeholder.svg' },
-        { label: t('thisWeek'), to: '/search?tab=this-week', image: '/placeholder.svg' },
-        { label: t('bestSellers'), to: '/search?q=Best%20Seller', image: '/placeholder.svg' },
-        { label: t('editorPicks'), to: '/search?q=Editors%20Pick', image: '/placeholder.svg' },
-        { label: t('limitedDrop'), to: '/search?q=Limited%20Drop', image: '/placeholder.svg' },
-        { label: t('freshStyles'), to: '/search?q=Fresh%20Style', image: '/placeholder.svg' },
-        { label: t('justAdded'), to: '/search?q=Just%20Added', image: '/placeholder.svg' },
-      ],
-    },
-    {
-      sectionKey: LEFT_MENU_SECTION.productTrending,
-      title: t('productTrending'),
-      items: [
-        { label: t('trendingNow'), to: '/search?tab=trending', image: '/placeholder.svg' },
-        { label: t('topRated'), to: '/search?sort=rating', image: '/placeholder.svg' },
-        { label: t('bestSellers'), to: '/search?sort=popular', image: '/placeholder.svg' },
-        { label: t('mostViewed'), to: '/search?q=Most%20Viewed', image: '/placeholder.svg' },
-        { label: t('popularNow'), to: '/search?q=Popular%20Now', image: '/placeholder.svg' },
-        { label: t('streetStyle'), to: '/search?q=Street%20Style', image: '/placeholder.svg' },
-        { label: t('viralPicks'), to: '/search?q=Viral', image: '/placeholder.svg' },
-        { label: t('trendingThisWeek'), to: '/search?q=Trending%20This%20Week', image: '/placeholder.svg' },
-      ],
-    },
-    {
-      sectionKey: LEFT_MENU_SECTION.productDiscounts,
-      title: t('productDiscounts'),
-      items: [
-        { label: t('allDiscounts'), to: '/discounts', image: '/placeholder.svg' },
-        { label: t('clothes'), to: '/discounts/clothes', image: '/placeholder.svg' },
-        { label: t('shoes'), to: '/discounts/shoes', image: '/placeholder.svg' },
-        { label: t('under20'), to: '/discounts?max_price=20', image: '/placeholder.svg' },
-        { label: t('topDeals'), to: '/discounts?sort=discount', image: '/placeholder.svg' },
-        { label: t('accessories'), to: '/discounts?q=Accessories', image: '/placeholder.svg' },
-        { label: t('bags'), to: '/discounts?q=Bags', image: '/placeholder.svg' },
-        { label: t('flashSale'), to: '/discounts?q=Flash', image: '/placeholder.svg' },
-      ],
-    },
-    {
-      sectionKey: LEFT_MENU_SECTION.brands,
-      title: t('brandsCategories'),
-      items: [
-        { label: 'Nike', to: '/search?q=Nike', image: '/placeholder.svg' },
-        { label: 'Adidas', to: '/search?q=Adidas', image: '/placeholder.svg' },
-        { label: 'Puma', to: '/search?q=Puma', image: '/placeholder.svg' },
-        { label: 'Zara', to: '/search?q=Zara', image: '/placeholder.svg' },
-      ],
-    },
-  ];
-  const leftMenuSource =
-    Array.isArray(headerSettings.left_menu) && headerSettings.left_menu.length > 0
-      ? headerSettings.left_menu
-      : defaultLeftMenu;
-  const leftMenu = (leftMenuSource || []).filter(
-    (s) => String(s?.title || "").toLowerCase() !== "menu visibility",
-  );
-
-  const mergeUniqueItems = (baseItems = [], extraItems = []) => {
-    const seen = new Set();
-    const toKey = (item) => `${item.label || ""}::${item.to || ""}`;
-    const merged = [];
-    [...baseItems, ...extraItems].forEach((item) => {
-      const key = toKey(item || {});
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      merged.push(item);
-    });
-    return merged;
-  };
-
-  const resolveLeftMenuSectionKey = (section) => {
-    if (section?.sectionKey) return section.sectionKey;
-    const title = String(section?.title || "").toLowerCase();
-    if (title === "new product" || title === String(t("newProduct") || "").toLowerCase()) {
-      return LEFT_MENU_SECTION.newProduct;
-    }
-    if (title === "product trending" || title === String(t("productTrending") || "").toLowerCase()) {
-      return LEFT_MENU_SECTION.productTrending;
-    }
-    if (title === "product discounts" || title === String(t("productDiscounts") || "").toLowerCase()) {
-      return LEFT_MENU_SECTION.productDiscounts;
-    }
-    if (
-      title === "brands" ||
-      title === "brands & categories" ||
-      title === "brands and categories" ||
-      title === String(t("brandsCategories") || "").toLowerCase()
-    ) {
-      return LEFT_MENU_SECTION.brands;
-    }
-    return null;
-  };
-
-  const leftMenuWithAuto = useMemo(() => {
-    const normalized = (leftMenu || []).map((section) => {
-      const sectionKey = resolveLeftMenuSectionKey(section);
-      if (sectionKey === LEFT_MENU_SECTION.newProduct) {
-        return { ...section, sectionKey, title: t("newProduct"), items: autoLeftMenu.newProduct };
-      }
-      if (sectionKey === LEFT_MENU_SECTION.productTrending) {
-        return { ...section, sectionKey, title: t("productTrending"), items: autoLeftMenu.trending };
-      }
-      if (sectionKey === LEFT_MENU_SECTION.productDiscounts) {
-        return { ...section, sectionKey, title: t("productDiscounts"), items: autoLeftMenu.discounts };
-      }
-      if (sectionKey === LEFT_MENU_SECTION.brands) {
-        return { ...section, sectionKey, title: t("brandsCategories"), items: autoLeftMenu.brands };
-      }
-      return section;
-    });
-
-    const findByKey = (sectionKey) =>
-      normalized.find((s) => resolveLeftMenuSectionKey(s) === sectionKey);
-
-    const ensureSection = (sectionKey, labelKey, fallbackItems, autoItems) => {
-      const existing = findByKey(sectionKey);
-      const next = {
-        sectionKey,
-        title: t(labelKey),
-        items: autoItems || fallbackItems,
-      };
-      return existing ? { ...existing, ...next } : next;
-    };
-
-    const defaultByKey = (sectionKey) =>
-      (defaultLeftMenu || []).find((s) => resolveLeftMenuSectionKey(s) === sectionKey)?.items || [];
-
-    const ensured = [
-      ensureSection(
-        LEFT_MENU_SECTION.newProduct,
-        "newProduct",
-        defaultByKey(LEFT_MENU_SECTION.newProduct),
-        autoLeftMenu.newProduct
-      ),
-      ensureSection(
-        LEFT_MENU_SECTION.productTrending,
-        "productTrending",
-        defaultByKey(LEFT_MENU_SECTION.productTrending),
-        autoLeftMenu.trending
-      ),
-      ensureSection(
-        LEFT_MENU_SECTION.productDiscounts,
-        "productDiscounts",
-        defaultByKey(LEFT_MENU_SECTION.productDiscounts),
-        autoLeftMenu.discounts
-      ),
-      ensureSection(
-        LEFT_MENU_SECTION.brands,
-        "brandsCategories",
-        defaultByKey(LEFT_MENU_SECTION.brands),
-        autoLeftMenu.brands
-      ),
-    ];
-
-    const ensuredKeys = new Set(ensured.map((s) => s.sectionKey));
-    const remaining = normalized.filter((s) => {
-      const key = resolveLeftMenuSectionKey(s);
-      return !key || !ensuredKeys.has(key);
-    });
-
-    return [...remaining, ...ensured];
-  }, [leftMenu, autoLeftMenu, t]);
-
-  const getLeftMenuTitle = (sectionOrTitle) => {
-    if (sectionOrTitle && typeof sectionOrTitle === "object") {
-      const sectionKey = resolveLeftMenuSectionKey(sectionOrTitle);
-      const labelKey = LEFT_MENU_LABEL_KEYS[sectionKey];
-      return labelKey ? t(labelKey) : sectionOrTitle.title;
-    }
-
-    const key = String(sectionOrTitle || "").toLowerCase();
-    const map = {
-      "new product": "newProduct",
-      "product trending": "productTrending",
-      "product discounts": "productDiscounts",
-      brands: "brandsCategories",
-      "brands & categories": "brandsCategories",
-      "brands and categories": "brandsCategories",
-    };
-    const tKey = map[key];
-    return tKey ? t(tKey) : sectionOrTitle;
-  };
-
-  const closeMegaMenu = () => setShowLeftMenu(false);
-
-  useEffect(() => {
-    setShowLeftMenu(false);
-  }, [location.pathname, location.search]);
-
-  const isBrandsSection = (section) =>
-    resolveLeftMenuSectionKey(section) === LEFT_MENU_SECTION.brands;
-
-  const renderMegaMenuItems = (activeItems, { compact = false } = {}) => {
-    const emptyLabel = t("megaMenuNothingYet") || "មិនទាន់មាន";
-    if (activeItems.length === 0) {
-      return <MegaMenuEmptyState message={emptyLabel} />;
-    }
-
-    if (compact) {
-      return (
-        <MegaMenuScrollArea className="max-h-[min(360px,60vh)]">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
-            {activeItems.map((item, i) => (
-              <Link
-                key={`${item.to}-${item.label}-${i}`}
-                to={item.to || "/search"}
-                onClick={closeMegaMenu}
-                className="group flex flex-col items-center gap-1 rounded-lg border border-transparent p-1.5 text-center hover:border-zinc-200 hover:bg-zinc-50/80"
-              >
-                <div className="flex h-12 w-full items-center justify-center rounded-md bg-zinc-50 ring-1 ring-zinc-100">
-                  {item.image ? (
-                    <img
-                      src={resolveImageUrl(item.image)}
-                      alt=""
-                      className="max-h-8 max-w-[4.25rem] object-contain transition-transform duration-200 group-hover:scale-105"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.svg";
-                      }}
-                    />
-                  ) : (
-                    <span className="px-1 text-[10px] font-bold uppercase tracking-wide text-zinc-600">
-                      {getInitials(item.label)}
-                    </span>
-                  )}
-                </div>
-                <span className="line-clamp-1 w-full text-[11px] font-medium leading-tight text-zinc-700 group-hover:text-zinc-900">
-                  {item.label}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </MegaMenuScrollArea>
-      );
-    }
-
-    return (
-      <MegaMenuScrollArea className="max-h-[min(360px,60vh)]">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {activeItems.map((item, i) => {
-            const isBrandLink = String(item.to || "").startsWith("/brands/");
-            return (
-              <Link
-                key={`${item.to}-${item.label}-${i}`}
-                to={item.to || "/search"}
-                onClick={closeMegaMenu}
-                className="group flex flex-col gap-2 rounded-xl border border-transparent p-2 text-left hover:border-zinc-200 hover:bg-zinc-50/70"
-              >
-                <div
-                  className="relative w-full overflow-hidden rounded-lg bg-zinc-100"
-                  style={{ aspectRatio: "4 / 5" }}
-                >
-                  {item.image ? (
-                    <img
-                      src={resolveImageUrl(item.image)}
-                      alt={item.label}
-                      className={cn(
-                        "h-full w-full transition-transform duration-300 group-hover:scale-105",
-                        isBrandLink ? "object-contain p-4" : "object-cover"
-                      )}
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.svg";
-                      }}
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center px-2 text-center text-sm font-bold text-zinc-500">
-                      {getInitials(item.label)}
-                    </span>
-                  )}
-                </div>
-                <span className="line-clamp-2 text-sm font-semibold text-zinc-800 group-hover:text-zinc-900 group-hover:underline">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </MegaMenuScrollArea>
-    );
-  };
 
   const navDropdowns = useMemo(
     () => mergeTopNavDropdowns(headerSettings.nav_dropdowns),
@@ -813,147 +648,116 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
           </button>
         )}
 
-        {/* Mobile dark mode toggle */}
-        <button
-          type="button"
-          onClick={toggleStorefrontMode}
-          className="shrink-0 fs-iconbtn-header group"
-          aria-label={storefrontMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          title={storefrontMode === "dark" ? "Light mode" : "Dark mode"}
-        >
-          {storefrontMode === "dark"
-            ? <Sun className="w-[18px] h-[18px]" strokeWidth={2} />
-            : <Moon className="w-[18px] h-[18px]" strokeWidth={2} />
-          }
-        </button>
+        <HeaderPrefsMenu
+          t={t}
+          language={language}
+          toggleLanguage={toggleLanguage}
+          languageEnabled={headerSettings.language_enabled}
+          storefrontMode={storefrontMode}
+          toggleStorefrontMode={toggleStorefrontMode}
+        />
       </div>
 
-      {/* Desktop header + nav + mega menu share one hover zone */}
+      {/* Desktop header + category nav share one hover zone for dropdowns */}
       <div
         className="hidden lg:block relative"
-        onMouseLeave={() => setShowLeftMenu(false)}
+        onMouseLeave={() => {
+          setActiveNavDropdown(null);
+          setNavHoverReset((n) => n + 1);
+        }}
       >
-        <div className="fs-header-bar fs-header-bar--desktop min-h-[5rem] py-1.5 lg:grid">
-          <div className="flex min-w-0 items-center justify-start gap-1 lg:gap-1.5">
-            {headerSettings.search_enabled && (
-              <>
-                <button
-                  type="button"
-                  className="fs-btn fs-btn-sm bg-transparent hover:bg-transparent hidden lg:flex shrink-0 border-0"
-                  onMouseEnter={() => setShowLeftMenu(true)}
-                >
-                  <Menu className="w-4 h-4" />
-                  <span className="hidden xl:inline">{t('menu')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSearchDialog(true)}
-                  className="fs-header-bar__search min-w-0 shrink"
-                >
-                  <div className="relative">
-                    <div className="fs-header-search w-full h-9 rounded-full border pl-10 pr-10 text-xs outline-none flex items-center">
-                      <span className="truncate font-medium">{searchPlaceholder}</span>
-                    </div>
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2">
-                      <Icon name="search" />
-                    </span>
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2">
-                      <Camera className="w-3.5 h-3.5" />
-                    </span>
-                  </div>
-                </button>
-              </>
-            )}
+        <div className="fs-header-bar fs-header-bar--desktop min-h-[5rem] py-1.5">
+          <div className="fs-header-bar__side fs-header-bar__side--left">
+            <NavBar
+              navItems={navItems}
+              variant="inline"
+              onActiveDropdownChange={onActiveDropdownChange}
+              resetToken={navHoverReset}
+            />
           </div>
 
-          <Link to="/" className="flex shrink-0 justify-self-center px-1">
+          <Link to="/" className="fs-header-bar__logo-wrap">
             <Logo className="fs-header-bar__logo" src={headerSettings.logo_url} />
           </Link>
 
-          <div className="fs-header-actions flex min-w-0 items-center justify-end gap-1 lg:gap-1.5 overflow-visible">
-            {headerSettings.language_enabled && (
-              <div className="relative group flex">
-                <button
-                  onClick={toggleLanguage}
-                  className="fs-lang-pill"
-                  title={t('language')}
-                  aria-label={t('language')}
-                >
-                  <img
-                    src={language === "km" ? "https://flagcdn.com/kh.svg" : "https://flagcdn.com/gb.svg"}
-                    alt=""
-                    className="fs-lang-pill__flag"
-                    aria-hidden="true"
-                  />
-                  <span>{language === "km" ? "KM" : "EN"}</span>
-                </button>
-                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50 pointer-events-none">
-                  {language === "km" ? t('english') : t('khmer')}
-                </div>
-              </div>
-            )}
-
-            {/* Desktop dark mode toggle */}
-            <button
-              onClick={toggleStorefrontMode}
-              className="fs-iconbtn-header group"
-              aria-label={storefrontMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              title={storefrontMode === "dark" ? "Light mode" : "Dark mode"}
-            >
-              {storefrontMode === "dark"
-                ? <Sun className="w-[18px] h-[18px]" strokeWidth={2} />
-                : <Moon className="w-[18px] h-[18px]" strokeWidth={2} />
-              }
-            </button>
-
-            <span className="fs-header-divider" aria-hidden="true" />
-
-            <button
-              onClick={onOpenNotifications}
-              className="fs-iconbtn-header group"
-              aria-label={t('notifications')}
-            >
-              <Bell className="w-[18px] h-[18px]" strokeWidth={2} />
-              <Badge value={notificationsUnread} accent />
-            </button>
-
-            {headerSettings.wishlist_enabled && (
-              <Link
-                className="fs-iconbtn-header group"
-                to="/search?tab=wishlist"
-                aria-label={t('wishlist')}
-              >
-                <Icon name="heart" />
-                <Badge value={wishlist.count} accent />
-              </Link>
-            )}
-
-            {headerSettings.cart_enabled && (
+          <div className="fs-header-bar__side fs-header-bar__side--right fs-header-actions">
+            {headerSettings.search_enabled && (
               <button
-                className="fs-iconbtn-header group"
-                onClick={onOpenCart}
-                aria-label={t('cart')}
+                type="button"
+                onClick={() => setShowSearchDialog(true)}
+                className="fs-header-bar__search"
               >
-                <Icon name="bag" />
-                <Badge value={count} />
+                <div className="relative">
+                  <div className="fs-header-search w-full h-9 rounded-full border pl-10 pr-10 text-xs outline-none flex items-center">
+                    <span className="truncate font-medium">{searchPlaceholder}</span>
+                  </div>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <Icon name="search" />
+                  </span>
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-80">
+                    <Camera className="w-3.5 h-3.5" />
+                  </span>
+                </div>
               </button>
             )}
 
-            <span className="fs-header-divider" aria-hidden="true" />
+            <div className="fs-header-bar__tools flex items-center gap-0.5 shrink-0">
+              <HeaderPrefsMenu
+                t={t}
+                language={language}
+                toggleLanguage={toggleLanguage}
+                languageEnabled={headerSettings.language_enabled}
+                storefrontMode={storefrontMode}
+                toggleStorefrontMode={toggleStorefrontMode}
+              />
+
+              <button
+                onClick={onOpenNotifications}
+                className="fs-iconbtn-header group shrink-0"
+                aria-label={t('notifications')}
+              >
+                <Bell className="w-[18px] h-[18px]" strokeWidth={2} />
+                <Badge value={notificationsUnread} accent />
+              </button>
+
+              {headerSettings.wishlist_enabled && (
+                <Link
+                  className="fs-iconbtn-header group shrink-0"
+                  to="/search?tab=wishlist"
+                  aria-label={t('wishlist')}
+                >
+                  <Icon name="heart" />
+                  <Badge value={wishlist.count} accent />
+                </Link>
+              )}
+
+              {headerSettings.cart_enabled && (
+                <button
+                  className="fs-iconbtn-header group shrink-0"
+                  onClick={onOpenCart}
+                  aria-label={t('cart')}
+                >
+                  <Icon name="bag" />
+                  <Badge value={count} />
+                </button>
+              )}
+            </div>
 
             <ProfileMenu user={user} onLogout={logout} t={t} />
 
             {user ? null : (
-              <div className="hidden xl:flex items-center gap-2 ml-1 shrink-0">
+              <div className="fs-header-bar__auth hidden lg:flex items-center gap-3 shrink-0 pl-1">
                 <button
+                  type="button"
                   onClick={() => setShowLoginDialog(true)}
-                  className="fs-btn fs-btn-secondary fs-btn-sm"
+                  className="fs-header-auth-link"
                 >
                   {t('login')}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowRegisterDialog(true)}
-                  className="fs-btn fs-btn-primary fs-btn-sm"
+                  className="fs-header-auth-link"
                 >
                   {t('register')}
                 </button>
@@ -962,55 +766,11 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
           </div>
         </div>
 
-        {/* Desktop Navigation Row */}
-        <div className="border-b fs-chrome-border relative">
-          <NavBar navItems={navItems} />
-        </div>
-
-        {/* Desktop Left Mega Menu Panel — height fits content */}
-        {showLeftMenu && (
-          <div className="absolute left-0 right-0 top-full z-40 pt-px">
-            <div className="bg-white shadow-xl border-t border-zinc-200/60">
-              <div className="container-safe py-4">
-                {leftMenuWithAuto.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-5 items-start">
-                    <div className="max-h-[min(440px,70vh)] overflow-y-auto pr-3 scrollbar-hide border-r border-zinc-100 space-y-1">
-                      {leftMenuWithAuto.map((section, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onMouseEnter={() => setActiveLeftSection(idx)}
-                          className={cn(
-                            "relative w-full text-left px-4 py-3 rounded-lg fs-nav-link-typo",
-                            activeLeftSection === idx
-                              ? "bg-zinc-50 text-zinc-900"
-                              : "text-zinc-700 hover:bg-zinc-100/70 hover:text-zinc-900"
-                          )}
-                        >
-                          {activeLeftSection === idx && (
-                            <span className="absolute left-0 top-0 h-full w-1 bg-zinc-900 rounded-r" />
-                          )}
-                          <span className="block whitespace-normal leading-tight">
-                            {getLeftMenuTitle(section)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="mb-3 fs-nav-link-typo text-zinc-500">
-                        {getLeftMenuTitle(leftMenuWithAuto[activeLeftSection])}
-                      </div>
-                      {renderMegaMenuItems(leftMenuWithAuto[activeLeftSection]?.items || [], {
-                        compact: isBrandsSection(leftMenuWithAuto[activeLeftSection]),
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+        {activeNavDropdown?.items?.length ? (
+          <div className="absolute left-0 right-0 top-full z-50 pt-px">
+            <NavDropdownPanel items={activeNavDropdown.items} />
           </div>
-        )}
+        ) : null}
       </div>
 
       <SmartSearchModal
