@@ -66,7 +66,7 @@ function Badge({ value, accent = false }) {
 }
 
 function Icon({ name }) {
-  const cls = "w-[18px] h-[18px]";
+  const cls = "fs-header-icon";
   if (name === "search") return <Search className={cls} strokeWidth={2} />;
   if (name === "user") return <User className={cls} strokeWidth={2} />;
   if (name === "heart") return <Heart className={cls} strokeWidth={2} />;
@@ -116,7 +116,7 @@ function HeaderPrefsMenu({
         aria-expanded={open}
         title={t("language")}
       >
-        <Settings2 className="w-[18px] h-[18px]" strokeWidth={2} />
+        <Settings2 className="fs-header-icon" strokeWidth={2} />
       </button>
 
       {open && (
@@ -695,7 +695,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
                     <Icon name="search" />
                   </span>
                   <span className="absolute right-2.5 top-1/2 -translate-y-1/2 opacity-80">
-                    <Camera className="w-3.5 h-3.5" />
+                    <Camera className="fs-header-icon" strokeWidth={2} />
                   </span>
                 </div>
               </button>
@@ -716,7 +716,7 @@ export default function Header({ onOpenCart, onOpenNotifications, notificationsU
                 className="fs-iconbtn-header group shrink-0"
                 aria-label={t('notifications')}
               >
-                <Bell className="w-[18px] h-[18px]" strokeWidth={2} />
+                <Bell className="fs-header-icon" strokeWidth={2} />
                 <Badge value={notificationsUnread} accent />
               </button>
 
