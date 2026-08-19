@@ -10,8 +10,10 @@ $sanitizeDatabaseUrl = static function (mixed $url): ?string {
     $url = trim($url);
     $url = trim($url, "\"'");
     $url = str_replace(["\r", "\n", "\t"], '', $url);
-    // Railway/dotenv sometimes leaves a trailing quote on the DB name: /railway"
-    $url = preg_replace('#/([^/?#]+)"+#', '/$1', $url) ?? $url;
+    // Dashboard/dotenv often yields postgresql://.../railway"?sslmode=require
+    // (quote stuck on the database name). [^/?#] previously swallowed the quote.
+    $url = preg_replace('#"+(?=\?|$)#', '', $url) ?? $url;
+    $url = preg_replace('#/([^/?#"]+)"+#', '/$1', $url) ?? $url;
 
     return $url;
 };
