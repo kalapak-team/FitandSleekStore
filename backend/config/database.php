@@ -35,6 +35,44 @@ $databaseUrl = $sanitizeDatabaseUrl(
     ?: env('DATABASE_PRIVATE_URL')
 );
 
+// Do not pass `url` to pgsql. Laravel re-parses it (rawurldecode) and a stray
+// quote on the path becomes database name railway" → every API returns 503.
+$pgsqlFromUrl = [
+    'host' => env('DB_HOST', '127.0.0.1'),
+    'port' => env('DB_PORT', '5432'),
+    'database' => $sanitizeDbIdent(env('DB_DATABASE'), 'laravel'),
+    'username' => env('DB_USERNAME', 'root'),
+    'password' => env('DB_PASSWORD', ''),
+    'sslmode' => env('DB_SSLMODE', 'prefer'),
+];
+if (is_string($databaseUrl) && $databaseUrl !== '') {
+    $parsed = parse_url(preg_replace('#^postgres(ql)?:#i', 'https:', $databaseUrl) ?? $databaseUrl);
+    if (is_array($parsed)) {
+        if (! empty($parsed['host'])) {
+            $pgsqlFromUrl['host'] = $parsed['host'];
+        }
+        if (! empty($parsed['port'])) {
+            $pgsqlFromUrl['port'] = $parsed['port'];
+        }
+        if (! empty($parsed['path']) && $parsed['path'] !== '/') {
+            $pgsqlFromUrl['database'] = $sanitizeDbIdent(rawurldecode(ltrim($parsed['path'], '/')), $pgsqlFromUrl['database']);
+        }
+        if (isset($parsed['user'])) {
+            $pgsqlFromUrl['username'] = rawurldecode($parsed['user']);
+        }
+        if (array_key_exists('pass', $parsed)) {
+            $pgsqlFromUrl['password'] = rawurldecode((string) $parsed['pass']);
+        }
+        if (! empty($parsed['query'])) {
+            $query = [];
+            parse_str($parsed['query'], $query);
+            if (! empty($query['sslmode']) && is_string($query['sslmode'])) {
+                $pgsqlFromUrl['sslmode'] = $sanitizeDbIdent($query['sslmode'], $pgsqlFromUrl['sslmode']);
+            }
+        }
+    }
+}
+
 return [
 
     /*
@@ -118,17 +156,16 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => $databaseUrl,
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '5432'),
-            'database' => $sanitizeDbIdent(env('DB_DATABASE'), 'laravel'),
-            'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            'host' => $pgsqlFromUrl['host'],
+            'port' => $pgsqlFromUrl['port'],
+            'database' => $pgsqlFromUrl['database'],
+            'username' => $pgsqlFromUrl['username'],
+            'password' => $pgsqlFromUrl['password'],
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
-            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'sslmode' => $pgsqlFromUrl['sslmode'],
         ],
 
         'sqlsrv' => [

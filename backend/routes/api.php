@@ -113,6 +113,8 @@ Route::get('/health/deps', function () {
             'db_port' => env('DB_PORT'),
             'db_database' => env('DB_DATABASE'),
             'db_connection' => env('DB_CONNECTION', config('database.default')),
+            'configured_host' => config('database.connections.pgsql.host'),
+            'configured_database' => config('database.connections.pgsql.database'),
         ],
     ];
     $cache = ['ok' => false, 'store' => config('cache.default')];
