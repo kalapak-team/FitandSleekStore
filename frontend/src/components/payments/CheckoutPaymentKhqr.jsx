@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../lib/api";
 import KhqrModal from "./KhqrModal";
+import { announceTelegramKhqrPaid } from "../../lib/telegramMiniApp.js";
+import { showKhqrSuccess } from "../../lib/khqrSuccess.js";
 
 export default function CheckoutPaymentKhqr({
   open,
@@ -36,9 +38,19 @@ export default function CheckoutPaymentKhqr({
       setStatus("paid");
       setError("");
       stopPolling();
+      announceTelegramKhqrPaid({
+        orderNumber: payload?.order_number || orderNumber,
+      });
+      showKhqrSuccess({
+        orderNumber: payload?.order_number || orderNumber,
+        total: payload?.khr_amount ?? payload?.amount ?? amount,
+        currency: payload?.khr_amount != null ? "KHR" : (payload?.currency || currency),
+        redirectSeconds: 60,
+        redirectTo: "/orders",
+      });
       onPaid?.(payload);
     },
-    [onPaid, stopPolling],
+    [onPaid, orderNumber, stopPolling, amount, currency],
   );
 
   const createKhqr = useCallback(async () => {
@@ -69,12 +81,12 @@ export default function CheckoutPaymentKhqr({
     }
   }, [handlePaid, orderId]);
 
-  const checkStatus = useCallback(async () => {
+  const checkStatus = useCallback(async ({ force = false } = {}) => {
     const targetId = paymentId;
     if (!targetId || paidNotifiedRef.current) return;
 
     try {
-      const { data } = await api.get(`/payments/bakong/status/${targetId}`);
+      const { data } = await api.get(`/payments/bakong/status/${targetId}`, { params: force ? { force: 1 } : undefined });
       pollFailuresRef.current = 0;
       setError("");
 
@@ -100,7 +112,7 @@ export default function CheckoutPaymentKhqr({
         return;
       }
 
-      if (nextStatus) {
+      if (nextStatus && nextStatus !== "idle") {
         setStatus(nextStatus);
       }
     } catch (e) {
@@ -121,27 +133,7 @@ export default function CheckoutPaymentKhqr({
   }, [handlePaid, paymentId, stopPolling]);
 
   useEffect(() => {
-    if (!open) return;
-    createKhqr();
-  }, [open, createKhqr]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (status === "paid" || status === "expired" || status === "error") return;
-    if (!paymentId) return;
-
-    checkStatus();
-    pollRef.current = setInterval(() => {
-      checkStatus();
-    }, 3000);
-
-    return () => {
-      stopPolling();
-    };
-  }, [open, status, checkStatus, paymentId, stopPolling]);
-
-  useEffect(() => {
-    if (!open) {
+    if (!orderId) {
       setPayment(null);
       setPaymentId(null);
       setStatus("idle");
@@ -152,7 +144,42 @@ export default function CheckoutPaymentKhqr({
       setVerificationNote("");
       stopPolling();
     }
-  }, [open, stopPolling]);
+  }, [orderId, stopPolling]);
+
+  useEffect(() => {
+    if (!open || !orderId) return;
+    createKhqr();
+  }, [open, orderId, createKhqr]);
+
+  useEffect(() => {
+    if (!paymentId) return;
+    if (status === "paid" || status === "error") return;
+
+    checkStatus();
+    pollRef.current = setInterval(() => {
+      checkStatus();
+    }, 3000);
+
+    return () => {
+      stopPolling();
+    };
+  }, [status, checkStatus, paymentId, stopPolling]);
+
+  useEffect(() => {
+    const onResume = () => {
+      if (document.visibilityState && document.visibilityState !== "visible") return;
+      if (!paidNotifiedRef.current) checkStatus();
+    };
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("focus", onResume);
+    const tg = window.Telegram?.WebApp;
+    tg?.onEvent?.("activated", onResume);
+    return () => {
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("focus", onResume);
+      tg?.offEvent?.("activated", onResume);
+    };
+  }, [checkStatus]);
 
   const displayAmount = payment?.khr_amount ?? amount;
   const displayCurrency = payment?.khr_amount != null ? "KHR" : currency;
@@ -172,6 +199,7 @@ export default function CheckoutPaymentKhqr({
       amount={displayAmount}
       currency={displayCurrency}
       onRegenerate={createKhqr}
+      
     />
   );
 }

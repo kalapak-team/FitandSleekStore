@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\ShipmentTrackingEvent;
 use App\Support\OrderAdminFilters;
 use App\Support\OrderMetrics;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class OrderAdminController extends Controller
 {
@@ -28,7 +30,7 @@ class OrderAdminController extends Controller
                 'orders.payment_method',
                 'orders.total',
                 'orders.created_at',
-            ])->with(['user:id,name,email'])
+            ])->with(['user:id,name,email,profile_image_path'])
                 ->withCount('items');
         } else {
             $query->with(['user', 'items.product', 'items.inventoryLot']);
@@ -77,12 +79,82 @@ class OrderAdminController extends Controller
     public function update(Request $request, Order $order)
     {
         $data = $request->validate([
-            'status' => ['required', 'string', 'max:50'],
+            'status' => [
+                'required',
+                'string',
+                Rule::in([
+                    'pending',
+                    'pending_payment',
+                    'processing',
+                    'preparing',
+                    'shipped',
+                    'in_transit',
+                    'arrived',
+                    'completed',
+                    'delivered',
+                    'cancelled',
+                    'failed',
+                    'returned',
+                ]),
+            ],
         ]);
 
-        $order->update(['status' => $data['status']]);
+        $status = strtolower($data['status']);
+        if ($status === 'delivered') {
+            $status = 'completed';
+        }
+        if ($status === 'pending') {
+            $status = 'pending_payment';
+        }
 
-        return $order->fresh()->load(['user', 'items.product.category']);
+        $order->update(['status' => $status]);
+        $this->syncShipmentWithOrderStatus($order->fresh(['shipment']), $status);
+
+        return $order->fresh()->load(['user', 'items.product.category', 'shipment']);
+    }
+
+    private function syncShipmentWithOrderStatus(Order $order, string $orderStatus): void
+    {
+        $shipment = $order->shipment;
+        if (! $shipment) {
+            return;
+        }
+
+        $shipmentStatus = match ($orderStatus) {
+            'processing', 'preparing' => 'processing',
+            'shipped' => 'shipped',
+            'in_transit' => 'in_transit',
+            'arrived' => 'arrived',
+            'completed' => 'delivered',
+            default => null,
+        };
+
+        if ($shipmentStatus === null || strtolower((string) $shipment->status) === $shipmentStatus) {
+            return;
+        }
+
+        $shippedAt = $shipment->shipped_at;
+        $deliveredAt = $shipment->delivered_at;
+        if (in_array($shipmentStatus, ['shipped', 'in_transit', 'arrived', 'delivered'], true) && ! $shippedAt) {
+            $shippedAt = now();
+        }
+        if ($shipmentStatus === 'delivered' && ! $deliveredAt) {
+            $deliveredAt = now();
+        }
+
+        $shipment->update([
+            'status' => $shipmentStatus,
+            'shipped_at' => $shippedAt,
+            'delivered_at' => $deliveredAt,
+        ]);
+
+        ShipmentTrackingEvent::create([
+            'shipment_id' => $shipment->id,
+            'status' => $shipmentStatus,
+            'note' => 'Status synced from admin order fulfillment.',
+            'updated_by' => auth()->guard('sanctum')->id(),
+            'event_time' => now(),
+        ]);
     }
 
     public function destroy(Order $order)

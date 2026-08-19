@@ -11,6 +11,8 @@ class TelegramLinkCode extends Model
 
     public const PURPOSE_DRIVER = 'driver';
 
+    public const PURPOSE_CUSTOMER = 'customer';
+
     protected $fillable = [
         'user_id',
         'code',

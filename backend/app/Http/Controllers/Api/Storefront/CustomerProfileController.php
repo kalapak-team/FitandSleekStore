@@ -8,14 +8,19 @@ use App\Models\Order;
 use App\Models\Address;
 use App\Models\Product;
 use App\Models\LoyaltyProfile;
+use App\Models\TelegramUser;
 use App\Services\LoyaltyService;
+use App\Services\TelegramService;
 use App\Support\Media;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CustomerProfileController extends Controller
 {
-    public function __construct(private LoyaltyService $loyaltyService)
-    {
+    public function __construct(
+        private LoyaltyService $loyaltyService,
+        private TelegramService $telegram,
+    ) {
     }
     private function normalizeLegacyAddress(array $legacy): array
     {
@@ -56,7 +61,32 @@ class CustomerProfileController extends Controller
      */
     public function getProfile()
     {
-        return response()->json(auth()->user());
+        $user = auth()->user();
+        $telegramUser = TelegramUser::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('last_interacted_at')
+            ->first();
+
+        if ($telegramUser) {
+            try {
+                $user = $this->telegram->syncTelegramProfileToUser($telegramUser, $user);
+            } catch (\Throwable $e) {
+                Log::warning('Telegram profile sync on /user/profile failed', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $payload = $user->toArray();
+        $payload['is_active'] = $user->isActive();
+        $payload['telegram_username'] = $telegramUser?->username;
+        $payload['telegram_name'] = trim(implode(' ', array_filter([
+            trim((string) ($telegramUser?->first_name ?? '')),
+            trim((string) ($telegramUser?->last_name ?? '')),
+        ])));
+
+        return response()->json($payload);
     }
 
     /**

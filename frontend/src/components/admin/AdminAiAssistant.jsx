@@ -8,13 +8,13 @@ import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 const ASSISTANT_TITLE = "Fit & Sleek AI Assistant";
 
 const WELCOME_MESSAGE =
-  "សួស្ដី — ខ្ញុំជួយគ្រប់គ្រង Fit & Sleek Admin Console។\n\n" +
-  "ខ្ញុំអាចឆ្លើយអំពី៖\n" +
+  "សួស្ដី 😊 ខ្ញុំជា Fit & Sleek Admin assistant — និយាយលេង ឬសួរការងារបាន។\n\n" +
+  "ខ្ញុំអាច៖\n" +
+  "• ជជែកធម្មតា (Khmer or English)\n" +
   "• Revenue & orders (today, 7d, 30d)\n" +
   "• Top selling products & recent orders\n" +
   "• Stock, inventory & low-stock alerts\n" +
-  "• Customers, payments & replacements\n\n" +
-  "សួរជាភាសាខ្មែរឬអង់គ្លេសបាន។";
+  "• Customers, payments & replacements";
 
 const QUICK_SUGGESTIONS = [
   { label: "Revenue today", text: "How much revenue today?" },
@@ -522,7 +522,7 @@ export default function AdminAiAssistant({ open, onClose }) {
         const { data } = await api.post("/ai/chat", {
           message: text,
           conversation_id: conversationId || undefined,
-        });
+        }, { timeout: 120000 });
 
         if (data.conversation_id) {
           setConversationId(data.conversation_id);
@@ -538,18 +538,26 @@ export default function AdminAiAssistant({ open, onClose }) {
           },
         ]);
       } catch (err) {
-        const msg =
+        const raw =
           err?.response?.data?.message ||
           err?.response?.data?.error ||
+          err?.code ||
           err?.message ||
           "Something went wrong. Please try again.";
-        setError(typeof msg === "string" ? msg : "AI request failed.");
+        const timedOut = String(raw).toLowerCase().includes("timeout") || err?.code === "ECONNABORTED";
+        const network = String(raw).toLowerCase() === "network error";
+        const msg = timedOut
+          ? "The AI took too long to reply. Please try again in a moment."
+          : network
+            ? "Could not reach the AI service. Check your connection and try again."
+            : (typeof raw === "string" ? raw : "AI request failed.");
+        setError(msg);
         setMessages((prev) => [
           ...prev,
           {
             id: `err-${Date.now()}`,
             role: "assistant",
-            content: `⚠️ ${typeof msg === "string" ? msg : "The AI service is unavailable. Check Dify and your local LLM."}`,
+            content: `⚠️ ${msg}`,
           },
         ]);
       } finally {

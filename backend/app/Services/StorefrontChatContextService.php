@@ -108,6 +108,9 @@ class StorefrontChatContextService
     {
         $ctx = $this->build();
         $hay = mb_strtolower($message);
+        if ($this->isSocialChitChat($hay)) {
+            return [];
+        }
 
         if ($this->messageAsksDiscounts($hay)) {
             return $ctx['discounted_products'] ?? [];
@@ -127,6 +130,72 @@ class StorefrontChatContextService
         }
 
         return [];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function featuredPicks(int $limit = 6): array
+    {
+        $ctx = $this->build();
+        $rows = $ctx['new_arrivals'] ?? [];
+        if ($rows === []) {
+            $rows = $ctx['discounted_products'] ?? [];
+        }
+
+        return array_slice($rows, 0, $limit);
+    }
+
+    public function isVagueProductBrowse(string $message): bool
+    {
+        $hay = mb_strtolower(trim($message));
+        if ($hay === '' || $this->isSocialChitChat($hay)) {
+            return false;
+        }
+
+        if ($this->messageAsksDiscounts($hay) || $this->messageAsksNewArrivals($hay)) {
+            return false;
+        }
+
+        $specific = ['green', 'blue', 'black', 'white', 'red', 'nike', 'size', 'jeans', 'shirt', 'jacket', 'shoes', 'ខោ', 'អាវ', 'ស្បែកជើង'];
+        foreach ($specific as $word) {
+            if (str_contains($hay, $word)) {
+                return false;
+            }
+        }
+
+        return (bool) preg_match('/\b(show me|show|see|browse|any|list|what).{0,24}(products?|items?|stuff|catalog|store)\b/u', $hay)
+            || (bool) preg_match('/(មានទំនិញ|មានអីវ៉ាន់|បង្ហាញទំនិញ|មើលទំនិញ)/u', $hay)
+            || in_array($hay, ['products', 'product', 'items', 'catalog', 'show me a products?', 'show me products?'], true);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function productsFromReplyText(string $reply): array
+    {
+        if (! preg_match_all('/«([^»]+)»/u', $reply, $matches)) {
+            return [];
+        }
+
+        $names = array_values(array_unique(array_filter(array_map('trim', $matches[1]))));
+        if ($names === []) {
+            return [];
+        }
+
+        return Product::query()
+            ->with('activeDiscount')
+            ->where('is_active', true)
+            ->where(function ($q) use ($names) {
+                foreach (array_slice($names, 0, 8) as $name) {
+                    $q->orWhere('name', 'ilike', $name);
+                }
+            })
+            ->limit(6)
+            ->get()
+            ->map(fn (Product $p) => $this->serializeProduct($p))
+            ->values()
+            ->all();
     }
 
     /**
@@ -181,6 +250,7 @@ class StorefrontChatContextService
         $stop = [
             'the', 'and', 'for', 'what', 'which', 'how', 'about', 'please', 'show', 'find',
             'product', 'products', 'item', 'items', 'any', 'have', 'you', 'your', 'store',
+            'today', 'hello', 'thanks', 'thank', 'morning', 'afternoon', 'evening', 'doing',
             'តើ', 'អ្វី', 'មាន', 'ទេ', 'ផលិតផល', 'អីវ៉ាន់', 'សួរ', 'ចង់', 'មើល',
         ];
 
@@ -209,6 +279,18 @@ class StorefrontChatContextService
         }
 
         return false;
+    }
+
+    public function isSocialChitChat(string $hay): bool
+    {
+        if (preg_match('/\b(hi|hello|hey|how are you|how\'s it going|what\'s up|thanks|thank you)\b/u', $hay)) {
+            return true;
+        }
+
+        return str_contains($hay, 'សួស្តី')
+            || str_contains($hay, 'សួស្ដី')
+            || str_contains($hay, 'សុខសប្បាយ')
+            || str_contains($hay, 'អរគុណ');
     }
 
     private function messageAsksDiscounts(string $hay): bool

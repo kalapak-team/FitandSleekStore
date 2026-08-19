@@ -23,12 +23,15 @@ import OrderDriverTelegramQr from "../../components/admin/OrderDriverTelegramQr.
 import OrderCodCollectionPanel from "../../components/admin/OrderCodCollectionPanel.jsx";
 import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
+import { resolveImageUrl } from "../../lib/images";
 
 const ORDER_STATUS_OPTIONS = [
   { value: "pending_payment", label: "Awaiting payment" },
   { value: "processing", label: "Processing" },
   { value: "shipped", label: "Shipped" },
-  { value: "completed", label: "Completed" },
+  { value: "in_transit", label: "In transit" },
+  { value: "arrived", label: "Arrived" },
+  { value: "completed", label: "Goods received" },
   { value: "cancelled", label: "Cancelled" },
 ];
 
@@ -96,7 +99,7 @@ const getStatusStyle = (status, mode, primaryColor) => {
  };
  }
 
- if (s === 'processing' || s === 'shipped' || s === 'preparing') {
+ if (s === 'processing' || s === 'shipped' || s === 'preparing' || s === 'in_transit' || s === 'arrived') {
  return {
  backgroundColor: isDark ? '#0EA5E9' : '#E0F2FE',
  color: isDark ? '#E0F2FE' : '#075985',
@@ -119,6 +122,29 @@ const getStatusStyle = (status, mode, primaryColor) => {
  borderColor: isDark ? '#475569' : '#CBD5E1',
  };
 };
+
+function CustomerAvatar({ user, sizeClass = "w-10 h-10", textClass = "text-sm" }) {
+  const [failed, setFailed] = useState(false);
+  const src = !failed && user?.profile_image_url
+    ? resolveImageUrl(user.profile_image_url)
+    : "";
+  const initial = (user?.name || user?.email || "U").charAt(0).toUpperCase();
+
+  return (
+    <div className={`${sizeClass} bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold ${textClass} overflow-hidden flex-shrink-0`}>
+      {src ? (
+        <img
+          src={src}
+          alt={user?.name || "Customer"}
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initial
+      )}
+    </div>
+  );
+}
 
 const isOrderPaid = (paymentStatus) => (paymentStatus || '').toLowerCase() === 'paid';
 
@@ -195,8 +221,10 @@ const formatFulfillmentStatus = (status, paymentStatus) => {
  processing: 'Processing',
  preparing: 'Preparing',
  shipped: 'Shipped',
- completed: 'Completed',
- delivered: 'Delivered',
+ in_transit: 'In transit',
+ arrived: 'Arrived',
+ completed: 'Goods received',
+ delivered: 'Goods received',
  cancelled: 'Cancelled',
  };
  return labels[s] || status || 'Pending';
@@ -497,7 +525,12 @@ export default function AdminOrders() {
  const { data } = await api.get(`/admin/orders/${id}`);
  setSelected(data);
  const fulfillment = data.status || "";
- setStatus(fulfillment === "paid" ? "processing" : fulfillment);
+ setStatus(
+  fulfillment === "paid" ? "processing"
+  : fulfillment === "pending" ? "pending_payment"
+  : fulfillment === "delivered" ? "completed"
+  : fulfillment
+ );
  } catch (e) {
  setErr(e?.response?.data?.message || "Failed to load order.");
  setSelected(null);
@@ -600,7 +633,9 @@ export default function AdminOrders() {
  { value: "awaiting_payment", label: "Awaiting payment" },
  { value: "processing", label: "Processing" },
  { value: "shipped", label: "Shipped" },
- { value: "completed", label: "Completed" },
+ { value: "in_transit", label: "In transit" },
+ { value: "arrived", label: "Arrived" },
+ { value: "completed", label: "Goods received" },
  { value: "cancelled", label: "Cancelled" },
  ].map((opt) => ({
  ...opt,
@@ -609,6 +644,8 @@ export default function AdminOrders() {
  if (opt.value === "awaiting_payment") return isAwaitingPayment(o);
  if (opt.value === "processing") return fulfillment === "processing" || fulfillment === "preparing" || fulfillment === "paid";
  if (opt.value === "shipped") return fulfillment === "shipped";
+ if (opt.value === "in_transit") return fulfillment === "in_transit";
+ if (opt.value === "arrived") return fulfillment === "arrived";
  if (opt.value === "completed") return fulfillment === "completed" || fulfillment === "delivered";
  if (opt.value === "cancelled") return fulfillment === "cancelled";
  return false;
@@ -902,9 +939,7 @@ export default function AdminOrders() {
  {isColVisible("customer") ? (
  <td className="px-4 md:px-6 py-3 md:py-4">
  <div className="flex items-center gap-3">
- <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm">
- {o.user?.name?.charAt(0).toUpperCase() || o.user?.email?.charAt(0).toUpperCase() || 'U'}
- </div>
+ <CustomerAvatar user={o.user} />
  <div>
  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{o.user?.name || 'Guest'}</p>
  <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[150px]">{o.user?.email}</p>
@@ -1005,9 +1040,7 @@ export default function AdminOrders() {
  </div>
  </div>
  <div className="flex items-center gap-3">
- <div className="w-9 h-9 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold text-sm flex-shrink-0">
- {o.user?.name?.charAt(0).toUpperCase() || o.user?.email?.charAt(0).toUpperCase() || 'U'}
- </div>
+ <CustomerAvatar user={o.user} sizeClass="w-9 h-9" />
  <div className="min-w-0">
  <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{o.user?.name || 'Guest'}</p>
  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{o.user?.email}</p>
@@ -1090,7 +1123,8 @@ export default function AdminOrders() {
  onClose={closeView}
  title={selected ? `Order #${selected.id}` : ""}
  titleId="order-view-title"
- maxWidthClass="max-w-2xl"
+ maxWidthClass="max-w-7xl"
+ maxHeightClass="max-h-[96vh]"
  >
  {viewLoading || !selected ? (
  <AdminSectionLoader />
@@ -1104,80 +1138,19 @@ export default function AdminOrders() {
  </span>
  </div>
 
+ <div className="grid grid-cols-1 gap-6 xl:grid-cols-2 xl:items-start">
+ <div>
 {/* Customer Info */}
  <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Customer Information</h4>
  <div className="flex items-center gap-3">
- <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-slate-700 dark:text-slate-200 font-bold">
- {selected?.user?.name?.charAt(0).toUpperCase() || 'U'}
- </div>
+ <CustomerAvatar user={selected?.user} />
  <div>
  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{selected?.user?.name || 'Guest'}</p>
  <p className="text-xs text-slate-500 dark:text-slate-400">{selected?.user?.email}</p>
  </div>
  </div>
  </div>
-
- {(canEditShipments || selected?.shipment) ? (
- <OrderShipmentPanel
- orderId={selected?.id}
- shipment={selected?.shipment}
- canEdit={canEditShipments}
- onSaved={(shipment) => {
- setSelected((prev) => (prev ? { ...prev, shipment, status: "shipped" } : prev));
- setStatus("shipped");
- refetchOrders();
- }}
- />
- ) : null}
-
- {selected?.id && (canEditShipments || canEditOrders) ? (
- <OrderDriverTelegramQr
- orderId={selected.id}
- orderNumber={selected.order_number}
- shipment={selected?.shipment}
- canEdit={canEditShipments || canEditOrders}
- onShipmentChange={(shipment) => {
- setSelected((prev) => (prev ? { ...prev, shipment } : prev));
- }}
- />
- ) : null}
-
- <OrderCodCollectionPanel
- order={selected}
- canEdit={canEditOrders}
- onCollected={(order) => {
- setSelected((prev) => (prev ? { ...prev, ...order, payment_status: "paid" } : prev));
- refetchOrders();
- }}
- />
-
- {canEditOrders ? (
- <div className="mb-6">
- <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Update fulfillment status</label>
- <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
- Payment: KHQR prepaid online, or COD (record cash/KHQR when delivered).
- </p>
- <div className="flex gap-3">
- <AdminSearchSelect
- value={status === 'paid' ? 'processing' : (status === 'pending' ? 'pending_payment' : status)}
- onChange={setStatus}
- options={ORDER_STATUS_OPTIONS}
- inputClassName="flex-1 h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] dark:focus:border-[rgba(var(--admin-primary-rgb),0.7)] focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.2)] focus:bg-white dark:focus:bg-slate-950 transition-all"
- className="flex-1 min-w-0"
- ariaLabel="Order status"
- placeholder="Search status…"
- allowEmpty={false}
- />
- <button
- onClick={save}
- className="h-12 px-6 rounded-xl bg-[color:var(--admin-primary)] text-white font-semibold hover:brightness-110 transition-colors"
- >
- Save
- </button>
- </div>
- </div>
- ) : null}
 
  {/* Order Items */}
  <div className="mb-6">
@@ -1230,12 +1203,75 @@ export default function AdminOrders() {
  </div>
  </div>
 
- {/* Total */}
- <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex justify-between items-center">
+ <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex justify-between items-center mb-6">
  <span className="text-lg font-semibold text-slate-700 dark:text-slate-200">Total Amount</span>
  <span className="text-2xl font-bold text-slate-900 dark:text-white"><Money value={selected?.total} /></span>
  </div>
- 
+
+ {canEditOrders ? (
+ <div className="mb-6">
+ <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Update fulfillment status</label>
+ <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+ Same steps as the courier Telegram job: Processing → Shipped → In transit → Arrived → Goods received.
+ </p>
+ <div className="flex gap-3">
+ <AdminSearchSelect
+ value={status === 'paid' ? 'processing' : (status === 'pending' ? 'pending_payment' : (status === 'delivered' ? 'completed' : status))}
+ onChange={setStatus}
+ options={ORDER_STATUS_OPTIONS}
+ inputClassName="flex-1 h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--admin-primary)] dark:focus:border-[rgba(var(--admin-primary-rgb),0.7)] focus:ring-2 focus:ring-[rgba(var(--admin-primary-rgb),0.2)] focus:bg-white dark:focus:bg-slate-950 transition-all"
+ className="flex-1 min-w-0"
+ ariaLabel="Order status"
+ placeholder="Search status…"
+ allowEmpty={false}
+ />
+ <button
+ onClick={save}
+ className="h-12 px-6 rounded-xl bg-[color:var(--admin-primary)] text-white font-semibold hover:brightness-110 transition-colors"
+ >
+ Save
+ </button>
+ </div>
+ </div>
+ ) : null}
+ </div>
+
+ <div>
+ {(canEditShipments || selected?.shipment) ? (
+ <OrderShipmentPanel
+ orderId={selected?.id}
+ shipment={selected?.shipment}
+ canEdit={canEditShipments}
+ onSaved={(shipment) => {
+ setSelected((prev) => (prev ? { ...prev, shipment, status: "shipped" } : prev));
+ setStatus("shipped");
+ refetchOrders();
+ }}
+ />
+ ) : null}
+
+ {selected?.id && (canEditShipments || canEditOrders) ? (
+ <OrderDriverTelegramQr
+ orderId={selected.id}
+ orderNumber={selected.order_number}
+ shipment={selected?.shipment}
+ canEdit={canEditShipments || canEditOrders}
+ onShipmentChange={(shipment) => {
+ setSelected((prev) => (prev ? { ...prev, shipment } : prev));
+ }}
+ />
+ ) : null}
+
+ <OrderCodCollectionPanel
+ order={selected}
+ canEdit={canEditOrders}
+ onCollected={(order) => {
+ setSelected((prev) => (prev ? { ...prev, ...order, payment_status: "paid" } : prev));
+ refetchOrders();
+ }}
+ />
+ </div>
+ </div>
  </>
  )}
  </AdminModal>

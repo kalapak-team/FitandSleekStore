@@ -59,11 +59,35 @@ const _settlements = <String, CodSettlementInfo>{
   ),
   'cod_khqr': CodSettlementInfo(
     method: 'cod_khqr',
-    channelKm: 'ក្នុងកុង (Scan KHQR)',
-    channelEn: 'In-app (KHQR scan)',
-    labelKm: 'Scan KHQR — ក្នុងកុង (Bakong)',
-    labelEn: 'KHQR scan — in-app (Bakong)',
+    channelKm: 'QR ហាង — អ្នកដឹកស្កេន',
+    channelEn: 'Shop QR — driver scans',
+    labelKm: 'បានបង់ដោយអ្នកដឹកជា QR',
+    labelEn: 'Paid by driver via QR',
     currency: 'KHR',
+  ),
+  'cod_driver_qr': CodSettlementInfo(
+    method: 'cod_driver_qr',
+    channelKm: 'Driver បង់ឥឡូវ — QR',
+    channelEn: 'Driver pays now — QR',
+    labelKm: 'បានបង់ដោយអ្នកដឹកជា QR',
+    labelEn: 'Paid by driver via QR',
+    currency: 'USD',
+  ),
+  'cod_driver_cash': CodSettlementInfo(
+    method: 'cod_driver_cash',
+    channelKm: 'Driver អោយជាលុយសុទ្ធ',
+    channelEn: 'Driver paid cash',
+    labelKm: 'Driver អោយជាលុយសុទ្ធ',
+    labelEn: 'Driver paid cash to the shop',
+    currency: 'USD',
+  ),
+  'cod_customer_driver_qr': CodSettlementInfo(
+    method: 'cod_customer_driver_qr',
+    channelKm: 'Customer បង់ QR អ្នកដឹក',
+    channelEn: 'Customer paid driver QR',
+    labelKm: 'Customer បង់ QR អ្នកដឹក — អ្នកដឹកនឹងបង់មកហាងផ្ទាល់',
+    labelEn: 'Customer paid the driver QR — driver remits to the shop',
+    currency: 'USD',
   ),
 };
 
@@ -101,13 +125,26 @@ CodSettlementInfo? settlementFromPayments(List<AdminPaymentSnippet> payments) {
   final actual = raw['actual_amount_received'] is num
       ? raw['actual_amount_received'] as num
       : paid.amount;
+  final qrBank = (raw['qr_bank_label'] ?? raw['qr_bank'])?.toString();
+  final labelKm = raw['settlement_label_km']?.toString() ??
+      (((paid.method == 'cod_driver_qr' || paid.method == 'cod_khqr') &&
+              qrBank != null &&
+              qrBank.isNotEmpty)
+          ? 'បានបង់ដោយអ្នកដឹកជា QR ($qrBank)'
+          : base.labelKm);
+  final labelEn = raw['settlement_label_en']?.toString() ??
+      (((paid.method == 'cod_driver_qr' || paid.method == 'cod_khqr') &&
+              qrBank != null &&
+              qrBank.isNotEmpty)
+          ? 'Paid by driver via QR ($qrBank)'
+          : base.labelEn);
 
   return CodSettlementInfo(
     method: base.method,
     channelKm: base.channelKm,
     channelEn: base.channelEn,
-    labelKm: base.labelKm,
-    labelEn: base.labelEn,
+    labelKm: labelKm,
+    labelEn: labelEn,
     currency: currency,
     expectedAmount: expected,
     actualAmountReceived: actual,

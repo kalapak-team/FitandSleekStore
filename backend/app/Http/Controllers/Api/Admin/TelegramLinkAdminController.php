@@ -195,8 +195,8 @@ class TelegramLinkAdminController extends BaseAdminController
             return false;
         }
 
-        // Staff Telegram linking only (admin / superadmin). External couriers do not need accounts.
-        if (! $target->isAdmin()) {
+        // Staff, customer, and driver Telegram linking. Role is never changed by this flow.
+        if (! $target->isAdmin() && ! $target->isCustomer() && ! $target->isDriver()) {
             return false;
         }
 

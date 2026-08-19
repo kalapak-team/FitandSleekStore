@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import api from "../../lib/api";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
@@ -12,6 +13,7 @@ import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
 import { downloadBlobResponse } from "../../lib/adminReportDownload.js";
 import { exportAdminTable } from "../../lib/adminTableExport.js";
 import { toastSuccess } from "../../lib/swal";
+import { showKhqrSuccess } from "../../lib/khqrSuccess.js";
 
 const PAPER_SIZE_OPTIONS = [
   { value: "a4", label: "A4" },
@@ -32,6 +34,8 @@ export default function AdminInvoicePage() {
  const [error, setError] = useState("");
  const [paperSize, setPaperSize] = useState("a4");
  const [exportBusy, setExportBusy] = useState(false);
+ const paidAlertedRef = useRef(false);
+ const seenUnpaidRef = useRef(false);
 
  const downloadPdf = async () => {
  setExportBusy(true);
@@ -102,7 +106,47 @@ export default function AdminInvoicePage() {
  }, [orderId, permissionsReady, canViewOrders]);
 
  const isPaid = useMemo(() => invoice?.payment_status === "PAID", [invoice]);
+ const payQr = invoice?.payment_qr;
  const logoUrl = resolveBundledLogoUrl(settings?.app_logo_url || settings?.header?.logo_url);
+
+ useEffect(() => {
+  if (!invoice) return;
+  if (!isPaid) {
+   seenUnpaidRef.current = true;
+   return;
+  }
+  if (!seenUnpaidRef.current || paidAlertedRef.current) return;
+  paidAlertedRef.current = true;
+  showKhqrSuccess({
+   orderNumber: invoice.order_number,
+   total: payQr?.amount || invoice.grand_total,
+   currency: payQr?.currency || "KHR",
+   body: "Customer paid the paper invoice. This sale is complete.",
+   showTelegram: false,
+   showRedirect: false,
+   redirectSeconds: 0,
+   buttonLabel: "OK",
+   statusLabel: "Paid & Complete",
+  });
+ }, [invoice, isPaid, payQr]);
+
+ useEffect(() => {
+  if (!permissionsReady || !canViewOrders || !orderId || isPaid) return undefined;
+  let cancelled = false;
+  const tick = async () => {
+   try {
+    const { data } = await api.get(`/admin/orders/${orderId}/invoice`);
+    if (!cancelled) setInvoice(data?.data || null);
+   } catch {
+    /* keep last invoice */
+   }
+  };
+  const id = window.setInterval(tick, 3000);
+  return () => {
+   cancelled = true;
+   window.clearInterval(id);
+  };
+ }, [orderId, permissionsReady, canViewOrders, isPaid]);
 
  if (!permissionsReady || loading) return <AdminPageLoader />;
 
@@ -229,6 +273,35 @@ export default function AdminInvoicePage() {
  <p>Shipping Fee: <span className="font-semibold">{money(invoice.shipping_fee)}</span></p>
  <p className="text-lg font-bold text-slate-900 dark:text-white">Grand Total: {money(invoice.grand_total)}</p>
  </div>
+
+ {payQr?.status === "pending" && payQr.qr_string ? (
+ <div className="mt-4 rounded-xl border-2 border-[#C0272D]/40 bg-[#FFF8F8] p-4 dark:border-[#C0272D]/50 dark:bg-red-950/20 print:border-[#C0272D]">
+  <div className={`flex flex-col items-center gap-4 ${paperSize === "thermal" ? "" : "sm:flex-row sm:items-center"}`}>
+   <div className="rounded-xl bg-white p-2 shadow-sm">
+    <QRCodeSVG value={payQr.qr_string} size={paperSize === "thermal" ? 160 : 200} level="M" includeMargin />
+   </div>
+   <div className="min-w-0 text-center sm:text-left">
+    <p className="text-xs font-bold uppercase tracking-wide text-[#C0272D]">KHQR · Bakong</p>
+    <p className="mt-1 text-base font-bold text-slate-900 dark:text-white">ស្កេនដើម្បីបង់ទៅហាង</p>
+    <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+     Scan with any Bakong bank app to pay the shop in full. This QR stays valid until this invoice is paid — then the sale is complete.
+     <br />
+     QR នេះមិនផុតកំណត់ទេ ទាល់តែបង់រួច។
+    </p>
+    <p className="mt-2 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{payQr.amount_label || money(invoice.grand_total)}</p>
+    {payQr.usd_label ? <p className="text-sm text-slate-500 dark:text-slate-400">{payQr.usd_label}</p> : null}
+   </div>
+  </div>
+ </div>
+ ) : isPaid ? (
+ <div className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-100">
+  PAID · បានបង់រួច — payment QR is closed
+ </div>
+ ) : invoice.payment_qr_error ? (
+ <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100">
+  {invoice.payment_qr_error}
+ </div>
+ ) : null}
 
  <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm dark:border-slate-600 dark:bg-slate-800/50">
  <p className="font-bold text-slate-800 dark:text-slate-100">Courier pickup · អ្នកដឹកមកយកពីហាង</p>

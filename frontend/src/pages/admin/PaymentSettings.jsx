@@ -203,7 +203,7 @@ export default function PaymentSettings() {
  </h5>
  <ul className="text-sm text-slate-700 dark:text-slate-200 space-y-1">
  <li>• <strong>KHQR:</strong> Customer pays immediately via Bakong scan — required for province delivery.</li>
- <li>• <strong>COD:</strong> Customer pays on delivery in Phnom Penh; driver/shop records cash or KHQR.</li>
+ <li>• <strong>COD:</strong> Driver pays the shop now (shop shows QR, driver scans ABA/ACLEDA, or cash), or waits to collect from the customer (customer pays the driver’s QR, then driver scans the shop QR to remit).</li>
  <li>• <strong>Exchange rate:</strong> Converts USD order total to KHR for COD collection.</li>
  </ul>
  </div>

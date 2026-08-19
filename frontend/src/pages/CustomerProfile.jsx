@@ -15,6 +15,33 @@ import ExternalCourierTrackButton from "../components/ExternalCourierTrackButton
 import TelegramAccountConnectCard from "../components/profile/TelegramAccountConnectCard.jsx";
 import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 
+const TELEGRAM_PLACEHOLDER_EMAIL = /@telegram\.fitandsleek\.local$/i;
+
+function isTelegramPlaceholderEmail(email) {
+  return typeof email === "string" && TELEGRAM_PLACEHOLDER_EMAIL.test(email);
+}
+
+function profileContactLine(person) {
+  if (!person) return "";
+  const username = String(person.telegram_username || "").replace(/^@/, "");
+  if (username) return `@${username}`;
+  if (isTelegramPlaceholderEmail(person.email)) return "Telegram account";
+  return person.email || "";
+}
+
+function memberSinceYear(person) {
+  const raw = person?.created_at;
+  if (!raw) return null;
+  const year = new Date(raw).getFullYear();
+  return Number.isFinite(year) && year > 1970 ? String(year) : null;
+}
+
+function accountIsActive(person) {
+  if (!person) return false;
+  if (person.status) return String(person.status).toLowerCase() === "active";
+  return Boolean(person.is_active);
+}
+
 const createEmptyAddress = () => ({
   label: "Home",
   receiver_name: "",
@@ -31,7 +58,7 @@ const createEmptyAddress = () => ({
 });
 
 export default function CustomerProfile() {
-  const { user, logout } = useAuth();
+  const { user, logout, refresh } = useAuth();
   const { add: addItem } = useCart();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -138,6 +165,11 @@ export default function CustomerProfile() {
       setReplacementCases(replacementRes.data?.data?.data || replacementRes.data?.data || []);
       setEditForm(profileRes.data);
       setLoyalty(loyaltyRes.data?.data || null);
+      try {
+        await refresh();
+      } catch {
+        /* header avatar can still update on next /me */
+      }
     } catch (error) {
       console.error("Error loading profile:", error);
     } finally {
@@ -204,9 +236,22 @@ export default function CustomerProfile() {
 
   const handleSaveProfile = async () => {
     try {
-      await api.put("/user/profile", editForm);
-      setProfile(editForm);
+      const nextEmail = String(editForm.email || "").trim();
+      const payload = {
+        name: editForm.name,
+        phone: editForm.phone,
+        email: nextEmail && !isTelegramPlaceholderEmail(nextEmail)
+          ? nextEmail
+          : (profile?.email || user.email),
+      };
+      await api.put("/user/profile", payload);
+      setProfile({ ...profile, ...payload });
       setEditing(false);
+      try {
+        await refresh();
+      } catch {
+        /* ignore */
+      }
       await showSuccess(PROFILE_SUCCESS_MESSAGE, undefined);
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -449,6 +494,11 @@ export default function CustomerProfile() {
       });
       // Also reload profile to ensure header image is updated
       loadProfile();
+      try {
+        await refresh();
+      } catch {
+        /* ignore */
+      }
       await showSuccess("Success", "Profile image updated successfully!");
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -553,6 +603,16 @@ export default function CustomerProfile() {
     );
   }
 
+  const person = profile || user;
+  const displayName = person.telegram_name || person.name || user.name || "";
+  const contactLine = profileContactLine(person);
+  const joinedYear = memberSinceYear(person) || memberSinceYear(user);
+  const isActive = accountIsActive(person) || accountIsActive(user);
+  const avatarUrl = person.profile_image_url || person.profile_image_path
+    ? resolveImageUrl(person.profile_image_url || person.profile_image_path)
+    : null;
+  const placeholderEmail = isTelegramPlaceholderEmail(person.email);
+
   return (
     <>
       <div className="container-safe-inset fs-customer-profile py-4 sm:py-6 lg:py-8">
@@ -562,14 +622,14 @@ export default function CustomerProfile() {
             <div className="flex items-center gap-3 sm:gap-4 lg:gap-6 w-full sm:w-auto">
               <div className="relative group flex-shrink-0">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/20 rounded-full flex items-center justify-center overflow-hidden">
-                  {profile?.profile_image_url || profile?.profile_image_path ? (
+                  {avatarUrl ? (
                     <img
-                      src={resolveImageUrl(profile.profile_image_url || profile.profile_image_path)}
-                      alt="Profile"
+                      src={avatarUrl}
+                      alt={displayName || "Profile"}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <span className="text-2xl sm:text-3xl font-black">{user.name?.charAt(0) || "U"}</span>
+                    <span className="text-2xl sm:text-3xl font-black">{displayName?.charAt(0) || "U"}</span>
                   )}
                 </div>
                 <button
@@ -589,9 +649,11 @@ export default function CustomerProfile() {
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black truncate">{user.name}</h1>
-                <p className="text-[#dbe6e1] text-sm sm:text-base truncate">{user.email}</p>
-                <p className="text-xs sm:text-sm text-[#c7d7d0] mt-1 sm:mt-2">Member since {new Date(user.created_at).getFullYear()}</p>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-black truncate">{displayName}</h1>
+                <p className="text-[#dbe6e1] text-sm sm:text-base truncate">{contactLine}</p>
+                <p className="text-xs sm:text-sm text-[#c7d7d0] mt-1 sm:mt-2">
+                  {joinedYear ? `Member since ${joinedYear}` : "Telegram member"}
+                </p>
               </div>
             </div>
             <button
@@ -682,25 +744,29 @@ export default function CustomerProfile() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
                       <div>
                         <label className="block text-sm font-semibold text-gray-600 mb-2">Full Name</label>
-                        <p className="text-lg text-gray-900">{profile?.name}</p>
+                        <p className="text-lg text-gray-900">{displayName || "—"}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-600 mb-2">Email</label>
+                        <label className="block text-sm font-semibold text-gray-600 mb-2">
+                          {placeholderEmail || person.telegram_username ? "Telegram" : "Email"}
+                        </label>
                         <p className="text-lg text-gray-900 flex items-center gap-2">
-                          <Mail className="w-4 h-4" /> {profile?.email}
+                          <Mail className="w-4 h-4" /> {contactLine || "—"}
                         </p>
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-600 mb-2">Phone</label>
                         <p className="text-lg text-gray-900 flex items-center gap-2">
-                          <Phone className="w-4 h-4" /> {profile?.phone || "Not provided"}
+                          <Phone className="w-4 h-4" /> {person.phone || "Not provided"}
                         </p>
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-600 mb-2">Status</label>
                         <p className="text-lg text-gray-900 capitalize">
-                          <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold">
-                            {profile?.is_active ? "Active" : "Inactive"}
+                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                            isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-600"
+                          }`}>
+                            {isActive ? "Active" : "Inactive"}
                           </span>
                         </p>
                       </div>
@@ -760,13 +826,19 @@ export default function CustomerProfile() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                          {isTelegramPlaceholderEmail(editForm.email) ? "Email (optional)" : "Email"}
+                        </label>
                         <input
                           type="email"
-                          value={editForm.email || ""}
+                          value={isTelegramPlaceholderEmail(editForm.email) ? "" : (editForm.email || "")}
+                          placeholder={isTelegramPlaceholderEmail(editForm.email) ? "Add a real email if you want" : ""}
                           onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6F8B7F] focus:border-transparent outline-none"
                         />
+                        {isTelegramPlaceholderEmail(editForm.email) || person.telegram_username ? (
+                          <p className="mt-1 text-xs text-gray-500">Signed in with Telegram {contactLine}</p>
+                        ) : null}
                       </div>
 
                       <div>

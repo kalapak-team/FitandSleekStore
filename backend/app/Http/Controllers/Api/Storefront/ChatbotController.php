@@ -4,11 +4,9 @@ namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
-use App\Models\User;
 use App\Services\HuggingFaceSpaceChatService;
 use App\Services\StorefrontChatContextService;
 use Illuminate\Http\Request;
-use Laravel\Sanctum\PersonalAccessToken;
 use RuntimeException;
 
 class ChatbotController extends Controller
@@ -49,6 +47,7 @@ class ChatbotController extends Controller
             'history' => 'sometimes|array',
             'history.*.role' => 'required_with:history|string',
             'history.*.content' => 'required_with:history|string',
+            'conversation_id' => 'nullable|string|max:64',
         ]);
 
         if (! $this->chatAi->isConfigured()) {
@@ -57,39 +56,37 @@ class ChatbotController extends Controller
             ], 503);
         }
 
-        $user = $this->resolveUser($request);
+        $current = trim($validated['message']);
 
-        // Space already has FAQ / RAG / store logic — keep Laravel system prompt light.
-        $systemText = 'You are Fit & Sleek customer support on the Fitandsleek website. '
-            . 'Be friendly and concise. Match the customer language (Khmer or English). '
-            . 'Do NOT use markdown tables — product cards appear in the chat UI.';
-
-        if ($user !== null) {
-            $systemText .= "\nSigned-in customer id: {$user->id}; email: {$user->email}.";
-        }
-
-        $messages = [['role' => 'system', 'content' => $systemText]];
+        // Send the customer's words only. The Space already greets, jokes, answers
+        // policy, and picks products — Laravel must not intercept or dump the catalog.
+        $messages = [];
 
         foreach ($validated['history'] ?? [] as $item) {
             $role = ($item['role'] ?? '') === 'assistant' ? 'assistant' : 'user';
             $content = trim((string) ($item['content'] ?? ''));
-            if ($content === '') {
+            if ($content === '' || $this->isLocalWelcome($content)) {
                 continue;
             }
             $messages[] = ['role' => $role, 'content' => $content];
         }
 
-        $messages[] = ['role' => 'user', 'content' => $validated['message']];
+        $last = $messages !== [] ? $messages[array_key_last($messages)] : null;
+        if ($last && $last['role'] === 'user' && $last['content'] === $current) {
+            array_pop($messages);
+        }
 
-        if (count($messages) > 13) {
-            $messages = array_merge(
-                [$messages[0]],
-                array_slice($messages, -12),
-            );
+        $messages[] = ['role' => 'user', 'content' => $current];
+
+        if (count($messages) > 12) {
+            $messages = array_slice($messages, -12);
         }
 
         try {
-            $result = $this->chatAi->chat($messages);
+            $sessionHash = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) ($validated['conversation_id'] ?? '')) ?: null;
+            $result = $this->chatAi->chat($messages, [
+                'session_hash' => $sessionHash ?: \Illuminate\Support\Str::uuid()->toString(),
+            ]);
         } catch (RuntimeException $e) {
             report($e);
 
@@ -107,50 +104,35 @@ class ChatbotController extends Controller
             ], 500);
         }
 
-        $products = $this->storeContext->buildRichProductsForMessage($validated['message']);
-        $reply = $this->polishReply(trim($result['reply']), $products);
+        $reply = trim((string) $result['reply']);
+        $products = $this->storeContext->productsFromReplyText($reply);
 
         return response()->json([
-            'reply' => $reply,
+            'reply' => $this->polishReply($reply, $products),
             'products' => $products,
             'provider' => $result['provider'] ?? 'huggingface',
             'model' => $result['model'],
         ]);
     }
 
-    private function polishReply(string $reply, array $products): string
+    private function isLocalWelcome(string $content): bool
     {
-        if ($products === []) {
-            return trim($reply);
-        }
-
-        $clean = preg_replace('/^\|.+\|\s*\r?\n\|[-:\s|]+\|\s*\r?\n(?:\|.+\|\s*\r?\n?)+/m', '', $reply) ?? $reply;
-        $clean = preg_replace('/^#{1,6}\s+.+$/m', '', $clean) ?? $clean;
-        $clean = preg_replace("/\n{3,}/", "\n\n", trim($clean));
-
-        if ($clean === '') {
-            return 'Here are some picks from our store:';
-        }
-
-        if (strlen($clean) > 280) {
-            $parts = preg_split('/(?<=[.!?។])\s+/u', $clean) ?: [$clean];
-
-            return trim(implode(' ', array_slice($parts, 0, 2)));
-        }
-
-        return $clean;
+        return str_starts_with($content, "Hi! I'm Fit & Sleek support")
+            || str_starts_with($content, 'I can help with:')
+            || str_starts_with($content, 'Hey! Welcome to Fit & Sleek')
+            || str_starts_with($content, 'សួស្តី! 😊 ស្វាគមន៍មក Fit & Sleek');
     }
 
-    private function resolveUser(Request $request): ?User
+    private function polishReply(string $reply, array $products): string
     {
-        $token = $request->bearerToken();
-        if (! $token) {
-            return null;
+        $clean = preg_replace('/^\|.+\|\s*\r?\n\|[-:\s|]+\|\s*\r?\n(?:\|.+\|\s*\r?\n?)+/m', '', $reply) ?? $reply;
+        $clean = preg_replace('/^#{1,6}\s+.+$/m', '', $clean) ?? $clean;
+        if ($products !== []) {
+            $clean = preg_replace('/!\[[^\]]*]\(https?:[^)\s]+\)/', '', $clean) ?? $clean;
+            $clean = preg_replace('/^«.+».*$/mu', '', $clean) ?? $clean;
         }
+        $clean = preg_replace("/\n{3,}/", "\n\n", trim($clean));
 
-        $accessToken = PersonalAccessToken::findToken($token);
-        $user = $accessToken?->tokenable;
-
-        return $user instanceof User ? $user : null;
+        return $clean !== '' ? $clean : trim($reply);
     }
 }

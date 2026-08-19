@@ -492,6 +492,7 @@ export default function Profile() {
  <TelegramLinkPanel
  userId={user.id}
  telegram={user?.telegram}
+ role={user?.role}
  canManage={canManageTelegram}
  showSuperAdminHint={user?.role === "superadmin"}
  />

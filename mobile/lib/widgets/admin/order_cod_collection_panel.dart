@@ -32,8 +32,9 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
   bool _loading = false;
   CodKhqrPayment? _khqr;
   Timer? _pollTimer;
-  String? _channel; // outdoor | khqr
-  String? _cashSettlement; // cod_cash_usd | cod_cash_khr
+  String? _plan; // driver_advance | collect_at_delivery
+  String? _advancePay; // qr | cash
+  String _cashCurrency = 'USD';
   final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   String _courierName = 'J&T Express';
@@ -83,7 +84,12 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
     try {
       final quote = await _svc.getCodQuote(widget.order.id);
       if (!mounted) return;
-      setState(() => _quote = quote);
+      setState(() {
+        _quote = quote;
+        if (quote.codPlan != null && quote.codPlan!.isNotEmpty) {
+          _plan = quote.codPlan;
+        }
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _quote = null);
@@ -112,23 +118,23 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
     });
   }
 
-  Future<void> _collectCash() async {
-    if (!widget.canEdit || _cashSettlement == null) return;
-    final parsed = double.tryParse(_amountCtrl.text.trim());
-    if (parsed == null || parsed < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('បញ្ចូលចំនួនទទួលពិត / Enter amount received')),
-      );
-      return;
-    }
+  Future<void> _record({
+    required String method,
+    String? qrBank,
+    String? currency,
+    double? amount,
+  }) async {
+    if (!widget.canEdit) return;
     setState(() => _loading = true);
     try {
       final order = await _svc.collectCodCash(
         orderId: widget.order.id,
-        settlementMethod: _cashSettlement!,
-        actualAmountReceived: parsed,
+        settlementMethod: method,
+        actualAmountReceived: amount,
         courierName: _courierName,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        qrBank: qrBank,
+        currency: currency,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,18 +151,29 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
     }
   }
 
-  Future<void> _generateKhqr() async {
+  Future<void> _startShopQr(String nextPlan) async {
     if (!widget.canEdit) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _plan = nextPlan;
+      if (nextPlan == 'driver_advance') _advancePay = 'qr';
+    });
     try {
+      await _svc.setCodPlan(orderId: widget.order.id, plan: nextPlan);
       final payment = await _svc.createCodKhqr(
         orderId: widget.order.id,
         courierName: _courierName,
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
       if (!mounted) return;
-      setState(() => _khqr = payment);
+      setState(() {
+        _plan = nextPlan;
+        _khqr = payment;
+      });
       _startPolling();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('QR ហាងរួចរាល់ — អ្នកដឹកជាអ្នកស្កេន')),
+      );
     } on DioException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -165,17 +182,6 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  void _selectCashSettlement(String method) {
-    setState(() {
-      _cashSettlement = method;
-      if (_quote != null) {
-        _amountCtrl.text = method == 'cod_cash_khr'
-            ? '${_quote!.khrAmount}'
-            : _quote!.usdAmount.toStringAsFixed(2);
-      }
-    });
   }
 
   @override
@@ -233,91 +239,106 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
             const Text('No permission to record COD payments.', style: TextStyle(fontSize: 12)),
           ] else ...[
             const SizedBox(height: 12),
-            const Text('ជំហាន ១ — របៀបប្រមូល', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+            const Text('ជម្រើស Driver', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: _ChannelChip(
-                    label: 'លុយក្រៅ',
-                    selected: _channel == 'outdoor',
+                    label: 'ទី១ បង់ឥឡូវ',
+                    selected: _plan == 'driver_advance',
                     onTap: _loading
                         ? null
                         : () => setState(() {
-                              _channel = 'outdoor';
-                              _khqr = null;
-                              _pollTimer?.cancel();
-                              _cashSettlement = null;
+                              _plan = 'driver_advance';
+                              _advancePay = null;
                             }),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: _ChannelChip(
-                    label: 'Scan KHQR',
-                    selected: _channel == 'khqr',
-                    onTap: _loading ? null : () => setState(() {
-                          _channel = 'khqr';
-                          _cashSettlement = null;
-                        }),
+                    label: 'ទី២ រង់ចាំប្រមូល',
+                    selected: _plan == 'collect_at_delivery',
+                    onTap: _loading
+                        ? null
+                        : () => setState(() {
+                              _plan = 'collect_at_delivery';
+                              _advancePay = null;
+                            }),
                   ),
                 ),
               ],
             ),
-            if (_channel == 'outdoor') ...[
+            if (_plan == 'driver_advance') ...[
               const SizedBox(height: 12),
-              const Text('ជំហាន ២ — រូបិយប័ណ្ណ', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
                     child: _ChannelChip(
-                      label: 'USD\n$usdLabel',
-                      selected: _cashSettlement == 'cod_cash_usd',
-                      onTap: _loading ? null : () => _selectCashSettlement('cod_cash_usd'),
+                      label: 'QR ABA/AC',
+                      selected: _advancePay == 'qr',
+                      onTap: _loading ? null : () => _startShopQr('driver_advance'),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _ChannelChip(
-                      label: 'KHR\n$khrLabel',
-                      selected: _cashSettlement == 'cod_cash_khr',
-                      onTap: _loading ? null : () => _selectCashSettlement('cod_cash_khr'),
+                      label: 'លុយសុទ្ធ',
+                      selected: _advancePay == 'cash',
+                      onTap: _loading ? null : () => setState(() => _advancePay = 'cash'),
                     ),
                   ),
                 ],
               ),
-              if (_cashSettlement != null) ...[
+              if (_advancePay == 'qr') ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'ហាងមាន QR — អ្នកដឹកជាអ្នកស្កេន។ ប្រព័ន្ធកត់ថា បានបង់ដោយអ្នកដឹកជា QR (ABA/ACLEDA)។',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+              if (_advancePay == 'cash') ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ChannelChip(
+                        label: 'USD\n$usdLabel',
+                        selected: _cashCurrency == 'USD',
+                        onTap: _loading
+                            ? null
+                            : () => setState(() {
+                                  _cashCurrency = 'USD';
+                                  if (_quote != null) {
+                                    _amountCtrl.text = _quote!.usdAmount.toStringAsFixed(2);
+                                  }
+                                }),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ChannelChip(
+                        label: 'KHR\n$khrLabel',
+                        selected: _cashCurrency == 'KHR',
+                        onTap: _loading
+                            ? null
+                            : () => setState(() {
+                                  _cashCurrency = 'KHR';
+                                  if (_quote != null) {
+                                    _amountCtrl.text = '${_quote!.khrAmount}';
+                                  }
+                                }),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _amountCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
-                    labelText: 'ចំនួនទទួលពិត / Amount received',
-                    isDense: true,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _courierName,
-                  decoration: const InputDecoration(labelText: 'អ្នកដឹក / Courier', isDense: true),
-                  items: [
-                    ...kCourierProviders.map((c) => DropdownMenuItem(value: c, child: Text(c))),
-                    if (!kCourierProviders.contains(_courierName))
-                      DropdownMenuItem(value: _courierName, child: Text(_courierName)),
-                  ],
-                  onChanged: _loading
-                      ? null
-                      : (v) {
-                          if (v != null) setState(() => _courierName = v);
-                        },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _notesCtrl,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'កំណត់ហតុ / Notes',
+                    labelText: 'ចំនួនលុយសុទ្ធ / Cash amount',
                     isDense: true,
                   ),
                 ),
@@ -325,46 +346,46 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _loading ? null : _collectCash,
+                    onPressed: _loading
+                        ? null
+                        : () {
+                            final parsed = double.tryParse(_amountCtrl.text.trim());
+                            if (parsed == null || parsed < 0) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('បញ្ចូលចំនួនលុយសុទ្ធ')),
+                              );
+                              return;
+                            }
+                            _record(
+                              method: 'cod_driver_cash',
+                              currency: _cashCurrency,
+                              amount: parsed,
+                            );
+                          },
                     style: FilledButton.styleFrom(backgroundColor: AppColors.storeHeader),
-                    child: Text(_loading ? '…' : 'កត់ត្រាបង់រួច / Record payment'),
+                    child: Text(_loading ? '…' : 'កត់ត្រា: Driver អោយជាលុយសុទ្ធ'),
                   ),
                 ),
               ],
             ],
-            if (_channel == 'khqr') ...[
+            if (_plan == 'collect_at_delivery') ...[
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _courierName,
-                decoration: const InputDecoration(labelText: 'អ្នកដឹក / Courier', isDense: true),
-                items: [
-                  ...kCourierProviders.map((c) => DropdownMenuItem(value: c, child: Text(c))),
-                  if (!kCourierProviders.contains(_courierName))
-                    DropdownMenuItem(value: _courierName, child: Text(_courierName)),
-                ],
-                onChanged: _loading
-                    ? null
-                    : (v) {
-                        if (v != null) setState(() => _courierName = v);
-                      },
+              const Text(
+                'ពេលមកដល់ Customer បង់ QR អ្នកដឹក។ បន្ទាប់មកអ្នកដឹកស្កេន QR ហាងដើម្បីបង់មកហាងផ្ទាល់។ ហាងមិនស្កេនទេ។',
+                style: TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _notesCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'កំណត់ហតុ / Notes', isDense: true),
-              ),
-              if (_khqr?.qrString == null || _khqr!.qrString!.isEmpty) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _loading ? null : _generateKhqr,
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC0272D)),
-                    child: Text(_loading ? '…' : 'បង្កើត KHQR ($khrLabel)'),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _loading ? null : () => _startShopQr('collect_at_delivery'),
+                  child: Text(
+                    _quote?.codPlan == 'collect_at_delivery'
+                        ? 'បង្ហាញ QR ហាងអោយអ្នកដឹកស្កេន'
+                        : 'កត់ផែនការ + បង្ហាញ QR ហាង',
                   ),
                 ),
-              ],
+              ),
             ],
           ],
           if (_khqr?.qrString != null && _khqr!.qrString!.isNotEmpty) ...[
@@ -372,7 +393,10 @@ class _OrderCodCollectionPanelState extends State<OrderCodCollectionPanel> {
             Center(
               child: Column(
                 children: [
-                  const Text('Show QR for customer to scan', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFC0272D))),
+                  const Text(
+                    'QR ហាង — អ្នកដឹកជាអ្នកស្កេន (ហាងមិនស្កេនទេ)',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFC0272D)),
+                  ),
                   const SizedBox(height: 8),
                   QrImageView(
                     data: _khqr!.qrString!,

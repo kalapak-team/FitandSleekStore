@@ -14,8 +14,10 @@ use RuntimeException;
  * Space: https://huggingface.co/spaces/Kalapak/fitandsleekAIchat
  * Host:  https://kalapak-fitandsleekaichat.hf.space
  *
- * Gradio ChatInterface (fn chat / api_name=chat, UI fn_index=7):
- *   data = [message, history, product_focus]
+ * Gradio ChatInterface (fn chat / api_name=chat):
+ *   data = [message, history|null, product_focus|null]
+ * Empty history MUST be JSON null. An empty array [] makes Gradio fail with
+ * `event: error` / `data: null`, which Laravel used to hide behind Demo Products.
  * Protocol "call": POST /gradio_api/call/chat then GET SSE until event: complete.
  * Protocol "queue": POST /gradio_api/queue/join (fn_index) then GET /queue/data.
  */
@@ -89,9 +91,14 @@ class HuggingFaceSpaceChatService
             throw new RuntimeException('Empty chat message.');
         }
 
+        $sessionHash = trim((string) ($options['session_hash'] ?? ''));
+        if ($sessionHash === '') {
+            $sessionHash = Str::lower(Str::random(16));
+        }
+
         $payload = $this->protocol() === 'queue'
-            ? $this->chatViaQueue($message, $history)
-            : $this->chatViaCall($message, $history);
+            ? $this->chatViaQueue($message, $history, $sessionHash)
+            : $this->chatViaCall($message, $history, $sessionHash);
 
         $reply = $this->extractReply($payload);
 
@@ -131,7 +138,9 @@ class HuggingFaceSpaceChatService
 
     /**
      * Build Gradio ChatInterface inputs: [message, history, product_focus].
-     * System prompts are prepended to the current user message.
+     * Send product_focus as null. An empty object {} makes Gradio treat State as a
+     * file lookup and return SSE error "404: Not Found". Empty history must also
+     * be null — [] is rejected by this ChatInterface Fake API.
      *
      * @param  list<array{role: string, content: string}>  $messages
      * @return array{0: string, 1: list<array{role: string, content: string}>}
@@ -192,9 +201,9 @@ class HuggingFaceSpaceChatService
      * @param  list<array{role: string, content: string}>  $history
      * @return list<mixed>|array<string, mixed>
      */
-    private function chatViaCall(string $message, array $history): array
+    private function chatViaCall(string $message, array $history, string $sessionHash): array
     {
-        $eventId = $this->enqueueCall($message, $history);
+        $eventId = $this->enqueueCall($message, $history, $sessionHash);
 
         return $this->waitForCallResult($eventId);
     }
@@ -202,15 +211,16 @@ class HuggingFaceSpaceChatService
     /**
      * @param  list<array{role: string, content: string}>  $history
      */
-    private function enqueueCall(string $message, array $history): string
+    private function enqueueCall(string $message, array $history, string $sessionHash): string
     {
         try {
             $response = $this->http(30)
                 ->acceptJson()
                 ->asJson()
                 ->post($this->baseUrl().'/gradio_api/call/'.$this->apiName(), [
-                    // Space chat(message, history, product_focus=None) — omit history/focus and Gradio errors.
-                    'data' => [$message, $history, null],
+                    // Do not send session_hash on the call protocol — Gradio looks it
+                    // up as a session file and returns SSE "404: Not Found".
+                    'data' => $this->gradioData($message, $history),
                 ])
                 ->throw();
         } catch (ConnectionException $e) {
@@ -297,16 +307,14 @@ class HuggingFaceSpaceChatService
      * @param  list<array{role: string, content: string}>  $history
      * @return list<mixed>|array<string, mixed>
      */
-    private function chatViaQueue(string $message, array $history): array
+    private function chatViaQueue(string $message, array $history, string $sessionHash): array
     {
-        $sessionHash = Str::lower(Str::random(12));
-
         try {
             $response = $this->http(30)
                 ->acceptJson()
                 ->asJson()
                 ->post($this->baseUrl().'/gradio_api/queue/join', [
-                    'data' => [$message, $history, null],
+                    'data' => $this->gradioData($message, $history),
                     'fn_index' => $this->fnIndex(),
                     'session_hash' => $sessionHash,
                 ])
@@ -405,14 +413,53 @@ class HuggingFaceSpaceChatService
     }
 
     /**
+     * @param  list<array{role: string, content: string}>  $history
+     * @return list<mixed>
+     */
+    private function gradioData(string $message, array $history): array
+    {
+        return [
+            $message,
+            $history === [] ? null : array_values($history),
+            null,
+        ];
+    }
+
+    /**
      * @return array{event?: string, data?: mixed}
      */
     private function parseSse(string $body): array
     {
-        $event = null;
+        $events = [];
+        $event = 'message';
         $dataLines = [];
 
+        $flush = function () use (&$events, &$event, &$dataLines): void {
+            if ($dataLines === [] && $event === 'message') {
+                return;
+            }
+            $raw = trim(implode("\n", $dataLines));
+            $dataLines = [];
+            $data = null;
+            if ($raw !== '' && strtolower($raw) !== 'null') {
+                $decoded = json_decode($raw, true);
+                $data = json_last_error() === JSON_ERROR_NONE ? $decoded : $raw;
+            }
+            $events[] = ['event' => $event, 'data' => $data];
+            $event = 'message';
+        };
+
         foreach (preg_split("/\r\n|\n|\r/", $body) ?: [] as $line) {
+            if ($line === '') {
+                $flush();
+                continue;
+            }
+            if (preg_match('/^event:\s*(\S+)\s+data:\s*(.*)$/', $line, $m)) {
+                $event = $m[1];
+                $dataLines[] = $m[2];
+                $flush();
+                continue;
+            }
             if (str_starts_with($line, 'event:')) {
                 $event = trim(substr($line, strlen('event:')));
                 continue;
@@ -421,22 +468,20 @@ class HuggingFaceSpaceChatService
                 $dataLines[] = substr($line, strlen('data:'));
             }
         }
+        $flush();
 
-        if ($dataLines === []) {
-            return ['event' => $event];
+        foreach (array_reverse($events) as $parsed) {
+            if (($parsed['event'] ?? '') === 'complete') {
+                return $parsed;
+            }
+        }
+        foreach (array_reverse($events) as $parsed) {
+            if (($parsed['event'] ?? '') === 'error') {
+                return $parsed;
+            }
         }
 
-        $raw = trim(implode("\n", $dataLines));
-        if ($raw === '' || strtolower($raw) === 'null') {
-            return ['event' => $event, 'data' => null];
-        }
-
-        $decoded = json_decode($raw, true);
-
-        return [
-            'event' => $event,
-            'data' => json_last_error() === JSON_ERROR_NONE ? $decoded : $raw,
-        ];
+        return $events !== [] ? $events[array_key_last($events)] : [];
     }
 
     /**

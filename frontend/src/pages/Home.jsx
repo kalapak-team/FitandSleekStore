@@ -10,6 +10,7 @@ import { useStorefrontBootstrap } from "../state/storefrontBootstrap.jsx";
 import api from "../lib/api";
 import { useLanguage } from "../lib/i18n.jsx";
 import { useAuth } from "../state/auth.jsx";
+import { useTelegramMiniApp } from "../lib/telegramMiniApp.js";
 
 const PARENT_SECTION_KEYS = new Set(["women", "men", "boys", "girls"]);
 const TAB_SECTION_MAP = { newIn: "new" };
@@ -81,6 +82,7 @@ export default function Home() {
   } = useStorefrontBootstrap();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const telegramMiniApp = useTelegramMiniApp();
   const [recommended, setRecommended] = useState(() => ({
     loading: !bootstrapRecommended?.length,
     items: bootstrapRecommended || [],
@@ -163,7 +165,7 @@ export default function Home() {
   const hasBootstrap = ready && bootstrap;
 
   return (
-    <div className="pb-14 w-full">
+    <div className={`w-full ${telegramMiniApp ? "pb-4" : "pb-14"}`}>
       <Hero initialBanners={heroBanners} skipFetch={Array.isArray(heroBanners) && heroBanners.length > 0} />
       <div className="animate-fade-in">
         <BrandRow initialItems={brandItems} skipFetch={Array.isArray(brandItems) && brandItems.length > 0} />

@@ -11,6 +11,7 @@ use App\Services\DeliveryFeeService;
 use App\Services\InventoryLotService;
 use App\Services\LoyaltyService;
 use App\Services\ProductVariantInventory;
+use App\Services\RielpayPaymentService;
 use App\Services\SecurityAuditService;
 use App\Support\ShippingAddress;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class OrderController extends Controller
         private LoyaltyService $loyaltyService,
         private InventoryLotService $inventoryLots,
         private DeliveryFeeService $deliveryFees,
+        private RielpayPaymentService $rielpayPayments,
     ) {
     }
 
@@ -215,10 +217,21 @@ class OrderController extends Controller
                     }
 
                     $validatedProducts[$productId] = $product;
-                    $validatedUnitPrices[$productId] = (float) ($product->final_price ?? $product->price ?? 0);
                 }
 
-                $unitPrice = (float) $validatedUnitPrices[$productId];
+                $variantKey = implode('|', [
+                    $productId,
+                    trim((string) ($i->size ?? '')),
+                    trim((string) ($i->color ?? '')),
+                ]);
+
+                if (! array_key_exists($variantKey, $validatedUnitPrices)) {
+                    $cartLine = clone $i;
+                    $cartLine->setRelation('product', $validatedProducts[$productId]);
+                    $validatedUnitPrices[$variantKey] = $this->resolveUnitPrice($cartLine);
+                }
+
+                $unitPrice = (float) $validatedUnitPrices[$variantKey];
                 $total += $unitPrice * (int) $i->quantity;
             }
 
@@ -246,7 +259,12 @@ class OrderController extends Controller
             foreach ($cart->items as $ci) {
                 $productId = (int) $ci->product_id;
                 $product = $validatedProducts[$productId] ?? $ci->product;
-                $unitPrice = (float) ($validatedUnitPrices[$productId] ?? $this->resolveUnitPrice($ci));
+                $variantKey = implode('|', [
+                    $productId,
+                    trim((string) ($ci->size ?? '')),
+                    trim((string) ($ci->color ?? '')),
+                ]);
+                $unitPrice = (float) ($validatedUnitPrices[$variantKey] ?? $this->resolveUnitPrice($ci));
                 $line = $unitPrice * (int) $ci->quantity;
 
                 OrderItem::create([
@@ -272,7 +290,17 @@ class OrderController extends Controller
                 'status' => 'pending',
             ]);
 
-            return $order->load(['items.product.category']);
+            $order->load(['items.product.category']);
+            $khqrCurrency = strtoupper((string) config('services.rielpay.currency', 'USD'));
+            $order->setAttribute(
+                'khqr_amount',
+                $khqrCurrency === 'KHR'
+                    ? $this->rielpayPayments->khrAmountForOrder($order)
+                    : round((float) $order->total, 2)
+            );
+            $order->setAttribute('khqr_currency', $khqrCurrency);
+
+            return $order;
         });
 
         if ($validated['payment_method'] === 'cod') {

@@ -164,6 +164,114 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const applySession = (data) => {
+    if (data?.token) {
+      const newToken = data.token;
+      localStorage.setItem(TOKEN_KEY, newToken);
+      setToken(newToken);
+      setUser(data.user);
+      writeCachedUser(data.user);
+    }
+    return data;
+  };
+
+  const loginWithTelegram = async (payload) => {
+    try {
+      const { data } = await api.post("/auth/telegram", payload);
+      return applySession(data);
+    } catch (err) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (data) {
+        return {
+          error: true,
+          message: data.message || data.error || "Telegram login failed",
+          status,
+        };
+      }
+      throw err;
+    }
+  };
+
+  const loginWithTelegramOidc = async (idToken) => {
+    try {
+      const { data } = await api.post("/auth/telegram/oidc", { id_token: idToken });
+      return applySession(data);
+    } catch (err) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (data) {
+        return {
+          error: true,
+          message: data.message || data.error || "Telegram login failed",
+          status,
+        };
+      }
+      throw err;
+    }
+  };
+
+  const startTelegramWebSession = async () => {
+    const { data } = await api.post("/auth/device-continue");
+    return data;
+  };
+
+  const pollTelegramWebSession = async (code) => {
+    const { data } = await api.get(`/auth/device-continue/${encodeURIComponent(code)}`);
+    if (data?.token) {
+      applySession(data);
+    }
+    return data;
+  };
+
+  const loginWithTelegramWebApp = async (initData) => {
+    try {
+      const { data } = await api.post("/auth/telegram/webapp", { init_data: initData });
+      return applySession(data);
+    } catch (err) {
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      if (data) {
+        return {
+          error: true,
+          message: data.message || data.error || "Telegram login failed",
+          status,
+        };
+      }
+      throw err;
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (localStorage.getItem(TOKEN_KEY)) return undefined;
+
+    let cancelled = false;
+    let tried = false;
+
+    const tryLogin = async () => {
+      if (cancelled || tried || localStorage.getItem(TOKEN_KEY)) return;
+      const initData = window.Telegram?.WebApp?.initData;
+      if (!initData) return;
+      tried = true;
+      try {
+        await loginWithTelegramWebApp(initData);
+      } catch {
+        tried = false;
+      }
+    };
+
+    tryLogin();
+    const id = window.setInterval(tryLogin, 300);
+    const stop = window.setTimeout(() => window.clearInterval(id), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const selectVerificationMethod = async ({ challengeToken, method }) => {
     const { data } = await api.post("/auth/verification/select-method", {
       challenge_token: challengeToken,
@@ -237,6 +345,11 @@ export function AuthProvider({ children }) {
       booted,
       token,
       login,
+      loginWithTelegram,
+      loginWithTelegramOidc,
+      startTelegramWebSession,
+      pollTelegramWebSession,
+      loginWithTelegramWebApp,
       register,
       selectVerificationMethod,
       verifyOtp,

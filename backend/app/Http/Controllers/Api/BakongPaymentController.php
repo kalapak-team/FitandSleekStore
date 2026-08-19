@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\WatchKhqrPayment;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\RielpayApi;
@@ -91,6 +92,9 @@ class BakongPaymentController extends Controller
             ->first();
 
         if ($activePayment) {
+            WatchKhqrPayment::dispatch((int) $activePayment->id);
+            $this->rielpayPayments->scheduleAutoConfirm($activePayment, $order);
+
             return response()->json($this->formatPaymentResponse($activePayment, null, $order));
         }
 
@@ -179,6 +183,9 @@ class BakongPaymentController extends Controller
             ], 500);
         }
 
+        WatchKhqrPayment::dispatch((int) $payment->id);
+        $this->rielpayPayments->scheduleAutoConfirm($payment, $order);
+
         return response()->json($this->formatPaymentResponse($payment->fresh(), $result, $order));
     }
 
@@ -218,32 +225,35 @@ class BakongPaymentController extends Controller
             }
         }
 
-        try {
-            $payment = $this->rielpayPayments->refreshStatus($payment, $order);
-        } catch (\Throwable $e) {
-            Log::warning('Rielpay status check failed', [
-                'payment_id' => $payment->id,
-                'order_id' => $order->id,
-                'error' => $e->getMessage(),
-            ]);
+        $maxAttempts = $request->boolean('force') ? 3 : 1;
 
-            $payment->refresh();
-            $order->refresh();
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            if ($attempt > 1) {
+                usleep(2_000_000); // 2 seconds between retries
+            }
 
-            if ($payment->status === 'paid' || $order->payment_status === 'paid') {
+            try {
+                $payment = $this->rielpayPayments->refreshStatus($payment, $order);
+            } catch (\Throwable $e) {
+                Log::warning('Rielpay status check failed', [
+                    'payment_id' => $payment->id,
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                    'attempt' => $attempt,
+                ]);
+
+                $payment->refresh();
+                $order->refresh();
+            }
+
+            if ($payment->status === 'paid' || $order->fresh()?->payment_status === 'paid') {
+                $order->refresh();
+
                 return response()->json(array_merge(
                     $this->formatPaymentResponse($payment, null, $order),
                     ['status' => 'paid']
                 ));
             }
-
-            return response()->json(array_merge(
-                $this->formatPaymentResponse($payment, null, $order),
-                [
-                    'status' => 'pending',
-                    'message' => 'Waiting for payment confirmation. Keep this screen open after you pay in your banking app.',
-                ]
-            ));
         }
 
         $order->refresh();
@@ -328,13 +338,18 @@ class BakongPaymentController extends Controller
             'qr_image_base64' => null,
             'expires_at' => $result['expires_at'],
             'raw_response' => $result['payload'],
+            'amount' => $result['khr_amount'] ?? $payment->amount,
+            'currency' => strtoupper((string) ($payment->currency ?: config('services.rielpay.currency', 'KHR'))),
         ]);
     }
 
     private function formatPaymentResponse(Payment $payment, ?array $generated = null, ?Order $order = null): array
     {
         $order ??= $payment->relationLoaded('order') ? $payment->order : null;
-        $khrAmount = $generated['khr_amount'] ?? ($order ? $this->rielpayPayments->khrAmountForOrder($order) : null);
+        $paymentCurrency = strtoupper((string) ($payment->currency ?: config('services.rielpay.currency', 'USD')));
+        $khrAmount = $paymentCurrency === 'KHR'
+            ? ($generated['khr_amount'] ?? ($order ? $this->rielpayPayments->khrAmountForOrder($order) : null))
+            : null;
 
         return [
             'payment_id' => $payment->id,
@@ -348,5 +363,69 @@ class BakongPaymentController extends Controller
             'usd_amount' => $generated['usd_amount'] ?? $payment->amount,
             'khr_amount' => $khrAmount,
         ];
+    }
+
+    public function webhook(Request $request): JsonResponse
+    {
+        $expected = trim((string) config('services.bakong.webhook_secret', env('BAKONG_WEBHOOK_SECRET')));
+        if ($expected !== '') {
+            $provided = (string) ($request->header('X-Bakong-Webhook-Secret')
+                ?: $request->header('X-Webhook-Secret')
+                ?: $request->input('secret')
+                ?: '');
+            if (! hash_equals($expected, $provided)) {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+        }
+
+        $payload = $request->all();
+        $md5 = strtolower(trim((string) (
+            $request->input('md5')
+            ?? $request->input('hash')
+            ?? data_get($payload, 'data.hash')
+            ?? data_get($payload, 'data.md5')
+            ?? ''
+        )));
+        $billNumber = trim((string) (
+            $request->input('bill_number')
+            ?? data_get($payload, 'data.bill_number')
+            ?? ''
+        ));
+
+        $paymentQuery = Payment::query()->khqrProvider()->with('order');
+        $payment = null;
+        if ($md5 !== '') {
+            $payment = (clone $paymentQuery)->where('md5', $md5)->latest('id')->first();
+        }
+        if (! $payment && $billNumber !== '') {
+            $payment = (clone $paymentQuery)->where('bill_number', $billNumber)->latest('id')->first();
+        }
+
+        if (! $payment || ! $payment->order) {
+            Log::info('KHQR webhook payment not found', [
+                'md5' => $md5 !== '' ? $md5 : null,
+                'bill_number' => $billNumber !== '' ? $billNumber : null,
+            ]);
+
+            return response()->json(['ok' => true, 'matched' => false]);
+        }
+
+        if ($payment->status === 'paid' || $payment->order->payment_status === 'paid') {
+            return response()->json([
+                'ok' => true,
+                'matched' => true,
+                'payment_id' => $payment->id,
+                'status' => 'paid',
+            ]);
+        }
+
+        $this->rielpayPayments->markPaid($payment, $payment->order, $payload);
+
+        return response()->json([
+            'ok' => true,
+            'matched' => true,
+            'payment_id' => $payment->id,
+            'status' => 'paid',
+        ]);
     }
 }

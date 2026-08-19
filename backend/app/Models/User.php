@@ -162,6 +162,11 @@ class User extends Authenticatable
         return $this->status === 'active';
     }
 
+    public function getIsActiveAttribute(): bool
+    {
+        return $this->status === 'active';
+    }
+
     /**
      * Relationships
      */
@@ -182,5 +187,5 @@ class User extends Authenticatable
         }
     }
 
-    protected $appends = ['profile_image_url', 'effective_admin_permissions'];
+    protected $appends = ['profile_image_url', 'effective_admin_permissions', 'is_active'];
 }

@@ -12,6 +12,8 @@ class Payment extends Model
     /** @var list<string> */
     public const KHQR_PROVIDERS = ['rielpay', 'bakong'];
 
+    public const METHOD_INVOICE_KHQR = 'invoice_khqr';
+
     protected $fillable = [
         'order_id',
         'provider',
@@ -78,5 +80,19 @@ class Payment extends Model
     public function scopeKhqrProvider($query)
     {
         return $query->whereIn('provider', self::KHQR_PROVIDERS);
+    }
+
+    /**
+     * Paper invoice KHQR: keep polling until paid; never expire locally.
+     */
+    public function isLifetimeInvoiceKhqr(): bool
+    {
+        if (strtolower((string) $this->method) === self::METHOD_INVOICE_KHQR) {
+            return true;
+        }
+
+        $raw = is_array($this->raw_response) ? $this->raw_response : [];
+
+        return (bool) ($raw['invoice_khqr'] ?? false) || (bool) ($raw['lifetime'] ?? false);
     }
 }

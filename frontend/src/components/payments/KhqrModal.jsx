@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode.react";
+import { saveKhqrImage } from "../../lib/saveKhqrImage.js";
+import { useLanguage } from "../../lib/i18n.jsx";
 
 /* ─── KHQR official brand colours ────────────────────── */
 const KHQR_RED   = "#C0272D";
@@ -62,8 +64,11 @@ export default function KhqrModal({
   currency,
   onRegenerate,
 }) {
+  const { t } = useLanguage();
   const [timeLeft, setTimeLeft] = useState(0);
   const [copied, setCopied] = useState(null);
+  const [saveState, setSaveState] = useState("");
+  const qrWrapRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -107,6 +112,34 @@ export default function KhqrModal({
     } catch {}
   }, []);
 
+  const handleSaveQr = useCallback(async () => {
+    const canvas = qrWrapRef.current?.querySelector("canvas");
+    const filename = `KHQR-${billNumber || "FitAndSleek"}.png`;
+    setSaveState("saving");
+    try {
+      const result = await saveKhqrImage({
+        qrImageBase64,
+        canvas,
+        filename,
+      });
+      if (result === "cancelled") {
+        setSaveState("");
+        return;
+      }
+      setSaveState("saved");
+      try {
+        window.Telegram?.WebApp?.showAlert?.(
+          t("khqrSaved") || "Saved. Open your bank app and scan this photo.",
+        );
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => setSaveState(""), 4000);
+    } catch {
+      setSaveState("failed");
+    }
+  }, [billNumber, qrImageBase64, t]);
+
   if (!open) return null;
 
   const modal = (
@@ -142,7 +175,7 @@ export default function KhqrModal({
                 <BakongLogo />
                 <NbcLogo />
               </div>
-              <p className="mt-2 text-xs text-white/70">Scan with your mobile banking or Bakong app</p>
+              <p className="mt-2 text-xs text-white/70">{t("khqrSaveHint") || "Save this QR, then open ABA / ACLEDA / Wing and scan from Photos."}</p>
             </div>
             <button
               onClick={onClose}
@@ -184,22 +217,57 @@ export default function KhqrModal({
                 <div className="mx-auto w-10 h-10 rounded-full border-4 border-red-200 border-t-red-500 animate-spin mb-3" />
                 <p className="text-sm text-slate-500 dark:text-slate-400">Generating KHQR…</p>
               </div>
-            ) : qrImageBase64 ? (
-              <img src={`data:image/png;base64,${qrImageBase64}`} alt="KHQR" className="w-56 h-56 object-contain" />
-            ) : qrString ? (
-              <QRCode value={qrString} size={220} level="M" includeMargin />
             ) : (
-              <div className="text-center text-sm text-slate-400 dark:text-slate-500">QR image not available</div>
+              <div ref={qrWrapRef} className="bg-white rounded-xl p-2">
+                {qrImageBase64 ? (
+                  <img
+                    src={`data:image/png;base64,${qrImageBase64}`}
+                    alt="KHQR"
+                    className="w-56 h-56 object-contain select-none"
+                  />
+                ) : qrString ? (
+                  <QRCode value={qrString} size={220} level="M" includeMargin renderAs="canvas" />
+                ) : (
+                  <div className="w-56 h-56 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">QR image not available</div>
+                )}
+              </div>
             )}
           </div>
         </div>
 
+        {!loading && (qrImageBase64 || qrString) && status !== "paid" && (
+          <div className="px-5 pt-3">
+            <button
+              type="button"
+              onClick={handleSaveQr}
+              disabled={saveState === "saving"}
+              className="w-full rounded-2xl px-4 py-3.5 text-sm font-bold text-white shadow-md active:scale-[0.99] transition-transform disabled:opacity-70"
+              style={{ background: KHQR_RED }}
+            >
+              {saveState === "saving" ? "…" : (t("khqrSaveImage") || "Save KHQR image")}
+            </button>
+            {saveState === "saved" ? (
+              <p className="mt-2 text-center text-xs font-semibold text-emerald-700">
+                {t("khqrSaved") || "Saved. Open your bank app and scan this photo."}
+              </p>
+            ) : saveState === "failed" ? (
+              <p className="mt-2 text-center text-xs text-rose-600">
+                {t("khqrSaveFailed") || "Could not save. Press and hold the QR, then Save Image."}
+              </p>
+            ) : (
+              <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+                {t("khqrSaveHint") || "Save this QR, then open ABA / ACLEDA / Wing and scan from Photos."}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* ── how-to steps ───────────────────── */}
         <div className="px-5 pt-3 grid grid-cols-3 gap-2.5">
           {[
-            { n: "1", icon: "📱", text: "Open banking\nor Bakong app" },
-            { n: "2", icon: "🔍", text: "Tap Scan &\npoint at QR" },
-            { n: "3", icon: "✅", text: "Confirm &\nreturn here" },
+            { n: "1", icon: "⬇️", text: t("khqrStepSave") || "Save KHQR\nto Photos" },
+            { n: "2", icon: "🏦", text: t("khqrStepBank") || "Open your\nbank app" },
+            { n: "3", icon: "✅", text: t("khqrStepScan") || "Scan from\nPhotos & pay" },
           ].map(({ n, icon, text }) => (
             <div key={n} className="rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 text-center">
               <div className="text-lg">{icon}</div>
@@ -254,6 +322,14 @@ export default function KhqrModal({
             <span className="font-semibold">Payment received! Finishing your order…</span>
           </div>
         )}
+        {status === "pending" && (
+          <div className="px-5 mt-3">
+            <div className="w-full rounded-xl px-5 py-3 text-sm text-center font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 flex items-center justify-center gap-2">
+              <div className="w-4 h-4 rounded-full border-2 border-teal-300 border-t-teal-600 animate-spin flex-shrink-0" />
+              {t("khqrAutoChecking") || "Checking payment automatically…"}
+            </div>
+          </div>
+        )}
         {status === "expired" && (
           <div className="mx-5 mt-3 flex flex-col sm:flex-row gap-2">
             <div className="flex-1 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm border border-amber-200 dark:border-amber-800">
@@ -274,7 +350,7 @@ export default function KhqrModal({
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          Keep this screen open while you complete payment on your banking app.
+          {t("khqrFooterTip") || "Keep this screen open. Scan the saved QR in your bank app, then return here."}
         </div>
       </div>
     </div>

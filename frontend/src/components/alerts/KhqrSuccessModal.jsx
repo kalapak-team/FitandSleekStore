@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import TelegramConnectButton from "../TelegramConnectButton.jsx";
+import { isTelegramMiniApp } from "../../lib/telegramMiniApp.js";
+import { useLanguage } from "../../lib/i18n.jsx";
 
 /* ── brand tokens ── */
 const KHQR_RED  = "#C0272D";
@@ -70,21 +72,35 @@ export default function KhqrSuccessModal({
   total = "—",
   currency = "KHR",
   redirectSeconds = 4,
+  body,
+  buttonLabel,
+  statusLabel,
+  showTelegram = true,
+  showRedirect = true,
   onClose,
 }) {
+  const { t } = useLanguage();
   const [timeLeft, setTimeLeft] = useState(redirectSeconds);
+  const inMiniApp = typeof window !== "undefined" && isTelegramMiniApp();
+  const countdown = showRedirect && redirectSeconds > 0;
 
   useEffect(() => {
     if (!open) { setTimeLeft(redirectSeconds); return undefined; }
     document.body.classList.add("modal-open");
     document.documentElement.classList.add("modal-open");
-    const t = setInterval(() => setTimeLeft((v) => Math.max(0, v - 1)), 1000);
+    if (!countdown) {
+      return () => {
+        document.body.classList.remove("modal-open");
+        document.documentElement.classList.remove("modal-open");
+      };
+    }
+    const tick = setInterval(() => setTimeLeft((v) => Math.max(0, v - 1)), 1000);
     return () => {
-      clearInterval(t);
+      clearInterval(tick);
       document.body.classList.remove("modal-open");
       document.documentElement.classList.remove("modal-open");
     };
-  }, [open, redirectSeconds]);
+  }, [open, redirectSeconds, countdown]);
 
   if (!open) return null;
 
@@ -93,7 +109,7 @@ export default function KhqrSuccessModal({
 
   const modal = (
     <div
-      className="ks-overlay fixed inset-0 z-[9998] flex items-center justify-center p-4 sm:p-6"
+      className="ks-overlay fixed inset-0 z-[20000] flex items-center justify-center p-4 sm:p-6"
       style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)" }}
       role="dialog"
       aria-modal="true"
@@ -163,10 +179,10 @@ export default function KhqrSuccessModal({
 
           {/* headline */}
           <h2 id="khqr-success-title" className="ks-fade-0 relative mt-4 text-2xl font-black text-white leading-snug">
-            Payment Successful!
+            {t("khqrPaySuccessTitle") || "Payment Successful!"}
           </h2>
           <p className="ks-fade-1 relative mt-1 text-sm text-white/70">
-            via KHQR · Bakong Network
+            {t("khqrPaySuccessVia") || "via KHQR · Bakong Network"}
           </p>
         </div>
 
@@ -174,7 +190,7 @@ export default function KhqrSuccessModal({
         <div className="px-6 pb-6 pt-5 space-y-4">
           {/* confirmation line */}
           <p className="ks-fade-2 text-center text-base font-semibold text-slate-800 dark:text-slate-100">
-            Your order is confirmed. 🎉
+            {body || t("khqrPaySuccessBody") || "Your order is confirmed."} 🎉
           </p>
 
           {/* order detail card */}
@@ -212,38 +228,41 @@ export default function KhqrSuccessModal({
               </div>
               <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                 <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Paid &amp; Processing
+                {statusLabel || "Paid & Processing"}
               </span>
             </div>
           </div>
 
-          {/* redirect countdown bar */}
-          <div className="ks-fade-3 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-              <span>Redirecting to your orders</span>
-              <span className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">{timeLeft}s</span>
+          {countdown ? (
+            <div className="ks-fade-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+                <span>Redirecting to your orders</span>
+                <span className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">{timeLeft}s</span>
+              </div>
+              <div className="relative h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                <div
+                  className="ks-bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400"
+                  style={{ "--dur": `${redirectSeconds}s` }}
+                />
+              </div>
             </div>
-            <div className="relative h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-              <div
-                className="ks-bar absolute left-0 top-0 h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400"
-                style={{ "--dur": `${redirectSeconds}s` }}
-              />
-            </div>
-          </div>
+          ) : null}
 
           {/* close / view orders button */}
           <div className="ks-fade-3 space-y-3">
-            <TelegramConnectButton
-              orderNumber={orderNumber !== "—" ? orderNumber : null}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#229ED9] px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
-            />
+            {showTelegram && !inMiniApp && (
+              <TelegramConnectButton
+                orderNumber={orderNumber !== "—" ? orderNumber : null}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#229ED9] px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
+              />
+            )}
             {onClose && (
               <button
                 onClick={onClose}
                 className="w-full rounded-2xl py-3 text-sm font-bold text-white shadow-md transition-opacity hover:opacity-90"
                 style={{ background: `linear-gradient(135deg, ${KHQR_RED}, #8b1a1e)` }}
               >
-                View My Orders
+                {buttonLabel || "View My Orders"}
               </button>
             )}
           </div>

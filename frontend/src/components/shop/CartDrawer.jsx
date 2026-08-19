@@ -1,11 +1,12 @@
 import React from "react";
 import { X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../../state/cart";
 import { useAuth } from "../../state/auth";
 import { resolveImageUrl } from "../../lib/images";
 import { useLanguage } from "../../lib/i18n.jsx";
 import { canPlaceStorefrontOrder } from "../../app/redirectAfterAuth.js";
+import { continueTelegramMiniAppCheckout, isTelegramMiniApp, rememberCheckoutAfterLogin } from "../../lib/telegramMiniApp.js";
 
 function Money({ value }) {
   const n = Number(value || 0);
@@ -15,8 +16,9 @@ function Money({ value }) {
 export default function CartDrawer({ open, onClose }) {
   const { cart, total, loading, updateQty, remove } = useCart();
   const items = cart?.items || [];
-  const { user } = useAuth();
+  const { user, loginWithTelegramWebApp } = useAuth();
   const { t } = useLanguage();
+  const nav = useNavigate();
   const storefrontCheckout = canPlaceStorefrontOrder(user);
 
   const getPriceMeta = (item) => {
@@ -129,13 +131,21 @@ export default function CartDrawer({ open, onClose }) {
             </Link>
             {storefrontCheckout || !user ? (
               <Link
-                onClick={(e) => {
-                  if (!user) {
-                    e.preventDefault();
-                    window.dispatchEvent(new Event("fs:open-login"));
+                onClick={async (e) => {
+                  onClose();
+                  if (user) return;
+                  e.preventDefault();
+                  rememberCheckoutAfterLogin("/checkout");
+                  if (isTelegramMiniApp()) {
+                    await continueTelegramMiniAppCheckout({
+                      user,
+                      loginWithTelegramWebApp,
+                      navigate: nav,
+                      path: "/checkout",
+                    });
                     return;
                   }
-                  onClose();
+                  window.dispatchEvent(new Event("fs:open-login"));
                 }}
                 to="/checkout"
                 className="h-11 rounded-full bg-zinc-950 hover:bg-zinc-900 text-white flex items-center justify-center text-sm font-semibold transition-colors"

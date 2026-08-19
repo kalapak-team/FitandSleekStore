@@ -19,14 +19,14 @@ ENV VITE_STORAGE_MEDIA_ORIGIN=$VITE_STORAGE_MEDIA_ORIGIN
 
 RUN npm run build
 
-FROM node:20-alpine
+FROM nginx:1.27-alpine
 
-WORKDIR /app
-RUN npm install -g serve@14.2.4
+RUN apk add --no-cache wget
 
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 5173
 
-# Listen on all interfaces — default bind can be loopback-only and Docker will show 0% CPU / no reachable port.
-CMD ["serve", "-s", "dist", "--no-port-switching", "-l", "tcp://0.0.0.0:5173"]
+# Static SPA plus /api /storage /sanctum reverse-proxy to Laravel (same public hostname).
+CMD ["nginx", "-g", "daemon off;"]

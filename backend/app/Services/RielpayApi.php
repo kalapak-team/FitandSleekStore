@@ -3,12 +3,20 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class RielpayApi
 {
+    public const CIRCUIT_CACHE_KEY = 'rielpay:circuit-open';
+
+    public static function isCircuitOpen(): bool
+    {
+        return Cache::has(self::CIRCUIT_CACHE_KEY);
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
@@ -95,6 +103,10 @@ class RielpayApi
             throw new RuntimeException('Rielpay API key is not configured (RIELPAY_API_KEY).');
         }
 
+        if (self::isCircuitOpen()) {
+            throw new RuntimeException('Payment service is temporarily unavailable. Please try again in a moment.');
+        }
+
         $headers = [
             'Accept' => 'application/json',
             'Authorization' => 'Bearer ' . $apiKey,
@@ -114,10 +126,12 @@ class RielpayApi
                 default => throw new RuntimeException('Unsupported HTTP method: ' . $method),
             };
         } catch (ConnectionException $e) {
+            $this->tripCircuit(0);
             throw new RuntimeException('Rielpay connection failed: ' . $e->getMessage(), 0, $e);
         }
 
         if ($response->failed()) {
+            $this->tripCircuit($response->status());
             $this->throwForFailedResponse($response->status(), $response->json(), $response->body());
         }
 
@@ -165,5 +179,12 @@ class RielpayApi
         };
 
         throw new RuntimeException($userMessage);
+    }
+
+    private function tripCircuit(int $status): void
+    {
+        if ($status === 0 || in_array($status, [502, 503, 504, 521, 522, 523, 524, 530], true)) {
+            Cache::put(self::CIRCUIT_CACHE_KEY, $status, now()->addSeconds(45));
+        }
     }
 }

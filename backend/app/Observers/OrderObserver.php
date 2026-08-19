@@ -49,9 +49,12 @@ class OrderObserver
 
         if ($order->shipment) {
             if ($paymentPaid || $statusPaid) {
-                // COD may already have a shipment; still alert when payment clears.
-                if ($order->payment_method === 'cod') {
-                    $this->telegramService->notifyOrderPaid($order->fresh(['user', 'items', 'shipment']));
+                $this->telegramService->notifyOrderPaid($order->fresh(['user', 'items', 'shipment', 'payments']));
+                if ($paymentPaid) {
+                    $this->sendPaymentSuccessEmails(
+                        $order,
+                        includeCustomer: ! $this->isCodDriverSettlement($order)
+                    );
                 }
             }
 
@@ -75,30 +78,30 @@ class OrderObserver
         ]);
 
         if ($paymentPaid) {
-            $this->sendPaymentSuccessEmails($order);
+            $this->sendPaymentSuccessEmails(
+                $order,
+                includeCustomer: ! $this->isCodDriverSettlement($order)
+            );
         }
 
         if ($paymentPaid || $statusPaid) {
-            $this->telegramService->notifyOrderPaid($order->fresh(['user', 'items', 'shipment']));
+            $this->telegramService->notifyOrderPaid($order->fresh(['user', 'items', 'shipment', 'payments']));
         }
     }
 
     public function created(Order $order): void
     {
-        if ($order->payment_method !== 'cod') {
-            return;
-        }
-
         // Order::create fires before cart lines are inserted in the same transaction.
-        // Wait until commit so Telegram admin card can include items.
         $orderId = (int) $order->id;
-        DB::afterCommit(function () use ($orderId) {
+        $isCod = $order->payment_method === 'cod';
+
+        DB::afterCommit(function () use ($orderId, $isCod) {
             $order = Order::query()->with(['user', 'items.product', 'shipment'])->find($orderId);
-            if (! $order || $order->payment_method !== 'cod') {
+            if (! $order) {
                 return;
             }
 
-            if (! $order->shipment) {
+            if ($isCod && ! $order->shipment) {
                 $shipment = Shipment::create([
                     'order_id' => $order->id,
                     'provider' => 'Internal',
@@ -116,15 +119,28 @@ class OrderObserver
                 $order->setRelation('shipment', $shipment);
             }
 
-            $this->telegramService->notifyOrderPlacedCod($order);
+            $this->telegramService->subscribeLinkedCustomerChats($order);
+
+            if ($isCod) {
+                $this->telegramService->notifyOrderPlacedCod($order);
+            } else {
+                $this->telegramService->notifyStaffOfNewOrder($order);
+            }
         });
     }
 
-    private function sendPaymentSuccessEmails(Order $order): void
+    private function isCodDriverSettlement(Order $order): bool
+    {
+        $order->loadMissing('payments');
+
+        return app(\App\Services\CodCollectionService::class)->isDriverToShopSettlement($order);
+    }
+
+    private function sendPaymentSuccessEmails(Order $order, bool $includeCustomer = true): void
     {
         $order->loadMissing(['user', 'payments']);
 
-        $customerEmail = trim((string) ($order->user?->email ?? ''));
+        $customerEmail = $includeCustomer ? trim((string) ($order->user?->email ?? '')) : '';
 
         $adminEmails = User::query()
             ->whereIn('role', ['admin', 'superadmin'])

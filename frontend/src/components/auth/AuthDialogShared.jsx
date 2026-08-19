@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Facebook, X } from "lucide-react";
+import { Facebook, Mail, Send, X } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import Logo from "../Logo.jsx";
 import { resolveBundledLogoUrl } from "../../lib/siteLogo.js";
 import { DialogPopup, DialogTitle, DialogDescription } from "../ui/Dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContents, TabsContent } from "../ui/Tabs";
+import { useAuth } from "../../state/auth";
 
 /** Shared corner radius — matches --fs-radius-* in styles/index.css */
 export const AUTH_SHELL_CLASS =
@@ -286,6 +287,279 @@ export function AuthTextButton({ children, onClick, className = "" }) {
     >
       {children}
     </button>
+  );
+}
+
+const AUTH_METHOD_ICON_WRAP = {
+  telegram: "bg-[#2AABEE]/10 text-[#229ED9]",
+  google: "border border-slate-200 bg-white",
+  facebook: "bg-[#1877F2]/10 text-[#1877F2]",
+  email: "bg-[#6E8B7E]/10 text-[#6E8B7E]",
+};
+
+export function AuthMethodPicker({
+  mode = "login",
+  value,
+  onChange,
+  onContinue,
+  methods,
+}) {
+  const isRegister = mode === "register";
+  const items = methods || [
+    {
+      id: "telegram",
+      title: "Use Telegram on this device",
+      description: isRegister
+        ? "Continue in Telegram to create or open your customer account"
+        : "Continue in Telegram to open your customer account",
+    },
+    {
+      id: "email",
+      title: "Email and password",
+      description: isRegister ? "Register with email" : "Use your Fit & Sleek email",
+    },
+    {
+      id: "google",
+      title: "Continue with Google",
+      description: isRegister ? "Register with your Google account" : "Sign in with Google",
+    },
+    {
+      id: "facebook",
+      title: "Continue with Facebook",
+      description: isRegister ? "Register with Facebook" : "Sign in with Facebook",
+    },
+  ];
+
+  const iconFor = (id) => {
+    if (id === "telegram") return Send;
+    if (id === "google") return GoogleIcon;
+    if (id === "facebook") return Facebook;
+    return Mail;
+  };
+
+  return (
+    <div className="mt-4 flex flex-col gap-5">
+      <div className="text-center">
+        <h3 className="text-lg font-semibold text-slate-900">
+          {isRegister ? "Register options" : "Login options"}
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          {isRegister
+            ? "Choose how you’d like to create your Fit & Sleek account."
+            : "Choose how you’d like to log in to Fit & Sleek."}
+        </p>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl bg-slate-100" role="radiogroup" aria-label={isRegister ? "Register options" : "Login options"}>
+        {items.map((item, index) => {
+          const Icon = iconFor(item.id);
+          const selected = value === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(item.id)}
+              className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition ${
+                index > 0 ? "border-t border-slate-200/80" : ""
+              } ${selected ? "bg-white" : "hover:bg-white/70"}`}
+            >
+              <span
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                  AUTH_METHOD_ICON_WRAP[item.id] || AUTH_METHOD_ICON_WRAP.email
+                }`}
+              >
+                <Icon className="h-5 w-5" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-slate-900">{item.title}</span>
+                {item.description ? (
+                  <span className="mt-0.5 block text-xs text-slate-500">{item.description}</span>
+                ) : null}
+              </span>
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                  selected ? "border-[#2AABEE] bg-[#2AABEE]" : "border-slate-300 bg-white"
+                }`}
+                aria-hidden
+              >
+                {selected ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <button type="button" onClick={onContinue} className={AUTH_PRIMARY_BTN}>
+        Continue
+      </button>
+    </div>
+  );
+}
+
+export function TelegramLoginPanel({ onAuth, onLoggedIn, onBack, error }) {
+  const { loginWithTelegramWebApp, loginWithTelegramOidc } = useAuth();
+  const [botUsername, setBotUsername] = useState("fitandsleek_bot");
+  const [clientId, setClientId] = useState("");
+  const [status, setStatus] = useState("idle");
+  const [localError, setLocalError] = useState("");
+  const webAppTriedRef = useRef(false);
+  const shopOrigin = typeof window !== "undefined" ? window.location.origin : "https://fitandsleek.kalapak-team.space";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchTelegramSettings, loadTelegramLoginSdk } = await import("../../lib/telegram.js");
+        const data = await fetchTelegramSettings();
+        if (cancelled) return;
+        if (data?.bot_username) setBotUsername(data.bot_username);
+        const id = String(data?.client_id || data?.bot_id || "").trim();
+        if (id) setClientId(id);
+        await loadTelegramLoginSdk().catch(() => {});
+      } catch {
+        /* keep defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (!initData || webAppTriedRef.current) return undefined;
+    webAppTriedRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      setStatus("waiting");
+      try {
+        const result = await loginWithTelegramWebApp(initData);
+        if (cancelled) return;
+        if (result?.error) {
+          setLocalError(result.message || "Telegram login failed");
+          setStatus("idle");
+          return;
+        }
+        onLoggedIn?.(result?.user || result);
+      } catch (err) {
+        if (cancelled) return;
+        setLocalError(err?.response?.data?.message || "Telegram login failed");
+        setStatus("idle");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loginWithTelegramWebApp, onLoggedIn]);
+
+  const submitWidgetUser = async (tgUser) => {
+    if (!tgUser?.id || !tgUser?.hash) {
+      setLocalError("Telegram login was cancelled.");
+      setStatus("idle");
+      return;
+    }
+    setStatus("waiting");
+    setLocalError("");
+    try {
+      if (onAuth) {
+        await onAuth(tgUser);
+      } else {
+        onLoggedIn?.(tgUser);
+      }
+    } catch (err) {
+      setLocalError(err?.response?.data?.message || "Telegram login failed. Please try again.");
+    } finally {
+      setStatus("idle");
+    }
+  };
+
+  const handleContinue = async () => {
+    setLocalError("");
+    if (!clientId) {
+      setLocalError("Telegram login is not ready yet. Try again in a moment.");
+      return;
+    }
+    setStatus("waiting");
+    try {
+      const { openTelegramLoginPopup } = await import("../../lib/telegram.js");
+      const result = await openTelegramLoginPopup(clientId);
+      if (result?.id_token) {
+        const session = await loginWithTelegramOidc(result.id_token);
+        if (session?.error) {
+          setLocalError(session.message || "Telegram login failed");
+          setStatus("idle");
+          return;
+        }
+        onLoggedIn?.(session?.user || session);
+        setStatus("idle");
+        return;
+      }
+      if (result?.id && result?.hash) {
+        await submitWidgetUser(result);
+        return;
+      }
+      const reason = String(result?.error || "");
+      if (reason === "popup_closed") {
+        setLocalError("Telegram login was cancelled.");
+      } else if (/domain|redirect|client|origin|invalid/i.test(reason)) {
+        setLocalError(
+          `Telegram has not allowed this website yet. Open @BotFather mini app → @${botUsername} → Login Widget → add Allowed URL: ${shopOrigin}`
+        );
+      } else {
+        setLocalError(
+          `Open @BotFather (mini app) → @${botUsername} → Login Widget → Allowed URLs → add ${shopOrigin}`
+        );
+      }
+      setStatus("idle");
+    } catch (err) {
+      const raw = String(err?.message || "");
+      if (/popup|blocked/i.test(raw)) {
+        setLocalError("Allow pop-ups, and pause the ad blocker on this site, then try Continue via Telegram again.");
+      } else {
+        setLocalError(err?.message || "Could not open Telegram login.");
+      }
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <div className="mt-4 flex flex-col items-center gap-4">
+      <div className="flex items-center justify-center -space-x-2">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#229ED9] text-white shadow-md">
+          <Send className="h-5 w-5" aria-hidden />
+        </span>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-bold text-slate-900">Log in with Telegram</p>
+        <p className="mt-1 text-sm text-slate-500">
+          Your name, username, and profile picture will be transmitted to the website.
+        </p>
+      </div>
+      <AuthError message={localError || error} />
+      <button
+        type="button"
+        onClick={handleContinue}
+        disabled={status === "waiting"}
+        className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#229ED9] text-base font-semibold text-white shadow-md shadow-[#229ED9]/30 transition hover:bg-[#1b8fc7] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <Send className="h-4 w-4" aria-hidden />
+        {status === "waiting" ? "Waiting for Telegram…" : "Continue via Telegram"}
+      </button>
+      {status === "waiting" ? (
+        <p className="text-center text-xs text-slate-500">
+          Telegram will show the account already signed in. You can use a different account or a phone number, then tap Log in.
+        </p>
+      ) : (
+        <p className="text-center text-xs text-slate-500">
+          Open @BotFather mini app → @{botUsername} → Login Widget → Allowed URLs → add {shopOrigin}
+        </p>
+      )}
+      <AuthTextButton onClick={onBack}>← Back to options</AuthTextButton>
+    </div>
   );
 }
 

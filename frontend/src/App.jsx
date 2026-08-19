@@ -14,6 +14,7 @@ import CartPage from "./pages/Cart.jsx";
 import Checkout from "./pages/Checkout.jsx";
 import PaymentProcess from "./pages/PaymentProcess.jsx";
 import PublicReceiptPage from "./pages/PublicReceipt.jsx";
+import DriverCodScanPage from "./pages/DriverCodScan.jsx";
 import Orders from "./pages/Orders.jsx";
 import ContactPage from "./pages/Contact.jsx";
 import SupportPage from "./pages/Support.jsx";
@@ -139,15 +140,17 @@ function TrackOrderRedirect() {
 
 function RequireAuth({ children }) {
   const { user, booted } = useAuth();
+  const location = useLocation();
   if (!booted) return <CustomerPageSkeleton />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return children;
 }
 
 function RequireStorefrontCustomer({ children }) {
   const { user, booted } = useAuth();
+  const location = useLocation();
   if (!booted) return <CustomerPageSkeleton />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   if (!canPlaceStorefrontOrder(user)) {
     return <Navigate to="/admin" replace />;
   }
@@ -360,6 +363,8 @@ export default function App() {
           <Route path="payment-settings" element={<PaymentSettings />} />
           <Route path="loyalty-top-fans" element={<LoyaltyTopFans />} />
         </Route>
+
+        <Route path="/driver/cod-scan/:token" element={<DriverCodScanPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

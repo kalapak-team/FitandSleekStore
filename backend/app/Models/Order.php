@@ -101,6 +101,19 @@ class Order extends Model
         );
     }
 
+    /** Delivered / completed — Telegram actions (status, KHQR, COD) are closed for everyone. */
+    public function isSuccessfullyClosed(): bool
+    {
+        $status = strtolower((string) ($this->status ?? ''));
+        if (in_array($status, ['completed', 'delivered'], true)) {
+            return true;
+        }
+
+        $this->loadMissing('shipment');
+
+        return in_array(strtolower((string) ($this->shipment?->status ?? '')), ['delivered'], true);
+    }
+
     public function isEligibleForTelegramUpdates(): bool
     {
         if (strtolower((string) ($this->status ?? '')) === 'cancelled') {

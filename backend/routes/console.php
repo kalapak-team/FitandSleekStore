@@ -20,6 +20,11 @@ Schedule::command('backup:database')
     ->withoutOverlapping(120)
     ->when(fn () => (bool) config('backup.enabled', true));
 
+Schedule::command('payments:poll-khqr')
+    ->everyFifteenSeconds()
+    ->withoutOverlapping(1)
+    ->name('poll-khqr-payments');
+
 Schedule::call(function () {
     $base = rtrim((string) config('app.url'), '/');
     if ($base === '') {

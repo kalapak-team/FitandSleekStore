@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\WatchKhqrPayment;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
@@ -141,6 +142,9 @@ class PosSaleController extends Controller
                     'amount' => (float) $subtotal,
                     'currency' => $currency,
                 ];
+
+                WatchKhqrPayment::dispatch((int) $payment->id);
+                $this->rielpayPayments->scheduleAutoConfirm($payment, $order);
             }
 
             return [$order, $snapshot, $subtotal, $khqrOut];

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Services\InvoiceKhqrService;
 use App\Services\InvoiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -11,9 +12,9 @@ use App\Support\BrandLogo;
 
 class InvoiceAdminController extends Controller
 {
-    public function show(Order $order, InvoiceService $invoiceService)
+    public function show(Order $order, InvoiceService $invoiceService, InvoiceKhqrService $invoiceKhqr)
     {
-        $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+        $invoice = $this->shopInvoice($order, $invoiceService, $invoiceKhqr);
 
         return response()->json([
             'message' => 'Invoice retrieved successfully',
@@ -21,9 +22,9 @@ class InvoiceAdminController extends Controller
         ]);
     }
 
-    public function downloadPdf(Order $order, InvoiceService $invoiceService)
+    public function downloadPdf(Order $order, InvoiceService $invoiceService, InvoiceKhqrService $invoiceKhqr)
     {
-        $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+        $invoice = $this->shopInvoice($order, $invoiceService, $invoiceKhqr, true);
         $invoice['logo_url'] = BrandLogo::url();
 
         $pdf = Pdf::loadView('invoices.bulk', [
@@ -53,7 +54,7 @@ class InvoiceAdminController extends Controller
         ]);
     }
 
-    public function bulkDownloadPdf(Request $request, InvoiceService $invoiceService)
+    public function bulkDownloadPdf(Request $request, InvoiceService $invoiceService, InvoiceKhqrService $invoiceKhqr)
     {
         $validated = $request->validate([
             'order_ids' => ['required', 'array', 'min:1'],
@@ -70,8 +71,8 @@ class InvoiceAdminController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $invoices = $orders->map(function (Order $order) use ($invoiceService) {
-            $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+        $invoices = $orders->map(function (Order $order) use ($invoiceService, $invoiceKhqr) {
+            $invoice = $this->shopInvoice($order, $invoiceService, $invoiceKhqr, true);
             $invoice['logo_url'] = BrandLogo::url();
             return $invoice;
         })->values()->all();
@@ -101,5 +102,15 @@ class InvoiceAdminController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function shopInvoice(Order $order, InvoiceService $invoiceService, InvoiceKhqrService $invoiceKhqr, bool $withImage = false): array
+    {
+        $invoice = $invoiceService->buildOrderInvoiceData($order, InvoiceService::AUDIENCE_SHOP);
+
+        return $invoiceKhqr->attach($order, $invoice, $withImage);
     }
 }

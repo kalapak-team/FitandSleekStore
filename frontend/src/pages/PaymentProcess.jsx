@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import KhqrSuccessModal from "../components/alerts/KhqrSuccessModal";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../lib/api";
 import BakongKhqrPanel from "../components/payments/BakongKhqrPanel";
+import { announceTelegramKhqrPaid } from "../lib/telegramMiniApp.js";
+import { showKhqrSuccess } from "../lib/khqrSuccess.js";
 
 const SUCCESS_REDIRECT_SECONDS = 60;
 
@@ -13,13 +14,6 @@ export default function PaymentProcess() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState("pending");
-  const [khqrSuccessOpen, setKhqrSuccessOpen] = useState(false);
-
-  useEffect(() => {
-    if (!khqrSuccessOpen) return;
-    const t = setTimeout(() => nav(`/orders/${orderId}`), SUCCESS_REDIRECT_SECONDS * 1000);
-    return () => clearTimeout(t);
-  }, [khqrSuccessOpen, nav, orderId]);
 
   const loadOrder = useCallback(async () => {
     try {
@@ -46,9 +40,16 @@ export default function PaymentProcess() {
   const handleBakongStatusChange = useCallback((status) => {
     if (status === "paid") {
       setPaymentStatus("success");
-      setKhqrSuccessOpen(true);
+      announceTelegramKhqrPaid({ orderNumber: order?.order_number || order?.id });
+      showKhqrSuccess({
+        orderNumber: order?.order_number || order?.id,
+        total: order?.khqr_amount ?? order?.total,
+        currency: order?.khqr_currency || "USD",
+        redirectSeconds: SUCCESS_REDIRECT_SECONDS,
+        redirectTo: `/orders/${orderId}`,
+      });
     }
-  }, []);
+  }, [order?.id, order?.order_number, order?.khqr_amount, order?.total, order?.khqr_currency, orderId]);
 
   if (loading) {
     return (
@@ -91,17 +92,6 @@ export default function PaymentProcess() {
           <BakongKhqrPanel orderId={order.id} onStatusChange={handleBakongStatusChange} />
         )}
       </div>
-
-      <KhqrSuccessModal
-        open={khqrSuccessOpen}
-        onClose={() => {
-          setKhqrSuccessOpen(false);
-          nav("/orders");
-        }}
-        orderNumber={order.order_number || order.id}
-        amount={order.total}
-        currency="KHR"
-      />
     </div>
   );
 }

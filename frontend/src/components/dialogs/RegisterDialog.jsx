@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Lock, Mail, User } from "lucide-react";
 import { useAuth } from "../../state/auth";
 import { useHomepageSettings } from "../../state/homepageSettings.jsx";
@@ -6,19 +6,18 @@ import { resolveBackendOrigin } from "../../lib/backendOrigin";
 import { Dialog } from "../ui/Dialog";
 import {
   AuthDialogShell,
-  AuthDivider,
   AuthError,
   AuthField,
   AuthFooterLink,
-  AuthNotice,
+  AuthMethodPicker,
   formatOtpNotice,
   OtpDeliveryNotice,
   AuthPhoneField,
-  AuthSocialButtons,
   AuthTextButton,
   AUTH_INPUT,
   AUTH_PRIMARY_BTN,
   TabsContent,
+  TelegramLoginPanel,
 } from "../auth/AuthDialogShared";
 
 export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
@@ -37,7 +36,18 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
   const [otpEmailSent, setOtpEmailSent] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { register, verifyOtp, resendOtp } = useAuth();
+  const [step, setStep] = useState("choose");
+  const [method, setMethod] = useState("telegram");
+  const { register, loginWithTelegram, verifyOtp, resendOtp } = useAuth();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep("choose");
+    setMethod("telegram");
+    setError("");
+    setOtpMode(false);
+    setOtpNotice("");
+  }, [isOpen]);
 
   const fullPhone = phoneLocal.trim() ? `${countryCode}${phoneLocal.replace(/\s+/g, "")}` : "";
 
@@ -47,6 +57,40 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
     const frontendCallback = `${window.location.origin}/oauth/callback`;
     localStorage.setItem("oauth_provider", provider);
     window.location.href = `${normalizedBase}/auth/${provider}/redirect?frontend_callback=${encodeURIComponent(frontendCallback)}`;
+  };
+
+  const handleContinue = () => {
+    setError("");
+    if (method === "google") {
+      handleSocial("google");
+      return;
+    }
+    if (method === "facebook") {
+      handleSocial("facebook");
+      return;
+    }
+    if (method === "telegram") {
+      setStep("telegram");
+      return;
+    }
+    setStep("email");
+  };
+
+  const handleTelegramAuth = async (tgUser) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await loginWithTelegram(tgUser);
+      if (result?.error) {
+        setError(result.message || "Telegram registration failed");
+        return;
+      }
+      finishRegister(result?.user);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Telegram registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const finishRegister = (user) => {
@@ -172,7 +216,41 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
         }}
       >
         <TabsContent value="register">
-          {!otpMode ? (
+          {!otpMode && step === "choose" ? (
+            <>
+              <AuthMethodPicker
+                mode="register"
+                value={method}
+                onChange={setMethod}
+                onContinue={handleContinue}
+              />
+              <AuthFooterLink>
+                Already have an account?{" "}
+                <AuthTextButton
+                  onClick={() => {
+                    onClose();
+                    onSwitchToLogin();
+                  }}
+                >
+                  Login
+                </AuthTextButton>
+              </AuthFooterLink>
+            </>
+          ) : null}
+
+          {!otpMode && step === "telegram" ? (
+            <TelegramLoginPanel
+              onAuth={handleTelegramAuth}
+              onLoggedIn={finishRegister}
+              onBack={() => {
+                setError("");
+                setStep("choose");
+              }}
+              error={error}
+            />
+          ) : null}
+
+          {!otpMode && step === "email" ? (
             <>
               <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-6">
                 <AuthField id="register-name" label="Full name" icon={User}>
@@ -249,25 +327,20 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
                 </button>
               </form>
 
-              <AuthDivider />
-              <AuthSocialButtons
-                onGoogle={() => handleSocial("google")}
-                onFacebook={() => handleSocial("facebook")}
-              />
-
               <AuthFooterLink>
-                Already have an account?{" "}
                 <AuthTextButton
                   onClick={() => {
-                    onClose();
-                    onSwitchToLogin();
+                    setError("");
+                    setStep("choose");
                   }}
                 >
-                  Login
+                  ← Back to options
                 </AuthTextButton>
               </AuthFooterLink>
             </>
-          ) : (
+          ) : null}
+
+          {otpMode ? (
             <form onSubmit={handleVerifyOtp} className="mt-7 flex flex-col gap-6">
               <OtpDeliveryNotice message={otpNotice} emailSent={otpEmailSent} />
               <AuthField id="register-otp-code" label="Verification code" icon={Lock}>
@@ -296,8 +369,18 @@ export default function RegisterDialog({ isOpen, onClose, onSwitchToLogin }) {
               >
                 Resend code
               </button>
+              <AuthTextButton
+                onClick={() => {
+                  setOtpMode(false);
+                  setError("");
+                  setOtpNotice("");
+                  setStep("email");
+                }}
+              >
+                ← Back to register
+              </AuthTextButton>
             </form>
-          )}
+          ) : null}
         </TabsContent>
       </AuthDialogShell>
     </Dialog>

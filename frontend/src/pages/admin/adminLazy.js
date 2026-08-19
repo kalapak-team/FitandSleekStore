@@ -1,37 +1,56 @@
 import { lazy } from "react";
 
+function lazyWithReload(importer) {
+  return lazy(() =>
+    importer().catch((error) => {
+      try {
+        const key = "fs:chunk-reload";
+        const last = Number(sessionStorage.getItem(key) || "0");
+        if (Date.now() - last > 15000) {
+          sessionStorage.setItem(key, String(Date.now()));
+          window.location.reload();
+          return new Promise(() => {});
+        }
+      } catch {
+        /* ignore storage / window */
+      }
+      throw error;
+    })
+  );
+}
+
 /** Default admin landing — eager so dashboard paints without an extra chunk round-trip. */
 export { default as AdminHome } from "./AdminHome.jsx";
-export const Reports = lazy(() => import("./Reports.jsx"));
-export const AdminProducts = lazy(() => import("./Products.jsx"));
-export const AdminCategories = lazy(() => import("./Categories.jsx"));
-export const AdminBrands = lazy(() => import("./Brands.jsx"));
-export const AdminSuppliers = lazy(() => import("./Suppliers.jsx"));
-export const AdminStockInventoryList = lazy(() => import("./StockInventoryList.jsx"));
-export const AdminInventoryLotsCatalog = lazy(() => import("./InventoryLotsCatalog.jsx"));
-export const AdminBarcodeQR = lazy(() => import("./StockInventory.jsx"));
-export const AdminPosScan = lazy(() => import("./Checkout.jsx"));
-export const AdminOrders = lazy(() => import("./Orders.jsx"));
-export const AdminInvoicePage = lazy(() => import("./Invoice.jsx"));
-export const AdminCustomers = lazy(() => import("./Customers.jsx"));
-export const AdminAdministrators = lazy(() => import("./Administrators.jsx"));
-export const HomePageManager = lazy(() => import("./HomePageManager.jsx"));
-export const CompleteHomepageManager = lazy(() => import("./CompleteHomepageManager.jsx"));
-export const Contacts = lazy(() => import("./Contacts.jsx"));
-export const Messages = lazy(() => import("./Messages.jsx"));
-export const ChatbotSettings = lazy(() => import("./ChatbotSettings.jsx"));
-export const Notifications = lazy(() => import("./Notifications.jsx"));
-export const Profile = lazy(() => import("./Profile.jsx"));
-export const Settings = lazy(() => import("./Settings.jsx"));
-export const AdminDiscounts = lazy(() => import("./Discounts.jsx"));
-export const UserManagement = lazy(() => import("./UserManagement.jsx"));
-export const AdminManagement = lazy(() => import("./AdminManagement.jsx"));
-export const AdminPayments = lazy(() => import("./Payments.jsx"));
-export const SaleHistory = lazy(() => import("./SaleHistory.jsx"));
-export const AdminReplacementCases = lazy(() => import("./ReplacementCases.jsx"));
-export const AdminShipments = lazy(() => import("./Shipments.jsx"));
-export const AdminPurchaseOrders = lazy(() => import("./PurchaseOrders.jsx"));
-export const AdminStockReceived = lazy(() => import("./StockReceived.jsx"));
-export const PaymentSettings = lazy(() => import("./PaymentSettings.jsx"));
-export const LoyaltyTopFans = lazy(() => import("./LoyaltyTopFans.jsx"));
-export const UserProfileDetail = lazy(() => import("./UserProfileDetail.jsx"));
+export const Reports = lazyWithReload(() => import("./Reports.jsx"));
+export const AdminProducts = lazyWithReload(() => import("./Products.jsx"));
+export const AdminCategories = lazyWithReload(() => import("./Categories.jsx"));
+export const AdminBrands = lazyWithReload(() => import("./Brands.jsx"));
+export const AdminSuppliers = lazyWithReload(() => import("./Suppliers.jsx"));
+export const AdminStockInventoryList = lazyWithReload(() => import("./StockInventoryList.jsx"));
+export const AdminInventoryLotsCatalog = lazyWithReload(() => import("./InventoryLotsCatalog.jsx"));
+export const AdminBarcodeQR = lazyWithReload(() => import("./StockInventory.jsx"));
+export const AdminPosScan = lazyWithReload(() => import("./Checkout.jsx"));
+export const AdminOrders = lazyWithReload(() => import("./Orders.jsx"));
+export const AdminInvoicePage = lazyWithReload(() => import("./Invoice.jsx"));
+export const AdminCustomers = lazyWithReload(() => import("./Customers.jsx"));
+export const AdminAdministrators = lazyWithReload(() => import("./Administrators.jsx"));
+export const HomePageManager = lazyWithReload(() => import("./HomePageManager.jsx"));
+export const CompleteHomepageManager = lazyWithReload(() => import("./CompleteHomepageManager.jsx"));
+export const Contacts = lazyWithReload(() => import("./Contacts.jsx"));
+export const Messages = lazyWithReload(() => import("./Messages.jsx"));
+export const ChatbotSettings = lazyWithReload(() => import("./ChatbotSettings.jsx"));
+export const Notifications = lazyWithReload(() => import("./Notifications.jsx"));
+export const Profile = lazyWithReload(() => import("./Profile.jsx"));
+export const Settings = lazyWithReload(() => import("./Settings.jsx"));
+export const AdminDiscounts = lazyWithReload(() => import("./Discounts.jsx"));
+export const UserManagement = lazyWithReload(() => import("./UserManagement.jsx"));
+export const AdminManagement = lazyWithReload(() => import("./AdminManagement.jsx"));
+export const AdminPayments = lazyWithReload(() => import("./Payments.jsx"));
+export const SaleHistory = lazyWithReload(() => import("./SaleHistory.jsx"));
+export const AdminReplacementCases = lazyWithReload(() => import("./ReplacementCases.jsx"));
+export const AdminShipments = lazyWithReload(() => import("./Shipments.jsx"));
+export const AdminPurchaseOrders = lazyWithReload(() => import("./PurchaseOrders.jsx"));
+export const AdminStockReceived = lazyWithReload(() => import("./StockReceived.jsx"));
+export const PaymentSettings = lazyWithReload(() => import("./PaymentSettings.jsx"));
+export const LoyaltyTopFans = lazyWithReload(() => import("./LoyaltyTopFans.jsx"));
+export const UserProfileDetail = lazyWithReload(() => import("./UserProfileDetail.jsx"));

@@ -686,10 +686,10 @@ export default function ProductDetail() {
                       e.stopPropagation();
                       setActiveImage((prev) => (prev - 1 + images.length) % images.length);
                     }}
-                    className="fs-carousel-nav-btn absolute left-3 top-1/2 -translate-y-1/2 md:left-4"
+                    className="fs-pdp-gallery-arrow fs-pdp-gallery-arrow--prev"
                     aria-label="Previous image"
                   >
-                    <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+                    <ChevronLeft className="h-8 w-8" strokeWidth={2.25} />
                   </button>
                   <button
                     type="button"
@@ -697,10 +697,10 @@ export default function ProductDetail() {
                       e.stopPropagation();
                       setActiveImage((prev) => (prev + 1) % images.length);
                     }}
-                    className="fs-carousel-nav-btn absolute right-3 top-1/2 -translate-y-1/2 md:right-4"
+                    className="fs-pdp-gallery-arrow fs-pdp-gallery-arrow--next"
                     aria-label="Next image"
                   >
-                    <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                    <ChevronRight className="h-8 w-8" strokeWidth={2.25} />
                   </button>
                 </>
               )}

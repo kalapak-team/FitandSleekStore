@@ -71,8 +71,27 @@ export function CartProvider({ children }) {
     }
   };
 
+  const mergeLocalCartIntoServer = async () => {
+    const local = readLocalCart();
+    if (!local.items.length) return;
+    for (const it of local.items) {
+      const productId = it?.product?.id;
+      if (!productId) continue;
+      try {
+        await api.post("/cart/items", {
+          product_id: productId,
+          quantity: Number(it.quantity) || 1,
+          size: it.size || null,
+          color: it.color || null,
+        });
+      } catch {
+        /* keep going so remaining guest lines still transfer */
+      }
+    }
+    writeLocalCart([]);
+  };
+
   useEffect(() => {
-    // Wait for auth to boot and user to be logged in
     if (!booted) return;
     if (!user || !token) {
       const local = readLocalCart();
@@ -80,7 +99,14 @@ export function CartProvider({ children }) {
       setTotal(local.total);
       return;
     }
-    load();
+    let cancelled = false;
+    (async () => {
+      await mergeLocalCartIntoServer();
+      if (!cancelled) await load();
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [booted, user?.id, token]);
 

@@ -6,6 +6,8 @@ import { resolveImageUrl } from "../../lib/images";
 import { useCatalogAvailability } from "../../state/catalogAvailability.jsx";
 import { filterStorefrontMedia } from "../../lib/catalogContent.js";
 
+const SLIDE_MS = 20000;
+
 function HeroPlaceholder() {
   return (
     <section className="fs-hero-shell" aria-label="Hero banner">
@@ -20,99 +22,28 @@ function HeroPlaceholder() {
   );
 }
 
-// High-End Animation Variants (3 Styles for Random Selection)
-const imageVariants = {
-  // Style 1: Fade-In (Elegant and Simple)
-  fadeInEnter: {
-    opacity: 0,
-  },
-  fadeInCenter: {
-    opacity: 1,
-    transition: {
-      duration: 1.0,
-      ease: [0.43, 0.13, 0.23, 0.96],
-    },
-  },
-  fadeInExit: {
-    opacity: 0,
-    transition: {
-      duration: 0.7,
-      ease: "easeOut",
-    },
-  },
-
-  // Style 2: Zoom-In / Ken Burns Effect (Cinematic)
-  zoomInEnter: {
-    scale: 1.2,
-    opacity: 0,
-  },
-  zoomInCenter: {
-    scale: 1,
-    opacity: 1,
-    transition: {
-      duration: 1.3,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-  zoomInExit: {
-    scale: 0.95,
-    opacity: 0,
-    transition: {
-      duration: 0.8,
-      ease: "easeOut",
-    },
-  },
-
-  // Style 3: Slide-from-Right (Dynamic)
-  slideFromRightEnter: {
-    x: "100%",
-    opacity: 0,
-  },
-  slideFromRightCenter: {
-    x: 0,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      stiffness: 50,
-      damping: 22,
-      mass: 1,
-    },
-  },
-  slideFromRightExit: {
-    x: "-30%",
-    opacity: 0,
-    transition: {
-      duration: 0.6,
-      ease: "easeIn",
-    },
-  },
-};
-
-// Paragon-style text animation variants with sophisticated staggering
 const textContainerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
       staggerChildren: 0.12,
-      delayChildren: 0.4, // Start after image begins
+      delayChildren: 0.25,
     },
   },
   exit: {
     opacity: 0,
     transition: {
-      staggerChildren: 0.05,
-      staggerDirection: -1,
+      duration: 0.35,
     },
   },
 };
 
-// Individual text element animations
 const badgeVariants = {
   hidden: {
-    y: -20,
+    y: -16,
     opacity: 0,
-    scale: 0.8,
+    scale: 0.9,
   },
   visible: {
     y: 0,
@@ -121,31 +52,28 @@ const badgeVariants = {
     transition: {
       type: "spring",
       stiffness: 200,
-      damping: 15,
+      damping: 18,
     },
   },
   exit: {
-    y: -10,
     opacity: 0,
-    scale: 0.9,
   },
 };
 
 const titleVariants = {
   hidden: {
-    y: 40,
+    y: 24,
     opacity: 0,
   },
   visible: {
     y: 0,
     opacity: 1,
     transition: {
-      duration: 0.7,
+      duration: 0.6,
       ease: [0.22, 1, 0.36, 1],
     },
   },
   exit: {
-    y: -20,
     opacity: 0,
   },
 };
@@ -153,39 +81,35 @@ const titleVariants = {
 const subtitleVariants = {
   hidden: {
     opacity: 0,
-    y: 20,
+    y: 14,
   },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.6,
+      duration: 0.5,
       ease: "easeOut",
     },
   },
   exit: {
     opacity: 0,
-    y: -10,
   },
 };
 
-// Button with continuous pulse animation
 const buttonVariants = {
   hidden: {
-    scale: 0.5,
+    y: 10,
     opacity: 0,
   },
   visible: {
-    scale: 1,
+    y: 0,
     opacity: 1,
     transition: {
-      type: "spring",
-      stiffness: 260,
-      damping: 20,
+      duration: 0.45,
+      ease: [0.22, 1, 0.36, 1],
     },
   },
   exit: {
-    scale: 0.8,
     opacity: 0,
   },
 };
@@ -199,18 +123,9 @@ export default function Hero({ initialBanners, skipFetch = false }) {
   const [loading, setLoading] = useState(() => !(skipFetch && Array.isArray(initialBanners)));
   const [fetchFailed, setFetchFailed] = useState(false);
   const [heroImageFailed, setHeroImageFailed] = useState(false);
-  const [animationStyle, setAnimationStyle] = useState("fadeIn");
+  const [floorIndex, setFloorIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
-
-  // Array of 3 high-end animation styles for random selection
-  const animationStyles = ["fadeIn", "zoomIn", "slideFromRight"];
-
-  // Get random animation style (not sequential - truly random)
-  const getRandomAnimationStyle = () => {
-    const randomIndex = Math.floor(Math.random() * animationStyles.length);
-    return animationStyles[randomIndex];
-  };
 
   useEffect(() => {
     if (skipFetch && Array.isArray(initialBanners)) {
@@ -262,11 +177,22 @@ export default function Hero({ initialBanners, skipFetch = false }) {
   }, [i, slides]);
 
   useEffect(() => {
+    if (slides.length === 0) return;
+    setI((x) => (x < slides.length ? x : 0));
+    setFloorIndex((x) => (x < slides.length ? x : 0));
+  }, [slides.length]);
+
+  useEffect(() => {
+    if (floorIndex === i) return undefined;
+    const t = window.setTimeout(() => setFloorIndex(i), 700);
+    return () => window.clearTimeout(t);
+  }, [i, floorIndex]);
+
+  useEffect(() => {
     if (slides.length <= 1) return;
     const t = setInterval(() => {
-      setAnimationStyle(getRandomAnimationStyle());
       setI((x) => (x + 1) % slides.length);
-    }, 5000); // 5-second auto-play
+    }, SLIDE_MS);
     return () => clearInterval(t);
   }, [slides.length]);
 
@@ -294,14 +220,16 @@ export default function Hero({ initialBanners, skipFetch = false }) {
   }
 
   const active = slides[i];
-  const showHeroImage = Boolean(active.image) && !heroImageFailed;
+  const floor = slides[floorIndex] || active;
+  const incoming = i !== floorIndex;
+  const showFloorImage = Boolean(floor?.image);
+  const showIncomingImage = incoming && Boolean(active.image) && !heroImageFailed;
   const showAnyOverlayText =
     (active.show_badge && active.badge) ||
     (active.show_title && active.title) ||
     (active.show_subtitle && active.desc) ||
     active.show_cta;
 
-  // Touch/Swipe handlers
   const handleTouchStart = (e) => {
     setTouchStart(e.targetTouches[0].clientX);
   };
@@ -318,11 +246,9 @@ export default function Hero({ initialBanners, skipFetch = false }) {
     const isRightSwipe = distance < -50;
 
     if (isLeftSwipe) {
-      setAnimationStyle(getRandomAnimationStyle());
       setI((x) => (x + 1) % slides.length);
     }
     if (isRightSwipe) {
-      setAnimationStyle(getRandomAnimationStyle());
       setI((x) => (x - 1 + slides.length) % slides.length);
     }
 
@@ -330,62 +256,57 @@ export default function Hero({ initialBanners, skipFetch = false }) {
     setTouchEnd(0);
   };
 
-  // Handle dot click
   const handleDotClick = (index) => {
     if (index !== i) {
-      setAnimationStyle(getRandomAnimationStyle());
       setI(index);
     }
   };
 
   return (
     <section className="fs-hero-shell">
-      <div className="fs-hero-banner relative overflow-hidden bg-zinc-900">
+      <div className="fs-hero-banner relative overflow-hidden bg-zinc-100">
         <div
           className="fs-hero-banner__frame overflow-hidden cursor-grab active:cursor-grabbing"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Animated Banner Images */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`banner-${i}-${animationStyle}`}
-              initial={`${animationStyle}Enter`}
-              animate={`${animationStyle}Center`}
-              exit={`${animationStyle}Exit`}
-              variants={imageVariants}
-              className="absolute inset-0"
-            >
-              {showHeroImage ? (
-                <img
-                  src={active.image}
-                  alt={active.title}
-                  onError={() => setHeroImageFailed(true)}
-                  className="absolute inset-0 w-full h-full object-cover object-center"
-                />
-              ) : (
-                <div
-                  className="absolute inset-0 bg-gradient-to-br from-zinc-400 via-zinc-300 to-zinc-200"
-                  aria-hidden
-                />
-              )}
+          {showFloorImage ? (
+            <img
+              src={floor.image}
+              alt=""
+              aria-hidden
+              className="fs-hero-banner__photo"
+            />
+          ) : (
+            <div
+              className="absolute inset-0 bg-gradient-to-br from-zinc-400 via-zinc-300 to-zinc-200"
+              aria-hidden
+            />
+          )}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-            </motion.div>
-          </AnimatePresence>
+          {showIncomingImage ? (
+            <img
+              key={active.id ?? i}
+              src={active.image}
+              alt={active.title}
+              onError={() => setHeroImageFailed(true)}
+              className="fs-hero-banner__photo fs-hero-banner__photo--in"
+            />
+          ) : null}
 
-          {/* Animated Text Content - Paragon Style */}
+          <div className="absolute inset-0 z-[2] bg-gradient-to-t from-black/45 via-black/10 to-transparent pointer-events-none" />
+
           {showAnyOverlayText ? (
             <div className="relative z-10 h-full flex items-end pointer-events-none">
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={`text-${i}`}
+                  key={`text-${active.id ?? i}`}
                   initial="hidden"
                   animate="visible"
                   exit="exit"
                   variants={textContainerVariants}
-                  className="p-6 sm:p-8 md:p-10 lg:p-14 xl:p-16 max-w-2xl text-white w-full"
+                  className="p-6 sm:p-8 md:p-10 lg:p-14 xl:p-16 max-w-2xl text-white w-full [text-shadow:0_1px_12px_rgba(0,0,0,0.35)]"
                 >
                   {active.show_badge && active.badge ? (
                     <motion.span
@@ -432,7 +353,6 @@ export default function Hero({ initialBanners, skipFetch = false }) {
             </div>
           ) : null}
 
-          {/* Elegant Progress Dots */}
           {slides.length > 1 && (
             <div className="absolute bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 md:gap-2">
               {slides.map((_, idx) => (
@@ -444,7 +364,6 @@ export default function Hero({ initialBanners, skipFetch = false }) {
                   className="relative group"
                   aria-label={`Go to slide ${idx + 1}`}
                 >
-                  {/* Dot background */}
                   <span
                     className={`block rounded-full transition-all duration-500 ${idx === i
                         ? "w-8 md:w-10 h-1.5 md:h-2 bg-white shadow-lg"
@@ -452,13 +371,12 @@ export default function Hero({ initialBanners, skipFetch = false }) {
                       }`}
                   />
 
-                  {/* Active progress bar */}
                   {idx === i && (
                     <motion.span
                       className="absolute inset-0 bg-white/50 rounded-full"
                       initial={{ scaleX: 0 }}
                       animate={{ scaleX: 1 }}
-                      transition={{ duration: 5, ease: "linear" }}
+                      transition={{ duration: SLIDE_MS / 1000, ease: "linear" }}
                       style={{ transformOrigin: "left" }}
                     />
                   )}

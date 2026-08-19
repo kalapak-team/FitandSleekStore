@@ -365,12 +365,29 @@ class AdminService {
     double? actualAmountReceived,
     String? courierName,
     String? notes,
+    String? qrBank,
+    String? currency,
   }) async {
     final res = await _api.dio.post('/admin/orders/$orderId/cod/cash', data: {
       'settlement_method': settlementMethod,
       if (actualAmountReceived != null) 'actual_amount_received': actualAmountReceived,
       if (courierName != null && courierName.isNotEmpty) 'courier_name': courierName,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (qrBank != null && qrBank.isNotEmpty) 'qr_bank': qrBank,
+      if (currency != null && currency.isNotEmpty) 'currency': currency,
+    });
+    final body = res.data as Map;
+    final data = body['data'] as Map? ?? body;
+    final order = data['order'] as Map? ?? data;
+    return AdminOrderDetail.fromJson(Map<String, dynamic>.from(order));
+  }
+
+  Future<AdminOrderDetail> setCodPlan({
+    required int orderId,
+    required String plan,
+  }) async {
+    final res = await _api.dio.post('/admin/orders/$orderId/cod/plan', data: {
+      'plan': plan,
     });
     final body = res.data as Map;
     final data = body['data'] as Map? ?? body;
@@ -1186,17 +1203,20 @@ class CodQuote {
     required this.usdAmount,
     required this.khrAmount,
     required this.exchangeRate,
+    this.codPlan,
   });
 
   final double usdAmount;
   final int khrAmount;
   final int exchangeRate;
+  final String? codPlan;
 
   factory CodQuote.fromJson(Map<String, dynamic> json) {
     return CodQuote(
       usdAmount: AdminDashboardStats._toDouble(json['usd_amount']),
       khrAmount: AdminDashboardStats._toInt(json['khr_amount']),
       exchangeRate: AdminDashboardStats._toInt(json['exchange_rate']),
+      codPlan: json['cod_plan']?.toString(),
     );
   }
 }

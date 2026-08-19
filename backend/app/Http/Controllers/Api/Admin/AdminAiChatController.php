@@ -38,18 +38,39 @@ class AdminAiChatController extends Controller
             $validated['conversation_id'] ?? null,
             'admin',
         );
-        $isFollowUp = ($validated['conversation_id'] ?? '') !== '';
-
-        $system = $this->buildSystemPrompt($validated['message'], $isFollowUp);
+        $current = trim($validated['message']);
+        $casual = $this->isCasualChat($current);
         $history = $conversation['messages'];
-        $messages = array_merge(
-            [['role' => 'system', 'content' => $system]],
-            $history,
-            [['role' => 'user', 'content' => $validated['message']]],
-        );
+
+        // Casual talk goes to the Space as the admin typed it. Wrapping KPI dumps
+        // + "answer ONLY from database facts" makes "hi bro" look like a report bot
+        // and can stall Hugging Face until the browser shows Network Error.
+        $messages = [];
+        if (! $casual) {
+            $messages[] = ['role' => 'system', 'content' => $this->buildSystemPrompt($current, $history !== [])];
+        }
+        foreach ($history as $item) {
+            $role = ($item['role'] ?? '') === 'assistant' ? 'assistant' : 'user';
+            $content = trim((string) ($item['content'] ?? ''));
+            if ($content === '') {
+                continue;
+            }
+            $messages[] = ['role' => $role, 'content' => $content];
+        }
+        $messages[] = ['role' => 'user', 'content' => $current];
+
+        if (count($messages) > 14) {
+            $hasSystem = ($messages[0]['role'] ?? '') === 'system';
+            $tail = array_slice($messages, $hasSystem ? 1 : 0);
+            $tail = array_slice($tail, -12);
+            $messages = $hasSystem ? array_merge([$messages[0]], $tail) : $tail;
+        }
 
         try {
-            $result = $this->chatAi->chat($messages);
+            $sessionHash = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $conversation['id']) ?: null;
+            $result = $this->chatAi->chat($messages, [
+                'session_hash' => $sessionHash ?: \Illuminate\Support\Str::uuid()->toString(),
+            ]);
         } catch (RuntimeException $e) {
             report($e);
 
@@ -78,10 +99,10 @@ class AdminAiChatController extends Controller
             ),
         );
 
-        $tables = $this->dashboardContext->buildRichTablesForMessage($validated['message']);
+        $tables = $casual ? [] : $this->dashboardContext->buildRichTablesForMessage($current);
         $reply = $this->polishReplyForRichTables($reply, $tables);
 
-        $history[] = ['role' => 'user', 'content' => $validated['message']];
+        $history[] = ['role' => 'user', 'content' => $current];
         $history[] = ['role' => 'assistant', 'content' => $reply];
         $this->conversations->save('admin', $conversation['id'], $history);
 
@@ -95,12 +116,36 @@ class AdminAiChatController extends Controller
         ]);
     }
 
+    private function isCasualChat(string $message): bool
+    {
+        $hay = mb_strtolower(trim($message));
+        $hay = trim($hay, " \t\n\r\0\x0B?!.,");
+        if ($hay === '') {
+            return false;
+        }
+
+        if (preg_match('/\b(hi|hello|hey|yo|sup|hiya|howdy)\b/u', $hay)) {
+            return true;
+        }
+        if (preg_match('/how are you|how\'s it going|what\'s up|whats up|good morning|good afternoon|good evening|thanks|thank you/u', $hay)) {
+            return true;
+        }
+
+        return str_contains($hay, 'សួស្តី')
+            || str_contains($hay, 'សួស្ដី')
+            || str_contains($hay, 'ជំរាបសួរ')
+            || str_contains($hay, 'សុខសប្បាយ')
+            || str_contains($hay, 'អរគុណ');
+    }
+
     private function buildSystemPrompt(string $message, bool $isFollowUp): string
     {
         $style = $isFollowUp
-            ? "Reply in 1–2 short sentences only. Answer ONLY what was asked. Use the admin's language (Khmer or English). "
+            ? "You are a friendly Fit & Sleek Admin Console colleague. Answer what was asked in the admin's language (Khmer or English). "
+                . "You may chat naturally. For numbers, use the live facts below — never invent them. "
                 . "NEVER use markdown tables (| pipe syntax) or ### headings — the app renders rich tables automatically."
-            : "Give a brief professional answer (1–2 sentences). Match the admin's language (Khmer or English). "
+            : "You are a friendly Fit & Sleek Admin Console colleague. Match the admin's language (Khmer or English). "
+                . "Chat naturally; when they ask for metrics, use the live facts below. "
                 . "NEVER use markdown tables (| pipe syntax) or ### headings — product/inventory data appears as UI tables automatically.";
 
         $facts = $this->dashboardContext->toCompactQueryContext($message);

@@ -15,6 +15,10 @@ return new class extends Migration
             return;
         }
 
+        if (! Schema::hasColumn('stock_received', 'category_id')) {
+            return;
+        }
+
         $sync = app(StockTableSyncService::class);
         $stockType = PaidOrderInventory::BARCODE_CATEGORY_TYPE;
 

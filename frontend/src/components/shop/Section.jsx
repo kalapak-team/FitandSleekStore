@@ -57,20 +57,20 @@ export default function Section({ title, to, items, loading, showDiscount = fals
             <button
               type="button"
               onClick={() => scrollBy(-1)}
-              className={`fs-carousel-nav-btn absolute left-2 top-1/2 z-10 -translate-y-1/2 transition-opacity ${canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"
+              className={`fs-pdp-gallery-arrow fs-pdp-gallery-arrow--prev z-10 transition-opacity ${canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               aria-label="Scroll products left"
             >
-              <ChevronLeft className="h-5 w-5" aria-hidden />
+              <ChevronLeft className="h-8 w-8" strokeWidth={2.25} aria-hidden />
             </button>
             <button
               type="button"
               onClick={() => scrollBy(1)}
-              className={`fs-carousel-nav-btn absolute right-2 top-1/2 z-10 -translate-y-1/2 transition-opacity ${canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"
+              className={`fs-pdp-gallery-arrow fs-pdp-gallery-arrow--next z-10 transition-opacity ${canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               aria-label="Scroll products right"
             >
-              <ChevronRight className="h-5 w-5" aria-hidden />
+              <ChevronRight className="h-8 w-8" strokeWidth={2.25} aria-hidden />
             </button>
           </>
         ) : null}

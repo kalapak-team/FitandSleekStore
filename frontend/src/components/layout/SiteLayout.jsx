@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import Topbar from "./Topbar.jsx";
 import Header from "./Header.jsx";
 import Footer from "./Footer.jsx";
 import MobileBottomNav from "./MobileBottomNav.jsx";
+import TelegramMiniAppDock from "./TelegramMiniAppDock.jsx";
+import TelegramMiniAppBackController from "./TelegramMiniAppBackController.jsx";
 import SupportChatWidget from "../widgets/SupportChatWidget.jsx";
 import CartDrawer from "../shop/CartDrawer.jsx";
 import NotificationDrawer from "./NotificationDrawer.jsx";
@@ -11,6 +13,7 @@ import ApiDegradedBanner from "./ApiDegradedBanner.jsx";
 import api from "../../lib/api.js";
 import { useAuth } from "../../state/auth.jsx";
 import { wakeBackend } from "../../lib/wakeBackend.js";
+import { useTelegramMiniAppLayout } from "../../lib/telegramMiniApp.js";
 import { InfoPageModalProvider } from "../../state/infoPageModal.jsx";
 
 export default function SiteLayout() {
@@ -20,6 +23,8 @@ export default function SiteLayout() {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsUnread, setNotificationsUnread] = useState(0);
   const { user } = useAuth();
+  const { active: telegramMiniApp, desktop: telegramMiniAppDesktop } = useTelegramMiniAppLayout();
+  const closeCart = useCallback(() => setCartOpen(false), []);
 
   useEffect(() => {
     wakeBackend();
@@ -103,40 +108,66 @@ export default function SiteLayout() {
 
   return (
     <InfoPageModalProvider>
-      <div className="fs-site min-h-screen flex flex-col">
-        <Topbar />
+      <div
+        className={`fs-site min-h-screen flex flex-col ${telegramMiniApp ? "fs-site--telegram-miniapp" : ""} ${telegramMiniAppDesktop ? "fs-site--telegram-miniapp-desktop" : ""}`}
+        data-telegram-miniapp={telegramMiniApp ? "1" : undefined}
+        data-telegram-miniapp-desktop={telegramMiniAppDesktop ? "1" : undefined}
+      >
+        {!telegramMiniApp && <Topbar />}
         <ApiDegradedBanner />
-        <Header
-          onOpenCart={() => setCartOpen(true)}
-          onOpenNotifications={() => setNotificationsOpen(true)}
-          notificationsUnread={notificationsUnread}
-        />
-        <main className="fs-main-content flex-1 fs-page-enter pb-28 sm:pb-24 lg:pb-0 text-base leading-relaxed text-slate-800 antialiased dark:text-slate-100">
+        {!telegramMiniApp && (
+          <Header
+            onOpenCart={() => setCartOpen(true)}
+            onOpenNotifications={() => setNotificationsOpen(true)}
+            notificationsUnread={notificationsUnread}
+          />
+        )}
+        {telegramMiniApp && (
+          <TelegramMiniAppBackController
+            cartOpen={cartOpen}
+            onCloseCart={closeCart}
+          />
+        )}
+        <main
+          className={`fs-main-content flex-1 fs-page-enter text-base leading-relaxed text-slate-800 antialiased dark:text-slate-100 ${
+            telegramMiniApp
+              ? telegramMiniAppDesktop
+                ? "pb-24"
+                : "pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+              : "pb-28 sm:pb-24 lg:pb-0"
+          }`}
+        >
           <Outlet />
         </main>
-        <Footer />
-        <MobileBottomNav
-          onOpenNotifications={() => setNotificationsOpen(true)}
-          notificationsUnread={notificationsUnread}
-          notifications={notifications}
-          notificationsLoading={notificationsLoading}
-          onMarkNotificationRead={markNotificationRead}
-          onMarkAllNotificationsRead={markAllNotificationsRead}
-          formatTime={formatNotifTime}
-        />
-        <SupportChatWidget />
-        <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
-        <NotificationDrawer
-          open={notificationsOpen}
-          onClose={() => setNotificationsOpen(false)}
-          notifications={notifications}
-          loading={notificationsLoading}
-          unreadCount={notificationsUnread}
-          onMarkRead={markNotificationRead}
-          onMarkAllRead={markAllNotificationsRead}
-          user={user}
-          formatTime={formatNotifTime}
-        />
+        {!telegramMiniApp && <Footer />}
+        {telegramMiniApp ? (
+          <TelegramMiniAppDock onOpenCart={() => setCartOpen(true)} />
+        ) : (
+          <MobileBottomNav
+            onOpenNotifications={() => setNotificationsOpen(true)}
+            notificationsUnread={notificationsUnread}
+            notifications={notifications}
+            notificationsLoading={notificationsLoading}
+            onMarkNotificationRead={markNotificationRead}
+            onMarkAllNotificationsRead={markAllNotificationsRead}
+            formatTime={formatNotifTime}
+          />
+        )}
+        {!telegramMiniApp && <SupportChatWidget />}
+        <CartDrawer open={cartOpen} onClose={closeCart} />
+        {!telegramMiniApp && (
+          <NotificationDrawer
+            open={notificationsOpen}
+            onClose={() => setNotificationsOpen(false)}
+            notifications={notifications}
+            loading={notificationsLoading}
+            unreadCount={notificationsUnread}
+            onMarkRead={markNotificationRead}
+            onMarkAllRead={markAllNotificationsRead}
+            user={user}
+            formatTime={formatNotifTime}
+          />
+        )}
       </div>
     </InfoPageModalProvider>
   );

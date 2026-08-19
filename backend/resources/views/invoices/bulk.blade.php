@@ -373,6 +373,70 @@
             border-bottom: 1px solid #64748b;
             min-height: 28px;
         }
+
+        .khqr-box {
+            margin-top: 14px;
+            border: 1.5px solid #C0272D;
+            border-radius: 8px;
+            padding: 12px 14px;
+            background: #FFF8F8;
+        }
+        .khqr-box table { width: 100%; border-collapse: collapse; }
+        .khqr-box td { vertical-align: middle; }
+        .khqr-box .qr-cell { width: 150px; text-align: center; }
+        .khqr-box .qr-cell img {
+            width: 132px;
+            height: 132px;
+            display: block;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid #E5E9F0;
+            border-radius: 6px;
+            padding: 4px;
+        }
+        .khqr-box .khqr-kicker {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: #C0272D;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+        }
+        .khqr-box .khqr-title {
+            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            margin: 0 0 4px 0;
+            color: {{ $textPrimary }};
+        }
+        .khqr-box .khqr-copy {
+            font-size: 9px;
+            color: {{ $textMuted }};
+            margin: 0 0 8px 0;
+            line-height: 1.45;
+        }
+        .khqr-box .khqr-amt {
+            font-size: 16px;
+            font-weight: 800;
+            margin: 0;
+            color: {{ $textPrimary }};
+        }
+        .khqr-box .khqr-usd {
+            font-size: 10px;
+            color: {{ $textMuted }};
+            margin: 2px 0 0 0;
+        }
+        .khqr-paid {
+            margin-top: 14px;
+            border: 1px solid #86EFAC;
+            background: #F0FDF4;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #166534;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -530,6 +594,39 @@
                     </td>
                 </tr>
             </table>
+
+            @php
+                $payQr = $invoice['payment_qr'] ?? null;
+                $payQrPending = is_array($payQr) && ($payQr['status'] ?? '') === 'pending' && !empty($payQr['qr_image']);
+                $payQrPaid = is_array($payQr) && ($payQr['status'] ?? '') === 'paid';
+            @endphp
+
+            @if ($payQrPending)
+                <div class="khqr-box">
+                    <table>
+                        <tr>
+                            <td class="qr-cell">
+                                <img src="{{ $payQr['qr_image'] }}" alt="KHQR">
+                            </td>
+                            <td>
+                                <p class="khqr-kicker">KHQR · Bakong</p>
+                                <p class="khqr-title">ស្កេនដើម្បីបង់ទៅហាង</p>
+                                <p class="khqr-copy">
+                                    Scan with any Bakong bank app to pay the shop in full.
+                                    This QR stays valid until this invoice is paid — then the sale is complete.
+                                    <br>QR នេះមិនផុតកំណត់ទេ ទាល់តែបង់រួច។
+                                </p>
+                                <p class="khqr-amt">{{ $payQr['amount_label'] ?? '' }}</p>
+                                @if (!empty($payQr['usd_label']))
+                                    <p class="khqr-usd">{{ $payQr['usd_label'] }}</p>
+                                @endif
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            @elseif ($payQrPaid)
+                <div class="khqr-paid">PAID · បានបង់រួច — payment QR is closed</div>
+            @endif
 
             @if ($isShop)
                 <div class="pickup-box">

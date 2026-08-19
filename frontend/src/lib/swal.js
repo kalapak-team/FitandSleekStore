@@ -99,6 +99,54 @@ export const toastSuccess = async (arg) => {
     });
 };
 
+export const successAlert = async ({
+    title,
+    khTitle,
+    enTitle,
+    khText,
+    enText,
+} = {}) => {
+    const head =
+        title
+        || [khTitle, enTitle].filter((part) => part && String(part).trim()).join("\n")
+        || "Success";
+    const text = [...new Set(
+        [khText, enText]
+            .filter((part) => part && String(part).trim())
+            .map((part) => String(part).trim()),
+    )].join("\n");
+    const dark = isDarkChrome();
+    const primaryHex = cssVarHex("--admin-primary", FALLBACK_PRIMARY);
+    const layout = modalLayoutClasses();
+
+    return Swal.fire({
+        ...layout,
+        ...modalChromeColors(),
+        icon: "success",
+        iconColor: primaryHex,
+        title: head,
+        ...(text ? { text } : {}),
+        customClass: { ...layout.customClass, container: "!z-[20000]" },
+        confirmButtonText: "OK",
+        showCancelButton: false,
+        focusConfirm: true,
+        didOpen: () => {
+            pushAdminModalChrome();
+        },
+        didRender: () => {
+            const b = Swal.getConfirmButton();
+            if (b) {
+                b.style.backgroundColor = primaryHex;
+                b.style.color = dark ? "#0b1119" : "#ffffff";
+                b.style.border = "none";
+            }
+        },
+        willClose: () => {
+            popAdminModalChrome();
+        },
+    });
+};
+
 export const errorAlert = async ({
     title,
     khTitle,

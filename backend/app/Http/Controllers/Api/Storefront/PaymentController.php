@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Storefront;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\WatchKhqrPayment;
 use App\Models\Order;
 use App\Models\Cart;
 use App\Models\Payment;
@@ -157,6 +158,9 @@ class PaymentController extends Controller
             ->first();
 
         if ($existing && $existing->khqr_payload && $existing->qr_string) {
+            WatchKhqrPayment::dispatch((int) $existing->id);
+            $this->rielpayPayments->scheduleAutoConfirm($existing, $order);
+
             return response()->json([
                 'payment' => $this->sanitizePayment($existing),
             ]);
@@ -192,8 +196,12 @@ class PaymentController extends Controller
                 'raw_response' => $result['payload'],
             ]);
 
+            $fresh = $payment->fresh();
+            WatchKhqrPayment::dispatch((int) $fresh->id);
+            $this->rielpayPayments->scheduleAutoConfirm($fresh, $order);
+
             return response()->json([
-                'payment' => $this->sanitizePayment($payment->fresh()),
+                'payment' => $this->sanitizePayment($fresh),
             ]);
         } catch (\Throwable $e) {
             Log::error('KHQR create failed', [

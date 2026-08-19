@@ -83,6 +83,7 @@ return [
     'telegram' => [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'bot_name' => env('TELEGRAM_BOT_NAME'),
+        'login_client_id' => env('TELEGRAM_LOGIN_CLIENT_ID'),
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
         'webhook_url' => env('TELEGRAM_WEBHOOK_URL'),
         'admin_chat_id' => env('TELEGRAM_ADMIN_CHAT_ID'),
@@ -105,6 +106,14 @@ return [
             'RIELPAY_DEEPLINK_CALLBACK',
             env('BAKONG_DEEPLINK_CALLBACK', 'fitandsleek://payment/callback')
         ),
+    ],
+
+    'bakong' => [
+        'proxy_url' => env('BAKONG_PROXY_URL'),
+        'proxy_secret' => env('BAKONG_PROXY_SECRET'),
+        'token' => env('BAKONG_TOKEN'),
+        'base_url' => env('BAKONG_BASE_URL', 'https://api-bakong.nbc.gov.kh'),
+        'webhook_secret' => env('BAKONG_WEBHOOK_SECRET'),
     ],
 
     'aba_payway' => [
@@ -158,7 +167,7 @@ return [
         'base_url' => env('CHATBOT_HF_URL', env('HF_CHAT_BASE_URL', 'https://kalapak-fitandsleekaichat.hf.space')),
         'space_id' => env('HF_CHAT_SPACE_ID', 'Kalapak/fitandsleekAIchat'),
         'token' => env('CHATBOT_HF_TOKEN', env('HF_TOKEN', env('HUGGING_FACE_HUB_TOKEN'))),
-        'protocol' => strtolower((string) env('CHATBOT_HF_PROTOCOL', 'call')),
+        'protocol' => strtolower((string) env('CHATBOT_HF_PROTOCOL', 'queue')),
         'fn_index' => (int) env('CHATBOT_HF_FN_INDEX', 7),
         'api_name' => trim((string) env('CHATBOT_HF_API_NAME', 'chat'), '/'),
         'send_history' => filter_var(env('CHATBOT_HF_SEND_HISTORY', true), FILTER_VALIDATE_BOOLEAN),

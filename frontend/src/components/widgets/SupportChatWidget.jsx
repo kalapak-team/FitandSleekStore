@@ -32,8 +32,10 @@ const QUICK_SUGGESTIONS = [
 ];
 
 function formatInlineText(text) {
+  const sitePath = /^\/(support|contact|faq|track-order|search|discounts|cart|checkout|p\/[\w-]+)$/;
+
   return String(text)
-    .split(/(\*\*[^*]+\*\*)/g)
+    .split(/(\*\*[^*]+\*\*|!\[[^\]]*]\(https?:[^)\s]+\)|\[[^\]]+]\([^)]+\)|\/(?:support|contact|faq|track-order|search|discounts|cart|checkout))/g)
     .map((part, index) => {
       if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
         return (
@@ -42,6 +44,33 @@ function formatInlineText(text) {
           </strong>
         );
       }
+
+      const mdLink = part.match(/^\[([^\]]+)]\(([^)]+)\)$/);
+      if (mdLink) {
+        const href = mdLink[2];
+        const label = mdLink[1];
+        if (href.startsWith("/")) {
+          return (
+            <Link key={index} to={href} className="font-semibold underline underline-offset-2">
+              {label}
+            </Link>
+          );
+        }
+        return (
+          <a key={index} href={href} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">
+            {label}
+          </a>
+        );
+      }
+
+      if (sitePath.test(part)) {
+        return (
+          <Link key={index} to={part} className="font-semibold underline underline-offset-2">
+            {part}
+          </Link>
+        );
+      }
+
       return part;
     });
 }
@@ -54,8 +83,49 @@ function stripMarkdownTables(text) {
     .trim();
 }
 
+function extractMarkdownImages(text) {
+  const images = [];
+  const clean = String(text || "").replace(/!\[([^\]]*)]\((https?:[^)\s]+)\)/g, (_, alt, url) => {
+    images.push({ alt: String(alt || "").trim(), url });
+    return "";
+  });
+  return { clean: stripMarkdownTables(clean), images };
+}
+
+function ChatMessageImages({ images, dark }) {
+  if (!images.length) return null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      {images.slice(0, 4).map((img) => (
+        <div
+          key={img.url}
+          className={`flex min-w-0 items-center gap-2.5 rounded-xl border p-2 ${
+            dark ? "border-[#30363d] bg-[#0d1117]" : "border-zinc-200 bg-zinc-50"
+          }`}
+        >
+          <img
+            src={img.url}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.src = "/placeholder.svg";
+            }}
+          />
+          {img.alt ? (
+            <p className={`min-w-0 flex-1 line-clamp-2 text-xs font-semibold ${dark ? "text-[#f0f6fc]" : "text-zinc-900"}`}>
+              {img.alt}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ChatMessageContent({ content }) {
-  const lines = stripMarkdownTables(content).split("\n");
+  const lines = content.split("\n");
   const blocks = [];
   let listItems = [];
 
@@ -82,14 +152,14 @@ function ChatMessageContent({ content }) {
     if (trimmed === "") return;
 
     blocks.push(
-      <p key={`p-${index}`} className={blocks.length ? "mt-1" : undefined}>
+      <p key={`p-${index}`} className={`break-words ${blocks.length ? "mt-1" : ""}`}>
         {formatInlineText(trimmed)}
       </p>
     );
   });
 
   flushList();
-  return <div>{blocks}</div>;
+  return <div className="min-w-0 overflow-hidden break-words">{blocks}</div>;
 }
 
 function ProductThumb({ name, imageUrl }) {
@@ -116,7 +186,7 @@ function ChatProductCards({ products, dark }) {
           key={p.id || p.slug || p.name}
           to={getProductPath(p) || "/search"}
           onClick={() => {}}
-          className={`flex items-center gap-2.5 rounded-xl border p-2 transition hover:-translate-y-0.5 ${
+          className={`flex min-w-0 items-center gap-2.5 rounded-xl border p-2 transition hover:-translate-y-0.5 ${
             dark
               ? "border-[#30363d] bg-[#0d1117] hover:border-[#58a6ff]/40"
               : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:shadow-sm"
@@ -152,14 +222,18 @@ function ChatProductCards({ products, dark }) {
 }
 
 function AssistantBubble({ message, dark }) {
+  const { clean, images } = extractMarkdownImages(message.text);
+  const hasCards = Array.isArray(message.products) && message.products.length > 0;
+
   return (
-    <div className="max-w-[92%]">
+    <div className="max-w-[92%] min-w-0">
       <div
-        className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+        className={`overflow-hidden break-words px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
           dark ? "bg-[#21262d] text-[#c9d1d9]" : "bg-zinc-100 text-zinc-900"
         }`}
       >
-        <ChatMessageContent content={message.text} />
+        <ChatMessageContent content={clean} />
+        {!hasCards ? <ChatMessageImages images={images} dark={dark} /> : null}
       </div>
       <ChatProductCards products={message.products} dark={dark} />
     </div>
@@ -197,6 +271,9 @@ export default function SupportChatWidget() {
   const [messages, setMessages] = useState([{ role: "assistant", text: WELCOME_TEXT, products: [] }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const conversationIdRef = useRef(
+    typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `chat-${Date.now()}`,
+  );
   const panelRef = useRef(null);
   const buttonRef = useRef(null);
   const listRef = useRef(null);
@@ -287,14 +364,18 @@ export default function SupportChatWidget() {
     setLoading(true);
 
     try {
-      const history = next.slice(-8).map((m) => ({
-        role: m.role,
-        content: m.text,
-      }));
+      const history = messages
+        .filter((m) => m.text !== WELCOME_TEXT)
+        .slice(-8)
+        .map((m) => ({
+          role: m.role,
+          content: m.text,
+        }));
       const { data } = await api.post("/chatbot/message", {
         message: text,
         history,
-      });
+        conversation_id: conversationIdRef.current,
+      }, { timeout: 120000 });
       const reply = data?.reply || "Sorry, I couldn't generate a reply.";
       setMessages((prev) => [
         ...prev,
@@ -410,7 +491,7 @@ export default function SupportChatWidget() {
         </div>
 
         <div className={`p-4 ${dark ? "bg-[#161b22]" : "bg-white"}`}>
-          <div ref={listRef} className="max-h-72 overflow-y-auto pr-1 space-y-3">
+          <div ref={listRef} className="max-h-72 overflow-x-hidden overflow-y-auto pr-1 space-y-3">
             {messages.map((m, i) => (
               <div
                 key={`${m.role}-${i}`}

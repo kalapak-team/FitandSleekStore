@@ -53,7 +53,7 @@ class TelegramSetWebhookCommand extends Command
 
         $response = Http::post("https://api.telegram.org/bot{$token}/setWebhook", [
             'url' => $url,
-            'allowed_updates' => ['message', 'callback_query'],
+            'allowed_updates' => ['message', 'callback_query', 'my_chat_member'],
             'secret_token' => $secret,
             'drop_pending_updates' => false,
         ]);
@@ -62,6 +62,14 @@ class TelegramSetWebhookCommand extends Command
 
         if ($response->successful()) {
             $this->info("Webhook set to: {$url}");
+            $menu = Http::timeout(15)->post("https://api.telegram.org/bot{$token}/setChatMenuButton", [
+                'menu_button' => [
+                    'type' => 'web_app',
+                    'text' => '🛍️ Shop Now',
+                    'web_app' => ['url' => rtrim((string) config('app.frontend_url'), '/')],
+                ],
+            ]);
+            $this->line($menu->body());
         }
 
         return $response->successful() ? self::SUCCESS : self::FAILURE;

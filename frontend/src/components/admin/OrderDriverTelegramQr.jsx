@@ -126,7 +126,7 @@ export default function OrderDriverTelegramQr({
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
         External courier — no shop account. When they arrive, Admin/Superadmin confirms pickup to unlock.
-        Then they scan this QR for order {orderNumber || `#${orderId}`} (ship / in transit / arrived / KHQR / complete).
+        Then they scan this QR for order {orderNumber || `#${orderId}`} (shipped → in transit → arrived → goods received).
       </p>
 
       {canEdit ? (

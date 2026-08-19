@@ -82,9 +82,11 @@ class OrderAdminFilters
                             }),
                         'processing' => $sub->whereIn('orders.status', ['processing', 'preparing', 'paid']),
                         'shipped' => $sub->where('orders.status', 'shipped'),
+                        'in_transit' => $sub->where('orders.status', 'in_transit'),
+                        'arrived' => $sub->where('orders.status', 'arrived'),
                         'completed' => $sub->whereIn('orders.status', ['completed', 'delivered']),
                         'cancelled' => $sub->where('orders.status', 'cancelled'),
-                        default => null,
+                        default => $sub->where('orders.status', $status),
                     };
                 });
             }

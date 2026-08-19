@@ -10,8 +10,10 @@ use App\Http\Controllers\Api\AuthSessionController;
 use App\Http\Controllers\Api\BakongPaymentController;
 use App\Http\Controllers\Api\SecurityAuditController;
 use App\Http\Controllers\Api\SocialAuthController;
+use App\Http\Controllers\Api\TelegramAuthController;
 use App\Http\Controllers\Api\TwoFactorController;
 use App\Http\Controllers\Api\CodCollectionController;
+use App\Http\Controllers\Api\DriverCodScanController;
 // Storefront
 use App\Http\Controllers\Api\Storefront\CategoryController;
 use App\Http\Controllers\Api\Storefront\ProductController;
@@ -90,10 +92,14 @@ use App\Http\Controllers\Api\Admin\AdminAiChatController;
 use App\Http\Controllers\Api\Admin\LoyaltyAdminController;
 
 Route::get('/health', function () {
-    return response()->json([
-        'ok' => true,
-        'media' => \App\Support\Media::diagnostics(),
-    ]);
+    try {
+        return response()->json([
+            'ok' => true,
+            'media' => \App\Support\Media::diagnostics(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['ok' => true]);
+    }
 });
 
 // Lightweight dependency probe (outside throttle) — helps diagnose storefront 500s on Render.
@@ -183,7 +189,28 @@ Route::get('/site-logo', function () {
 
 // Current user
 Route::get('/me', function (Request $request) {
-    return response()->json($request->user());
+    $user = $request->user();
+    $telegramUser = \App\Models\TelegramUser::query()
+        ->where('user_id', $user->id)
+        ->orderByDesc('last_interacted_at')
+        ->first();
+
+    if ($telegramUser && ! filled($user->profile_image_path)) {
+        try {
+            $user = app(\App\Services\TelegramService::class)
+                ->syncTelegramProfileToUser($telegramUser, $user);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Telegram profile sync on /me failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    $payload = $user->toArray();
+    $payload['telegram_username'] = $telegramUser?->username;
+
+    return response()->json($payload);
 })->middleware(['auth:sanctum', 'device.bound']);
 
 // -------------------------
@@ -201,6 +228,15 @@ Route::get('/auth/security-activity', [SecurityAuditController::class, 'myActivi
 Route::delete('/auth/sessions/{session}', [AuthSessionController::class, 'destroy'])->middleware(['auth:sanctum', 'device.bound']);
 Route::get('/auth/facebook/redirect-direct', [AuthController::class, 'redirectToFacebook'])->middleware('throttle:auth-social');
 Route::get('/auth/facebook/callback-direct', [AuthController::class, 'handleFacebookCallback'])->middleware('throttle:auth-social');
+Route::post('/auth/telegram', [TelegramAuthController::class, 'login'])->middleware('throttle:auth-social');
+Route::post('/auth/telegram/oidc', [TelegramAuthController::class, 'loginWithOidc'])->middleware('throttle:auth-social');
+Route::post('/auth/telegram/web-session', [TelegramAuthController::class, 'createWebSession'])->middleware('throttle:auth-social');
+Route::get('/auth/telegram/web-session/{code}', [TelegramAuthController::class, 'pollWebSession'])->middleware('throttle:auth-telegram-poll');
+Route::post('/auth/device-continue', [TelegramAuthController::class, 'createWebSession'])->middleware('throttle:auth-social');
+Route::get('/auth/device-continue/{code}', [TelegramAuthController::class, 'pollWebSession'])->middleware('throttle:auth-telegram-poll');
+Route::post('/auth/telegram/webapp', [TelegramAuthController::class, 'loginWithWebApp'])->middleware('throttle:auth-social');
+Route::post('/auth/telegram/phone', [TelegramAuthController::class, 'startPhoneLogin'])->middleware('throttle:auth-login');
+Route::post('/auth/telegram/phone/verify', [TelegramAuthController::class, 'verifyPhoneLogin'])->middleware('throttle:auth-otp-verify');
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])->middleware('throttle:auth-social');
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])->middleware('throttle:auth-social');
 Route::get('/auth/social/exchange/{ticket}', [SocialAuthController::class, 'exchange'])->middleware('throttle:auth-social');
@@ -250,10 +286,17 @@ Route::get('/shipments/track', [ShipmentTrackingController::class, 'track']);
 Route::get('/telegram/settings', [TelegramController::class, 'settings']);
 Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle']);
 Route::post('/telegram/webhook/{secret}', [TelegramWebhookController::class, 'handle']);
+Route::post('/payments/khqr/webhook', [BakongPaymentController::class, 'webhook'])
+    ->middleware('throttle:60,1');
 
 Route::get('/receipt/{token}', [PublicReceiptController::class, 'show']);
 Route::get('/receipt/{token}/pdf', [PublicReceiptController::class, 'downloadPdf']);
 Route::get('/receipt/{token}/pay-qr', [PublicReceiptController::class, 'paymentQr']);
+
+Route::get('/driver/cod-scan/{token}', [DriverCodScanController::class, 'show'])
+    ->middleware('throttle:api');
+Route::post('/driver/cod-scan/{token}', [DriverCodScanController::class, 'capture'])
+    ->middleware('throttle:api-sensitive');
 
 // Contact Form (public)
 Route::post('/contact', [ContactController::class, 'store'])->middleware('throttle:api-sensitive');
@@ -301,12 +344,16 @@ Route::middleware(['auth:sanctum', 'device.bound'])->group(function () {
         ->middleware(['driver', 'throttle:30,1']);
     Route::get('/driver/orders/{order}/cod', [CodCollectionController::class, 'quote'])
         ->middleware('driver');
+    Route::post('/driver/orders/{order}/cod/plan', [CodCollectionController::class, 'setPlan'])
+        ->middleware('driver');
     Route::post('/driver/orders/{order}/cod/cash', [CodCollectionController::class, 'collectCash'])
         ->middleware('driver');
     Route::post('/driver/orders/{order}/cod/khqr', [CodCollectionController::class, 'createKhqr'])
         ->middleware('driver');
     Route::get('/driver/orders/{order}/cod/khqr/status', [CodCollectionController::class, 'khqrStatus'])
         ->middleware(['driver', 'throttle:20,1']);
+    Route::post('/driver/orders/{order}/cod/khqr/confirm', [CodCollectionController::class, 'confirmKhqr'])
+        ->middleware('driver');
 
     // Payment Processing
     Route::post('/payments/{order}/verify-bkash', [PaymentController::class, 'verifyBKash']);
@@ -322,7 +369,7 @@ Route::middleware(['auth:sanctum', 'device.bound'])->group(function () {
         ->whereNumber('payment');
     Route::get('/payments/bakong/status/{payment}', [BakongPaymentController::class, 'status'])
         ->whereNumber('payment')
-        ->middleware('throttle:30,1');
+        ->middleware('throttle:payment-status-poll');
 
     // User Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
@@ -447,9 +494,11 @@ Route::middleware(['auth:sanctum', 'device.bound', 'admin'])->prefix('admin')->g
     Route::patch('orders/{order}', [OrderAdminController::class, 'update']);
     Route::delete('orders/{order}', [OrderAdminController::class, 'destroy']);
     Route::get('orders/{order}/cod', [CodCollectionController::class, 'quote']);
+    Route::post('orders/{order}/cod/plan', [CodCollectionController::class, 'setPlan']);
     Route::post('orders/{order}/cod/cash', [CodCollectionController::class, 'collectCash']);
     Route::post('orders/{order}/cod/khqr', [CodCollectionController::class, 'createKhqr']);
     Route::get('orders/{order}/cod/khqr/status', [CodCollectionController::class, 'khqrStatus']);
+    Route::post('orders/{order}/cod/khqr/confirm', [CodCollectionController::class, 'confirmKhqr']);
 
     // Unified user profile (admin view)
     Route::get('users/{user}/profile', [UserProfileAdminController::class, 'show']);

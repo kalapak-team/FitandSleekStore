@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode.react";
-import { Clock3, Copy, RefreshCcw, ShieldCheck, Smartphone } from "lucide-react";
+import { Clock3, Copy, Download, RefreshCcw, ShieldCheck, Smartphone } from "lucide-react";
 import api from "../../lib/api";
+import { saveKhqrImage } from "../../lib/saveKhqrImage.js";
 
-const POLL_INTERVAL = 2500;
+const POLL_INTERVAL = 5000;
 
 const pickStatus = (payload) => payload?.payment?.status || payload?.status || null;
 
@@ -14,6 +15,8 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
   const [error, setError] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const qrWrapRef = useRef(null);
+  const [saveState, setSaveState] = useState("");
 
   const expiresTimestamp = useMemo(() => {
     if (!payment?.expires_at) return null;
@@ -71,9 +74,10 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
     const updateCountdown = () => {
       const diff = Math.max(0, Math.floor((expiresTimestamp - Date.now()) / 1000));
       setSecondsLeft(diff);
-      if (diff === 0) {
-        setStatus("expired");
-        notify("expired");
+      if (diff === 0 && status === "pending") {
+        // Keep polling — Bakong may still confirm a scan after the QR timer hits 0.
+        setSecondsLeft(0);
+        return;
       }
     };
 
@@ -85,7 +89,7 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
   useEffect(() => {
     const targetId = paymentId || orderId;
 
-    if (!payment || status !== "pending" || !targetId) {
+    if (!payment || !["pending", "expired"].includes(status) || !targetId) {
       return undefined;
     }
 
@@ -118,6 +122,26 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
       await navigator.clipboard.writeText(payment.md5);
     } catch (err) {
       console.warn("Clipboard copy failed", err);
+    }
+  };
+
+  const handleSaveQr = async () => {
+    const canvas = qrWrapRef.current?.querySelector("canvas");
+    setSaveState("saving");
+    try {
+      const result = await saveKhqrImage({
+        qrImageBase64: payment?.qr_image_base64,
+        canvas,
+        filename: `KHQR-${payment?.bill_number || "FitAndSleek"}.png`,
+      });
+      if (result === "cancelled") {
+        setSaveState("");
+        return;
+      }
+      setSaveState("saved");
+      window.setTimeout(() => setSaveState(""), 4000);
+    } catch {
+      setSaveState("failed");
     }
   };
 
@@ -169,13 +193,36 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
         </div>
 
         <div className="flex flex-col items-center gap-4">
-          <div className="bg-white p-4 rounded-2xl shadow-xl">
-            {payment?.qr_string ? (
-              <QRCode value={payment.qr_string} size={260} level="M" includeMargin={true} />
+          <div ref={qrWrapRef} className="bg-white p-4 rounded-2xl shadow-xl">
+            {payment?.qr_image_base64 ? (
+              <img
+                src={`data:image/png;base64,${payment.qr_image_base64}`}
+                alt="KHQR"
+                className="w-[260px] h-[260px] object-contain"
+              />
+            ) : payment?.qr_string ? (
+              <QRCode value={payment.qr_string} size={260} level="M" includeMargin={true} renderAs="canvas" />
             ) : (
               <div className="w-[260px] h-[260px] flex items-center justify-center text-slate-400">Generating...</div>
             )}
           </div>
+
+          {(payment?.qr_image_base64 || payment?.qr_string) && !paid ? (
+            <button
+              type="button"
+              onClick={handleSaveQr}
+              disabled={saveState === "saving"}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#C0272D] text-white text-sm font-semibold shadow-md disabled:opacity-70"
+            >
+              <Download className="w-4 h-4" />
+              {saveState === "saving" ? "…" : saveState === "saved" ? "Saved" : "Save KHQR image"}
+            </button>
+          ) : null}
+          {saveState === "saved" ? (
+            <p className="text-xs text-emerald-700">Saved. Open ABA / ACLEDA / Wing and scan from Photos.</p>
+          ) : (
+            <p className="text-xs text-slate-500">Save this QR, then scan it from Photos in your bank app.</p>
+          )}
 
           <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-slate-600 dark:text-slate-300">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
@@ -198,8 +245,8 @@ export default function BakongKhqrPanel({ orderId, amount, currency = "KHR", onS
 
           <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
-              <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">1. Scan with Bakong / ABA</p>
-              <p className="text-slate-500 dark:text-slate-400">Use any Bakong-ready banking app and scan the QR above.</p>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">1. Save KHQR &amp; open bank app</p>
+              <p className="text-slate-500 dark:text-slate-400">Save the image, then open ABA / ACLEDA / Wing and scan from Photos.</p>
             </div>
             <div className="p-4 rounded-2xl bg-white/60 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700">
               <p className="font-semibold text-slate-800 dark:text-slate-100 mb-1">2. Confirm amount & pay</p>

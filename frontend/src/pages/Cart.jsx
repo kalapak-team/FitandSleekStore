@@ -5,6 +5,7 @@ import { useAuth } from "../state/auth";
 import { resolveImageUrl } from "../lib/images";
 import { useLanguage } from "../lib/i18n.jsx";
 import { canPlaceStorefrontOrder } from "../app/redirectAfterAuth.js";
+import { continueTelegramMiniAppCheckout, isTelegramMiniApp, rememberCheckoutAfterLogin } from "../lib/telegramMiniApp.js";
 import { remainingSellableQty, sellableQtyForVariantLine } from "../lib/variantMatrix.js";
 import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 import api from "../lib/api";
@@ -17,7 +18,7 @@ export default function CartPage() {
   const { cart, total, loading, updateQty, remove } = useCart();
   const items = cart?.items || [];
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, loginWithTelegramWebApp } = useAuth();
   const nav = useNavigate();
   const storefrontCheckout = canPlaceStorefrontOrder(user);
   const [loyalty, setLoyalty] = React.useState(null);
@@ -213,9 +214,19 @@ export default function CartPage() {
           {storefrontCheckout || !user ? (
             <Link
               to="/checkout"
-              onClick={(e) => {
+              onClick={async (e) => {
                 if (user) return;
                 e.preventDefault();
+                rememberCheckoutAfterLogin("/checkout");
+                if (isTelegramMiniApp()) {
+                  await continueTelegramMiniAppCheckout({
+                    user,
+                    loginWithTelegramWebApp,
+                    navigate: nav,
+                    path: "/checkout",
+                  });
+                  return;
+                }
                 window.dispatchEvent(new Event("fs:open-login"));
               }}
               className="mt-5 w-full rounded-xl bg-black text-white py-4 font-bold hover:opacity-90 active:scale-95 transition-all duration-200 flex items-center justify-center"

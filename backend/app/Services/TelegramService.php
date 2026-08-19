@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\WatchKhqrPayment;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\Payment;
@@ -17,9 +18,11 @@ use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Support\Media;
 
 class TelegramService
 {
@@ -41,6 +44,101 @@ class TelegramService
         $name = trim((string) config('services.telegram.bot_name', ''));
 
         return $name !== '' ? ltrim($name, '@') : null;
+    }
+
+    /**
+     * Numeric bot id (first part of TELEGRAM_BOT_TOKEN). Used by oauth.telegram.org.
+     */
+    public function botId(): ?int
+    {
+        $token = trim((string) config('services.telegram.bot_token'));
+        if ($token === '' || ! str_contains($token, ':')) {
+            return null;
+        }
+
+        $id = (int) strtok($token, ':');
+
+        return $id > 0 ? $id : null;
+    }
+
+    /**
+     * Client ID from BotFather Login Widget (defaults to the bot id).
+     */
+    public function loginClientId(): ?string
+    {
+        $configured = trim((string) config('services.telegram.login_client_id', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        $botId = $this->botId();
+
+        return $botId ? (string) $botId : null;
+    }
+
+    /**
+     * Persistent composer button. Telegram applies menu_button only when sent as a JSON object.
+     *
+     * @param  array<string, mixed>|null  $menuButton
+     */
+    public function setChatMenuButton(?int $chatId = null, ?array $menuButton = null): bool
+    {
+        if (! $this->isEnabled()) {
+            return false;
+        }
+
+        $payload = [
+            'menu_button' => $menuButton ?? $this->shopNowMenuButton(),
+        ];
+        if ($chatId !== null && $chatId !== 0) {
+            $payload['chat_id'] = $chatId;
+        }
+
+        $endpoint = 'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/setChatMenuButton';
+
+        try {
+            $response = Http::timeout(15)->post($endpoint, $payload);
+            if ($response->successful() && $response->json('ok') === true) {
+                return true;
+            }
+
+            Log::warning('Telegram setChatMenuButton failed', [
+                'chat_id' => $chatId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Telegram setChatMenuButton exception', [
+                'chat_id' => $chatId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{type: string, text: string, web_app: array{url: string}}
+     */
+    public function shopNowMenuButton(): array
+    {
+        $shopUrl = rtrim((string) config('app.frontend_url', 'https://fitandsleek.kalapak-team.space'), '/');
+
+        return [
+            'type' => 'web_app',
+            'text' => '🛍️ Shop Now',
+            'web_app' => ['url' => $shopUrl === '' ? 'https://fitandsleek.kalapak-team.space' : $shopUrl],
+        ];
+    }
+
+    public function customerPayUrl(Order $order): ?string
+    {
+        $shopUrl = rtrim((string) config('app.frontend_url', 'https://fitandsleek.kalapak-team.space'), '/');
+        if ($shopUrl === '' || $order->id <= 0) {
+            return null;
+        }
+
+        return $shopUrl.'/payment/'.$order->id;
     }
 
     public function buildBotDeepLink(string $startPayload): ?string
@@ -80,27 +178,141 @@ class TelegramService
             return;
         }
 
-        $order->loadMissing(['user', 'items', 'shipment']);
+        $lockKey = 'tg-order-paid-notified-'.$order->id;
+        $order->loadMissing(['user', 'items', 'shipment', 'payments']);
+        if ($order->payment_method === 'cod' && $this->codCollection->isPendingCustomerToDriverRemittance($order)) {
+            return;
+        }
 
-        $this->notifyAdminOfNewOrder($order);
+        if (! Cache::add($lockKey, 1, now()->addDay())) {
+            return;
+        }
+
+        try {
+            if ($order->payment_method === 'cod') {
+                $this->notifyCodShopPaymentSuccess($order);
+
+                return;
+            }
+
+            $this->notifyAdminOfNewOrder($order);
+            $this->createInAppNotification(
+                $order,
+                'order_paid',
+                'Order confirmed',
+                'Your payment was received. We are preparing your order.'
+            );
+
+            $label = $order->order_number ?: '#'.$order->id;
+            $total = number_format((float) $order->total, 2);
+
+            $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $total) {
+                $message = TelegramBotTexts::get($locale, 'order_confirmed', $this->htmlReplace([
+                    'label' => $label,
+                    'total' => $total,
+                ]));
+
+                return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
+            });
+        } catch (\Throwable $e) {
+            Cache::forget($lockKey);
+            Log::error('Telegram notifyOrderPaid failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Shop received COD payment (customer paid shop, or driver paid shop).
+     * Alert admin + driver always. Customer only for at-delivery shop payment (២ក / ២ខ), never option 1.
+     */
+    private function notifyCodShopPaymentSuccess(Order $order): void
+    {
+        $order->loadMissing(['user', 'items.product', 'shipment', 'payments']);
+
+        $customerPaidShop = $this->codCollection->isCustomerPaysShopSettlement($order);
+        $driverAdvance = $this->codCollection->isDriverAdvanceSettlement($order);
+        $kind = $customerPaidShop ? 'cod_customer_paid' : 'cod_driver_paid';
+        $label = $order->order_number ?: '#'.$order->id;
+        $total = number_format((float) $order->total, 2);
+        $amount = $this->formatCodSettlementAmount($order);
+
+        $adminCard = $this->formatAdminOrderCardHtml($order, $kind);
+        $adminKeyboard = $this->buildAdminOrderKeyboard($order);
+        foreach ($this->resolveAdminChatIds() as $chatId) {
+            $this->sendMessage((string) $chatId, $adminCard, $adminKeyboard, 'HTML');
+        }
+
+        foreach ($this->resolveDriverChatIds($order) as $chatId) {
+            $locale = $this->resolveLocaleForChatId((int) $chatId);
+            $key = $customerPaidShop ? 'driver_customer_paid_shop' : 'driver_paid_on_behalf';
+            $message = TelegramBotTexts::get($locale, $key, $this->htmlReplace([
+                'label' => $label,
+                'total' => $total,
+                'amount' => $amount,
+            ]));
+            $this->sendMessage(
+                (string) $chatId,
+                $message,
+                $this->buildDriverOrderKeyboard($order),
+                'HTML'
+            );
+        }
+
+        if ($driverAdvance) {
+            return;
+        }
+
         $this->createInAppNotification(
             $order,
             'order_paid',
-            'Order confirmed',
-            'Your payment was received. We are preparing your order.'
+            'Order completed',
+            'Payment was received. This order is complete.'
         );
 
-        $label = $order->order_number ?: '#'.$order->id;
-        $total = number_format((float) $order->total, 2);
+        foreach ($this->resolveOrderChatIds($order) as $chatId) {
+            $chatId = (int) $chatId;
+            if ($chatId <= 0 || ! $this->isCustomerChatForOrder($chatId, $order)) {
+                continue;
+            }
 
-        $this->notifyOrderRecipients($order, function (string $locale) use ($order, $label, $total) {
-            $message = TelegramBotTexts::get($locale, 'order_confirmed', $this->htmlReplace([
+            $locale = $this->resolveLocaleForChatId($chatId);
+            $key = $customerPaidShop ? 'order_paid_completed' : 'order_completed_paid';
+            $message = TelegramBotTexts::get($locale, $key, $this->htmlReplace([
                 'label' => $label,
                 'total' => $total,
             ]));
+            $this->sendMessage(
+                (string) $chatId,
+                $message,
+                $this->buildOrderActionKeyboard($order, null, $locale),
+                'HTML'
+            );
+        }
+    }
 
-            return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
-        });
+    public function rememberDriverJobChat(Order $order, int $chatId): void
+    {
+        if ($chatId <= 0 || $this->isAdminChatId($chatId) || $this->isCustomerChatForOrder($chatId, $order)) {
+            return;
+        }
+
+        Cache::put('tg-cod-driver-chat:'.$order->id, $chatId, now()->addDays(14));
+
+        $payment = Payment::query()->where('order_id', $order->id)->latest('id')->first();
+        if (! $payment) {
+            return;
+        }
+
+        $raw = is_array($payment->raw_response) ? $payment->raw_response : [];
+        if ((int) ($raw['driver_telegram_chat_id'] ?? 0) === $chatId) {
+            return;
+        }
+
+        $payment->update([
+            'raw_response' => array_merge($raw, ['driver_telegram_chat_id' => $chatId]),
+        ]);
     }
 
     public function notifyOrderPlacedCod(Order $order): void
@@ -143,7 +355,7 @@ class TelegramService
         }
 
         $status = strtolower(trim($status));
-        $skip = ['paid', 'pending_payment', 'shipped', 'delivered', 'completed', 'in_transit'];
+        $skip = ['paid', 'pending_payment', 'processing', 'preparing', 'shipped', 'delivered', 'completed', 'in_transit', 'arrived'];
         if (in_array($status, $skip, true)) {
             return;
         }
@@ -175,6 +387,10 @@ class TelegramService
 
             return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
         });
+
+        if (in_array(strtolower(trim($status)), ['cancelled', 'canceled', 'failed'], true)) {
+            $this->notifyStaffOrderEvent($order, $status === 'failed' ? 'failed' : 'cancelled');
+        }
     }
 
     public function notifyShipmentStatusChanged(Shipment $shipment): void
@@ -209,6 +425,7 @@ class TelegramService
         $textKey = match ($status) {
             'processing', 'pending' => 'order_processing',
             'in_transit' => 'order_in_transit',
+            'arrived' => 'order_arrived',
             'failed' => 'order_failed',
             'returned' => 'order_returned',
             default => null,
@@ -218,8 +435,8 @@ class TelegramService
             return;
         }
 
-        // Avoid duplicate noise: pending/processing are covered by order status alerts.
-        if (in_array($status, ['pending', 'processing'], true)) {
+        // pending is the COD placement state — covered by notifyOrderPlacedCod.
+        if ($status === 'pending') {
             return;
         }
 
@@ -246,28 +463,52 @@ class TelegramService
 
     public function notifyAdminOfNewCodOrder(Order $order): void
     {
-        $chatId = config('services.telegram.admin_chat_id');
-        if (! filled($chatId)) {
-            Log::warning('Telegram admin COD notify skipped: TELEGRAM_ADMIN_CHAT_ID empty');
+        $this->notifyStaffOrderEvent($order, 'cod');
+    }
 
+    /**
+     * Alert every linked shop owner + staff (and the admin group) about an order event.
+     */
+    public function notifyStaffOrderEvent(Order $order, string $kind): void
+    {
+        if (! $this->isEnabled()) {
             return;
         }
 
-        $order->loadMissing(['user', 'items', 'shipment']);
+        $lockKey = 'tg-staff-order-'.$kind.'-'.$order->id;
+        if (! Cache::add($lockKey, 1, now()->addDay())) {
+            return;
+        }
 
-        $sent = $this->sendMessage(
-            (string) $chatId,
-            $this->formatAdminOrderCardHtml($order, 'cod'),
-            $this->buildAdminOrderKeyboard($order),
-            'HTML'
-        );
+        $order->loadMissing(['user', 'items.product', 'shipment', 'payments']);
+        $html = $this->formatAdminOrderCardHtml($order, $kind);
+        $keyboard = $this->buildAdminOrderKeyboard($order);
+        $sent = 0;
 
-        if (! $sent) {
-            Log::warning('Telegram admin COD notify failed to send', [
-                'chat_id' => $chatId,
+        foreach ($this->resolveAdminChatIds() as $chatId) {
+            if ($this->sendMessage((string) $chatId, $html, $keyboard, 'HTML')) {
+                $sent++;
+            }
+        }
+
+        if ($sent === 0) {
+            Cache::forget($lockKey);
+            Log::warning('Telegram staff order alert had no recipients', [
                 'order_id' => $order->id,
+                'kind' => $kind,
             ]);
         }
+    }
+
+    public function notifyStaffOfNewOrder(Order $order): void
+    {
+        $kind = strtolower((string) $order->payment_method) === 'cod' ? 'cod' : 'new';
+        $this->notifyStaffOrderEvent($order, $kind);
+    }
+
+    public function notifyPaymentFailed(Order $order, ?Payment $payment = null, string $reason = 'failed'): void
+    {
+        $this->notifyStaffOrderEvent($order, $reason === 'expired' ? 'expired' : 'failed');
     }
 
     public function buildReceiptUrl(Order $order): string
@@ -280,6 +521,10 @@ class TelegramService
      */
     public function buildOrderActionKeyboard(Order $order, ?Shipment $shipment = null, string $locale = TelegramBotTexts::LOCALE_EN): ?array
     {
+        if ($order->isSuccessfullyClosed()) {
+            return $this->buildClosedOrderKeyboard($order, $locale);
+        }
+
         $order->loadMissing('shipment');
         $shipment ??= $order->shipment;
         $rows = [];
@@ -290,17 +535,26 @@ class TelegramService
             'callback_data' => 'invoice_'.$order->id,
         ];
 
-        if ($order->payment_status !== 'paid') {
-            $actionRow[] = [
-                'text' => $order->payment_method === 'cod'
-                    ? TelegramBotTexts::get($locale, 'btn_payment_qr_cod')
-                    : TelegramBotTexts::get($locale, 'btn_payment_qr'),
-                'callback_data' => 'payqr_'.$order->id,
-            ];
-        }
-
         if ($actionRow !== []) {
             $rows[] = $actionRow;
+        }
+
+        if ($order->payment_status !== 'paid' && $order->payment_method === 'bakong_khqr') {
+            $rows[] = [[
+                'text' => TelegramBotTexts::get($locale, 'btn_payment_qr'),
+                'callback_data' => 'payqr_'.$order->id,
+            ]];
+            $payUrl = $this->customerPayUrl($order);
+            if ($payUrl !== null) {
+                $rows[] = [[
+                    'text' => TelegramBotTexts::get($locale, 'btn_pay_in_app'),
+                    'web_app' => ['url' => $payUrl],
+                ]];
+            }
+            $rows[] = [[
+                'text' => TelegramBotTexts::get($locale, 'btn_i_paid'),
+                'callback_data' => 'paidok_'.$order->id,
+            ]];
         }
 
         if ($shipment && filled($shipment->external_tracking_url)) {
@@ -443,8 +697,12 @@ class TelegramService
     {
         $order->loadMissing('shipment');
 
-        if ($this->isAdminChatId($chatId)) {
+        if ($this->isAdminChatId($chatId) || $this->isLinkedAdminChat($chatId)) {
             return $this->buildAdminOrderKeyboard($order);
+        }
+
+        if ($order->payment_method === 'cod' && $this->chatMayGenerateCodShopQr($chatId, $order)) {
+            return $this->buildDriverOrderKeyboard($order);
         }
 
         return $this->buildOrderActionKeyboard($order, $order->shipment, $this->resolveLocaleForChatId($chatId));
@@ -564,8 +822,112 @@ class TelegramService
         return (string) $chatId === (string) (int) $configured;
     }
 
+    /** Linked admin / superadmin private chat (not only TELEGRAM_ADMIN_CHAT_ID). */
+    public function isLinkedAdminChat(int $chatId): bool
+    {
+        if ($chatId === 0) {
+            return false;
+        }
+
+        $tg = TelegramUser::query()->with('user')->where('chat_id', $chatId)->latest('id')->first();
+        $user = $tg?->user;
+
+        return $user && $user->isActive() && $user->isAdmin();
+    }
+
     /**
-     * @return array{ok: bool, message: string, customer_notified: bool}
+     * Skip seeded demo Telegram chats (200001–200030) that are not real Telegram IDs.
+     */
+    private function isDeliverableTelegramChatId(int $chatId): bool
+    {
+        if ($chatId === 0) {
+            return false;
+        }
+
+        return $chatId < 200000 || $chatId >= 210000;
+    }
+
+    public function isCustomerChatForOrder(int $chatId, Order $order): bool
+    {
+        if ($chatId <= 0 || $this->isAdminChatId($chatId) || $this->isStaffOrDriverChat($chatId)) {
+            return false;
+        }
+
+        if ($this->resolveDriverChatIds($order)->contains($chatId)) {
+            return false;
+        }
+
+        if ($order->user_id) {
+            return TelegramUser::query()
+                ->where('user_id', $order->user_id)
+                ->where('chat_id', $chatId)
+                ->exists();
+        }
+
+        return TelegramOrderSubscription::query()
+            ->where('order_id', $order->id)
+            ->where('chat_id', $chatId)
+            ->exists();
+    }
+
+    public function chatMayGenerateCodShopQr(int $chatId, Order $order): bool
+    {
+        if ($chatId <= 0 || $this->isCustomerChatForOrder($chatId, $order)) {
+            return false;
+        }
+
+        if ($this->isAdminChatId($chatId) || $this->isStaffOrDriverChat($chatId)) {
+            return true;
+        }
+
+        $cached = (int) Cache::get('tg-cod-driver-chat:'.$order->id);
+
+        return $cached === $chatId || $this->resolveDriverChatIds($order)->contains($chatId);
+    }
+
+    /**
+     * Customer chat may receive KHQR for Bakong checkout, or COD ២ខ (customer pays shop).
+     * Shop remittance QR (option 1 / ២ក) stays driver/admin only.
+     */
+    public function chatMayReceivePaymentQr(int $chatId, Order $order): bool
+    {
+        if ($chatId <= 0) {
+            return false;
+        }
+
+        if (strtolower((string) $order->payment_method) === 'bakong_khqr') {
+            return true;
+        }
+
+        if (strtolower((string) $order->payment_method) !== 'cod') {
+            return false;
+        }
+
+        if ($this->chatMayGenerateCodShopQr($chatId, $order)) {
+            return true;
+        }
+
+        if (! $this->isCustomerChatForOrder($chatId, $order)) {
+            return false;
+        }
+
+        $order->loadMissing('payments');
+        $payment = $order->payments->sortByDesc('id')->first();
+        $plan = $this->codCollection->currentPlan($payment);
+
+        return $plan === CodCollectionService::CUSTOMER_PAYS_SHOP_PLAN;
+    }
+
+    private function isStaffOrDriverChat(int $chatId): bool
+    {
+        $tg = TelegramUser::query()->with('user')->where('chat_id', $chatId)->latest('id')->first();
+        $role = strtolower((string) ($tg?->user?->role ?? ''));
+
+        return in_array($role, ['driver', 'admin', 'superadmin', 'staff'], true);
+    }
+
+    /**
+     * @return array{ok: bool, message: string, customer_notified: bool, already?: bool}
      */
     public function updateShipmentStatusFromAdminChat(
         Order $order,
@@ -575,90 +937,126 @@ class TelegramService
     ): array
     {
         $status = strtolower(trim($status));
-        $allowed = ['pending', 'processing', 'shipped', 'in_transit', 'delivered', 'failed', 'returned'];
+        $allowed = ['pending', 'processing', 'shipped', 'in_transit', 'arrived', 'delivered', 'failed', 'returned'];
         if (! in_array($status, $allowed, true)) {
             return ['ok' => false, 'message' => 'Invalid status.', 'customer_notified' => false];
         }
 
-        $order->loadMissing(['shipment', 'user']);
-        $shipment = $order->shipment;
-        if (! $shipment) {
-            return ['ok' => false, 'message' => 'Shipment not found for this order.', 'customer_notified' => false];
-        }
-
-        $shippedAt = $shipment->shipped_at;
-        $deliveredAt = $shipment->delivered_at;
-        if (in_array($status, ['shipped', 'in_transit', 'delivered'], true) && ! $shippedAt) {
-            $shippedAt = now();
-        }
-        if ($status === 'delivered' && ! $deliveredAt) {
-            $deliveredAt = now();
-        }
-
-        $shipmentUpdate = [
-            'status' => $status,
-            'shipped_at' => $shippedAt,
-            'delivered_at' => $deliveredAt,
-        ];
-
-        if ($actor?->isDriver() && in_array($status, ['delivered', 'in_transit', 'shipped'], true)) {
-            $shipmentUpdate['delivered_by_user_id'] = $actor->id;
-            if (! filled($shipment->delivered_by_name)) {
-                $shipmentUpdate['delivered_by_name'] = $actor->name;
+        return DB::transaction(function () use ($order, $status, $actor, $actorNote) {
+            $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
+            if (! $lockedOrder) {
+                return ['ok' => false, 'message' => 'Order not found.', 'customer_notified' => false];
             }
-        }
 
-        $shipment->update($shipmentUpdate);
+            $lockedOrder->loadMissing(['shipment', 'user']);
+            $shipment = $lockedOrder->shipment;
+            if (! $shipment) {
+                return ['ok' => false, 'message' => 'Shipment not found for this order.', 'customer_notified' => false];
+            }
 
-        $actorLabel = $actorNote
-            ?: ($actor
-                ? trim(($actor->name ?: 'user').' #'.$actor->id.' ('.$actor->role.')')
-                : 'unknown');
+            $shipment = Shipment::query()->whereKey($shipment->id)->lockForUpdate()->first();
+            if (! $shipment) {
+                return ['ok' => false, 'message' => 'Shipment not found for this order.', 'customer_notified' => false];
+            }
 
-        ShipmentTrackingEvent::create([
-            'shipment_id' => $shipment->id,
-            'status' => $status,
-            'note' => 'Status updated from Telegram bot by '.$actorLabel.'.',
-            'updated_by' => $actor?->id,
-            'event_time' => now(),
-        ]);
+            $lockedOrder->setRelation('shipment', $shipment);
+            $current = strtolower(trim((string) $shipment->status));
+            if ($lockedOrder->isSuccessfullyClosed()) {
+                return [
+                    'ok' => false,
+                    'closed' => true,
+                    'already' => $current === $status,
+                    'message' => TelegramBotTexts::get('km', 'order_closed'),
+                    'customer_notified' => false,
+                ];
+            }
 
-        // Sync order status into system (web/app) immediately.
-        $orderStatus = match ($status) {
-            'processing' => 'processing',
-            'shipped', 'in_transit' => 'shipped',
-            'failed' => 'failed',
-            'returned' => 'returned',
-            'delivered' => null, // ShipmentObserver sets completed
-            default => null,
-        };
+            if ($current === $status) {
+                return [
+                    'ok' => false,
+                    'already' => true,
+                    'message' => TelegramBotTexts::get('km', 'status_already_set'),
+                    'customer_notified' => false,
+                ];
+            }
 
-        if ($orderStatus !== null && (string) $order->status !== $orderStatus) {
-            $order->update(['status' => $orderStatus]);
-        }
+            $shippedAt = $shipment->shipped_at;
+            $deliveredAt = $shipment->delivered_at;
+            if (in_array($status, ['shipped', 'in_transit', 'arrived', 'delivered'], true) && ! $shippedAt) {
+                $shippedAt = now();
+            }
+            if ($status === 'delivered' && ! $deliveredAt) {
+                $deliveredAt = now();
+            }
 
-        $customerNotified = $this->resolveOrderChatIds($order->fresh(['user']))->isNotEmpty();
+            $shipmentUpdate = [
+                'status' => $status,
+                'shipped_at' => $shippedAt,
+                'delivered_at' => $deliveredAt,
+            ];
 
-        $statusKm = match ($status) {
-            'processing' => 'កំពុងរៀបចំ',
-            'shipped' => 'ដឹកចេញ',
-            'in_transit' => 'កំពុងដឹក',
-            'delivered' => 'ដឹកដល់',
-            'failed' => 'បរាជ័យ',
-            'returned' => 'ត្រឡប់',
-            default => $status,
-        };
+            if ($actor?->isDriver() && in_array($status, ['delivered', 'in_transit', 'shipped'], true)) {
+                $shipmentUpdate['delivered_by_user_id'] = $actor->id;
+                if (! filled($shipment->delivered_by_name)) {
+                    $shipmentUpdate['delivered_by_name'] = $actor->name;
+                }
+            }
 
-        return [
-            'ok' => true,
-            'message' => "✅ {$statusKm} / ".str_replace('_', ' ', $status)
-                ."\nOrder: ".($order->order_number ?: '#'.$order->id)
-                ."\nBy: {$actorLabel}"
-                ."\n".($customerNotified
-                    ? '📣 Customer Telegram: notified'
-                    : '⚠️ Customer Telegram: not linked — alert skipped'),
-            'customer_notified' => $customerNotified,
-        ];
+            $shipment->update($shipmentUpdate);
+
+            $actorLabel = $actorNote
+                ?: ($actor
+                    ? trim(($actor->name ?: 'user').' #'.$actor->id.' ('.$actor->role.')')
+                    : 'unknown');
+
+            ShipmentTrackingEvent::create([
+                'shipment_id' => $shipment->id,
+                'status' => $status,
+                'note' => 'Status updated from Telegram bot by '.$actorLabel.'.',
+                'updated_by' => $actor?->id,
+                'event_time' => now(),
+            ]);
+
+            // Sync order status into system (web/app) immediately.
+            $orderStatus = match ($status) {
+                'processing' => 'processing',
+                'shipped' => 'shipped',
+                'in_transit' => 'in_transit',
+                'arrived' => 'arrived',
+                'failed' => 'failed',
+                'returned' => 'returned',
+                'delivered' => null, // ShipmentObserver sets completed
+                default => null,
+            };
+
+            if ($orderStatus !== null && (string) $lockedOrder->status !== $orderStatus) {
+                $lockedOrder->update(['status' => $orderStatus]);
+            }
+
+            $customerNotified = $this->resolveCustomerChatIds($lockedOrder->fresh(['user']) ?? $lockedOrder)->isNotEmpty();
+
+            $statusKm = match ($status) {
+                'processing' => 'កំពុងរៀបចំ',
+                'shipped' => 'ដឹកចេញ',
+                'in_transit' => 'កំពុងដឹក',
+                'arrived' => 'មកដល់ទីតាំង',
+                'delivered' => 'បានទទួលអីវ៉ាន់',
+                'failed' => 'បរាជ័យ',
+                'returned' => 'ត្រឡប់',
+                default => $status,
+            };
+
+            return [
+                'ok' => true,
+                'message' => "✅ {$statusKm} / ".str_replace('_', ' ', $status)
+                    ."\nOrder: ".($lockedOrder->order_number ?: '#'.$lockedOrder->id)
+                    ."\nBy: {$actorLabel}"
+                    ."\n".($customerNotified
+                        ? '📣 Customer Telegram: notified'
+                        : '⚠️ Customer Telegram: not linked — alert skipped'),
+                'customer_notified' => $customerNotified,
+            ];
+        });
     }
 
     /**
@@ -666,28 +1064,245 @@ class TelegramService
      */
     public function buildDriverOrderKeyboard(Order $order): array
     {
+        if ($order->isSuccessfullyClosed()) {
+            return $this->buildClosedOrderKeyboard($order);
+        }
+
         $rows = [];
-        $actionRow = [];
-        if ($order->payment_status !== 'paid') {
-            $actionRow[] = [
-                'text' => $order->payment_method === 'cod' ? '💳 KHQR COD' : '💳 KHQR',
+        if ($order->payment_status !== 'paid' && $order->payment_method === 'cod') {
+            $rows[] = [[
+                'text' => TelegramBotTexts::get('km', 'btn_i_paid'),
+                'callback_data' => 'paidok_'.$order->id,
+            ]];
+            $rows[] = [
+                ['text' => TelegramBotTexts::get('km', 'btn_driver_pay_now'), 'callback_data' => 'dpay_'.$order->id.'_now'],
+                ['text' => TelegramBotTexts::get('km', 'btn_driver_wait'), 'callback_data' => 'dpay_'.$order->id.'_wait'],
+            ];
+            $rows[] = [[
+                'text' => TelegramBotTexts::get('km', 'btn_driver_shop_prepaid'),
+                'callback_data' => 'dpay_'.$order->id.'_wshop',
+            ]];
+            $plan = $this->codCollection->currentPlan(
+                $order->payments()->where('status', 'pending')->latest('id')->first()
+            );
+            if ($plan === CodCollectionService::COLLECT_AT_DELIVERY_PLAN) {
+                $amounts = $this->codCollection->amountBreakdown($order, $plan);
+                $rows[] = [[
+                    'text' => TelegramBotTexts::get('km', 'btn_generate_shop_khqr_amount', [
+                        'remit' => number_format($amounts['shop_qr_usd'], 2),
+                    ]),
+                    'callback_data' => 'dpay_'.$order->id.'_cq',
+                ]];
+            }
+            if ($plan === CodCollectionService::CUSTOMER_PAYS_SHOP_PLAN) {
+                $amounts = $this->codCollection->amountBreakdown($order, $plan);
+                $rows[] = [[
+                    'text' => TelegramBotTexts::get('km', 'btn_generate_customer_shop_qr', [
+                        'total' => number_format($amounts['customer_usd'], 2),
+                    ]),
+                    'callback_data' => 'dpay_'.$order->id.'_csqr',
+                ]];
+            }
+        } elseif ($order->payment_status !== 'paid') {
+            $rows[] = [[
+                'text' => '💳 KHQR',
                 'callback_data' => 'payqr_'.$order->id,
+            ]];
+        }
+
+        $order->loadMissing('shipment');
+        $current = strtolower((string) ($order->shipment?->status ?? $order->status ?? ''));
+        $finished = in_array((string) $order->status, ['completed', 'delivered'], true)
+            || in_array($current, ['delivered'], true);
+
+        if (! $finished) {
+            $rows[] = [
+                $this->telegramStatusButton('📦 ដឹកចេញ', $order->id, 'shipped', $current, 'drivest_'),
+                $this->telegramStatusButton('🚚 កំពុងដឹក', $order->id, 'in_transit', $current, 'drivest_'),
+            ];
+            $rows[] = [
+                $this->telegramStatusButton('📍 មកដល់', $order->id, 'arrived', $current, 'drivest_'),
+                $this->telegramStatusButton('📦 បានទទួលអីវ៉ាន់', $order->id, 'complete', $current, 'drivest_'),
             ];
         }
-        if ($actionRow !== []) {
-            $rows[] = $actionRow;
-        }
-
-        $rows[] = [
-            ['text' => '📦 ដឹកចេញ', 'callback_data' => 'drivest_'.$order->id.'_shipped'],
-            ['text' => '🚚 កំពុងដឹក', 'callback_data' => 'drivest_'.$order->id.'_in_transit'],
-        ];
-        $rows[] = [
-            ['text' => '✅ មកដល់', 'callback_data' => 'drivest_'.$order->id.'_delivered'],
-            ['text' => '✔️ បញ្ចប់', 'callback_data' => 'drivest_'.$order->id.'_complete'],
-        ];
 
         return ['inline_keyboard' => $rows];
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}
+     */
+    public function buildDriverCodAdvanceKeyboard(Order $order): array
+    {
+        $id = $order->id;
+
+        return ['inline_keyboard' => [
+            [
+                ['text' => TelegramBotTexts::get('km', 'btn_generate_shop_khqr'), 'callback_data' => 'dpay_'.$id.'_qr'],
+            ],
+            [
+                ['text' => TelegramBotTexts::get('km', 'btn_driver_cash'), 'callback_data' => 'dpay_'.$id.'_cash'],
+            ],
+        ]];
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}
+     */
+    public function buildDriverCodCustomerQrKeyboard(Order $order): array
+    {
+        $id = $order->id;
+
+        return ['inline_keyboard' => [
+            [
+                ['text' => TelegramBotTexts::get('km', 'btn_generate_shop_khqr'), 'callback_data' => 'dpay_'.$id.'_cq'],
+            ],
+        ]];
+    }
+
+    /**
+     * @return array{ok: bool, message: string, order: Order, keyboard: array<string, mixed>|null}
+     */
+    public function applyDriverCodAction(
+        Order $order,
+        string $action,
+        ?int $verifiedBy,
+        string $courierLabel,
+        string $locale,
+    ): array {
+        $label = $order->order_number ?: '#'.$order->id;
+        $amounts = $this->codCollection->amountBreakdown($order);
+        $total = number_format($amounts['customer_usd'], 2);
+        $remit = number_format($amounts['shop_qr_usd'], 2);
+        $shipping = number_format($amounts['shipping_usd'], 2);
+        $goods = number_format($amounts['goods_usd'], 2);
+
+        if ($action === 'now') {
+            $this->codCollection->setPlan($order, CodCollectionService::DRIVER_ADVANCE_PLAN);
+            $fresh = $order->fresh(['shipment', 'payments']);
+
+            return [
+                'ok' => true,
+                'message' => TelegramBotTexts::get($locale, 'driver_cod_pay_how', [
+                    'label' => $label,
+                    'total' => $total,
+                ]),
+                'order' => $fresh,
+                'keyboard' => $this->buildDriverCodAdvanceKeyboard($fresh),
+            ];
+        }
+
+        if ($action === 'qr' || $action === 'cq' || $action === 'csqr') {
+            $this->codCollection->setPlan(
+                $order,
+                $action === 'cq'
+                    ? CodCollectionService::COLLECT_AT_DELIVERY_PLAN
+                    : ($action === 'csqr'
+                        ? CodCollectionService::CUSTOMER_PAYS_SHOP_PLAN
+                        : CodCollectionService::DRIVER_ADVANCE_PLAN)
+            );
+            $fresh = $order->fresh(['shipment', 'payments']);
+            $amounts = $this->codCollection->amountBreakdown($fresh);
+            $key = match ($action) {
+                'cq' => 'driver_cod_send_customer_qr',
+                'csqr' => 'driver_cod_send_customer_shop_qr',
+                default => 'driver_cod_send_qr',
+            };
+
+            return [
+                'ok' => true,
+                'message' => TelegramBotTexts::get($locale, $key, [
+                    'label' => $label,
+                    'total' => number_format($amounts['customer_usd'], 2),
+                    'remit' => number_format($amounts['shop_qr_usd'], 2),
+                    'shipping' => number_format($amounts['shipping_usd'], 2),
+                    'goods' => number_format($amounts['goods_usd'], 2),
+                ]),
+                'order' => $fresh,
+                'keyboard' => $this->buildDriverOrderKeyboard($fresh),
+                'send_shop_qr' => true,
+                'await_qr' => null,
+            ];
+        }
+
+        if ($action === 'wait') {
+            $this->codCollection->setPlan($order, CodCollectionService::COLLECT_AT_DELIVERY_PLAN);
+            $fresh = $order->fresh(['shipment', 'payments']);
+            $amounts = $this->codCollection->amountBreakdown($fresh);
+
+            return [
+                'ok' => true,
+                'message' => TelegramBotTexts::get($locale, 'driver_cod_wait_saved', [
+                    'total' => number_format($amounts['customer_usd'], 2),
+                    'remit' => number_format($amounts['shop_qr_usd'], 2),
+                    'shipping' => number_format($amounts['shipping_usd'], 2),
+                    'goods' => number_format($amounts['goods_usd'], 2),
+                ]),
+                'order' => $fresh,
+                'keyboard' => $this->buildDriverOrderKeyboard($fresh),
+            ];
+        }
+
+        if ($action === 'wshop') {
+            $this->codCollection->setPlan($order, CodCollectionService::CUSTOMER_PAYS_SHOP_PLAN);
+            $fresh = $order->fresh(['shipment', 'payments']);
+            $amounts = $this->codCollection->amountBreakdown($fresh);
+
+            return [
+                'ok' => true,
+                'message' => TelegramBotTexts::get($locale, 'driver_cod_shop_prepaid_saved', [
+                    'total' => number_format($amounts['customer_usd'], 2),
+                ]),
+                'order' => $fresh,
+                'keyboard' => $this->buildDriverOrderKeyboard($fresh),
+            ];
+        }
+
+        $map = [
+            'aba' => [CodCollectionService::DRIVER_QR, 'aba'],
+            'ac' => [CodCollectionService::DRIVER_QR, 'acleda'],
+            'wing' => [CodCollectionService::DRIVER_QR, 'wing'],
+            'oth' => [CodCollectionService::DRIVER_QR, 'other'],
+            'cash' => [CodCollectionService::DRIVER_CASH, null],
+            'caba' => [CodCollectionService::CUSTOMER_DRIVER_QR, 'aba'],
+            'cac' => [CodCollectionService::CUSTOMER_DRIVER_QR, 'acleda'],
+            'cwing' => [CodCollectionService::CUSTOMER_DRIVER_QR, 'wing'],
+            'coth' => [CodCollectionService::CUSTOMER_DRIVER_QR, 'other'],
+        ];
+
+        if (! isset($map[$action])) {
+            return [
+                'ok' => false,
+                'message' => 'Invalid COD action.',
+                'order' => $order,
+                'keyboard' => $this->buildDriverOrderKeyboard($order),
+            ];
+        }
+
+        [$method, $qrBank] = $map[$action];
+        $payment = $this->codCollection->collectCash(
+            $order,
+            $method,
+            $verifiedBy,
+            null,
+            [
+                'qr_bank' => $qrBank,
+                'courier_name' => $courierLabel,
+                'currency' => 'USD',
+            ],
+        );
+        $fresh = $order->fresh(['shipment', 'payments', 'user', 'items']);
+        $raw = is_array($payment->raw_response) ? $payment->raw_response : [];
+        $settlement = (string) ($raw['settlement_label_km'] ?? $method);
+
+        return [
+            'ok' => true,
+            'message' => TelegramBotTexts::get($locale, 'driver_cod_recorded', [
+                'label' => $settlement,
+            ]),
+            'order' => $fresh,
+            'keyboard' => $this->buildDriverOrderKeyboard($fresh),
+        ];
     }
 
     public function sendDriverJobCard(int $chatId, Order $order, ?string $locale = null): void
@@ -710,21 +1325,65 @@ class TelegramService
             'status' => $status,
         ]);
 
+        $this->rememberDriverJobChat($order, $chatId);
         $this->sendMessage((string) $chatId, $message, $this->buildDriverOrderKeyboard($order));
     }
 
     public function sendPaymentQrToChat(int $chatId, Order $order, ?string $locale = null): bool
     {
         $locale ??= $this->resolveLocaleForChatId($chatId);
-
-        if ($order->payment_status === 'paid') {
+        if ($order->isSuccessfullyClosed()) {
             $this->sendMessage(
                 (string) $chatId,
-                TelegramBotTexts::get($locale, 'already_paid'),
+                TelegramBotTexts::get($locale, 'order_closed'),
+                $this->keyboardForChat($chatId, $order),
+                null
+            );
+
+            return false;
+        }
+
+        if ($this->chatMayGenerateCodShopQr($chatId, $order)) {
+            $this->rememberDriverJobChat($order, $chatId);
+        }
+
+        if (! $this->chatMayReceivePaymentQr($chatId, $order)) {
+            $this->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'payment_qr_customer_denied'),
                 $this->keyboardForChat($chatId, $order)
             );
 
             return false;
+        }
+
+        if ($order->payment_status === 'paid') {
+            $this->notifyOrderPaid($order);
+
+            return true;
+        }
+
+        if (RielpayApi::isCircuitOpen()) {
+            $this->sendMessage(
+                (string) $chatId,
+                TelegramBotTexts::get($locale, 'payment_qr_gateway_down'),
+                $this->shopKhqrRetryKeyboard($order, $chatId)
+            );
+
+            return false;
+        }
+
+        try {
+            $this->rielpayPayments->refreshOrderKhqr($order);
+            $order->refresh();
+        } catch (\Throwable) {
+            // Fall through and show QR; gateway check also runs in the background.
+        }
+
+        if ($order->payment_status === 'paid') {
+            $this->notifyOrderPaid($order);
+
+            return true;
         }
 
         try {
@@ -734,7 +1393,7 @@ class TelegramService
                 $this->sendMessage(
                     (string) $chatId,
                     TelegramBotTexts::get($locale, 'payment_qr_failed'),
-                    $this->keyboardForChat($chatId, $order)
+                    $this->shopKhqrRetryKeyboard($order, $chatId)
                 );
 
                 return false;
@@ -743,18 +1402,44 @@ class TelegramService
             $amount = $payment['amount'] ?? null;
             $currency = (string) ($payment['currency'] ?? 'KHR');
             $amountLabel = $currency === 'KHR'
-                ? number_format((float) $amount).' ៛'
-                : '$'.number_format((float) $amount, 2);
+                ? number_format((float) ($amount ?? $this->codCollection->khrAmountForShopKhqr($order))).' ៛'
+                : '$'.number_format((float) ($amount ?? $order->total), 2);
 
             $label = $order->order_number ?: '#'.$order->id;
+            $codPlan = $this->codCollection->currentPlan(
+                $order->payments()->where('status', 'pending')->latest('id')->first()
+            );
             $codNote = $order->payment_method === 'cod'
-                ? TelegramBotTexts::get($locale, 'payment_qr_cod_note')
+                ? TelegramBotTexts::get(
+                    $locale,
+                    $codPlan === CodCollectionService::CUSTOMER_PAYS_SHOP_PLAN
+                        ? 'payment_qr_cod_customer_note'
+                        : 'payment_qr_cod_note'
+                )
                 : TelegramBotTexts::get($locale, 'payment_qr_scan_note');
+
+            $expiresNote = '';
+            $expiresAt = $payment['expires_at'] ?? null;
+            if ($expiresAt) {
+                try {
+                    $until = \Illuminate\Support\Carbon::parse($expiresAt);
+                    $minutes = max(1, (int) ceil(now()->diffInSeconds($until, false) / 60));
+                    if ($until->isFuture()) {
+                        $expiresNote = TelegramBotTexts::get($locale, 'payment_qr_expires', [
+                            'minutes' => $minutes,
+                            'time' => $until->timezone(config('app.timezone', 'UTC'))->format('H:i'),
+                        ]);
+                    }
+                } catch (\Throwable) {
+                    $expiresNote = '';
+                }
+            }
 
             $caption = TelegramBotTexts::get($locale, 'payment_qr_title')."\n\n"
                 .TelegramBotTexts::get($locale, 'order_label').": `{$label}`\n"
                 .TelegramBotTexts::get($locale, 'amount_label').": *{$amountLabel}*"
-                .$codNote;
+                .$codNote
+                .$expiresNote;
 
             $sent = $this->sendPhoto(
                 (string) $chatId,
@@ -763,8 +1448,18 @@ class TelegramService
                 $this->keyboardForChat($chatId, $order)
             );
 
-            // Ensure action buttons remain even if photo markup fails.
-            if ($sent && $this->isAdminChatId($chatId)) {
+            if ($sent) {
+                $paymentId = (int) ($payment['id'] ?? 0);
+                if ($paymentId > 0) {
+                    WatchKhqrPayment::dispatch($paymentId);
+                    $this->rielpayPayments->scheduleAutoConfirm($paymentId, $order->id);
+                    dispatch(function () {
+                        app(RielpayPaymentService::class)->pollPendingKhqr();
+                    })->afterResponse();
+                }
+            }
+
+            if ($sent && ($this->isAdminChatId($chatId) || $this->isLinkedAdminChat($chatId))) {
                 $this->sendMessage(
                     (string) $chatId,
                     "⬆️ KHQR ខាងលើ · បន្តចុចប៊ូតុងខាងក្រោមបាន\n⬆️ QR above · use buttons below to continue",
@@ -782,19 +1477,26 @@ class TelegramService
             ]);
 
             $message = TelegramBotTexts::get($locale, 'payment_qr_failed_gen');
+            $reason = strtolower(trim($e->getMessage()));
+            if (
+                str_contains($reason, 'unreachable')
+                || str_contains($reason, 'temporarily unavailable')
+                || str_contains($reason, 'http 530')
+                || str_contains($reason, 'http 502')
+            ) {
+                $message = TelegramBotTexts::get($locale, 'payment_qr_gateway_down');
+            }
             if ($this->isAdminChatId($chatId)) {
-                // Customers get the generic text; staff need the reason to know whether
-                // to retry or to go fix the payment gateway.
-                $reason = trim($e->getMessage());
-                if ($reason !== '') {
-                    $message .= "\n\n🛠 ".$reason;
+                $detail = trim($e->getMessage());
+                if ($detail !== '') {
+                    $message .= "\n\n🛠 ".$detail;
                 }
             }
 
             $this->sendMessage(
                 (string) $chatId,
                 $message,
-                $this->keyboardForChat($chatId, $order)
+                $this->shopKhqrRetryKeyboard($order, $chatId)
             );
 
             return false;
@@ -802,10 +1504,70 @@ class TelegramService
     }
 
     /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}|null
+     */
+    private function shopKhqrRetryKeyboard(Order $order, int $chatId): ?array
+    {
+        $base = $this->keyboardForChat($chatId, $order) ?? ['inline_keyboard' => []];
+        if (! isset($base['inline_keyboard']) || ! is_array($base['inline_keyboard'])) {
+            $base['inline_keyboard'] = [];
+        }
+        $retry = [[
+            'text' => TelegramBotTexts::get($this->resolveLocaleForChatId($chatId), 'btn_retry_shop_khqr'),
+            'callback_data' => 'payqr_'.$order->id,
+        ]];
+        array_unshift($base['inline_keyboard'], $retry);
+
+        return $base;
+    }
+
+    /**
+     * @return array{inline_keyboard: list<list<array<string, string>>>}
+     */
+    public function shopKhqrConfirmKeyboard(Order $order, int $chatId): array
+    {
+        $locale = $this->resolveLocaleForChatId($chatId);
+        $base = $this->keyboardForChat($chatId, $order) ?? ['inline_keyboard' => []];
+        if (! isset($base['inline_keyboard']) || ! is_array($base['inline_keyboard'])) {
+            $base['inline_keyboard'] = [];
+        }
+
+        array_unshift($base['inline_keyboard'], [[
+            'text' => TelegramBotTexts::get($locale, 'btn_confirm_shop_received'),
+            'callback_data' => 'shopok_'.$order->id,
+        ]]);
+
+        return $base;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function resolvePaymentQrForOrder(Order $order): array
     {
+        $invoiceQr = Payment::query()
+            ->where('order_id', $order->id)
+            ->khqrProvider()
+            ->where('method', Payment::METHOD_INVOICE_KHQR)
+            ->where('status', 'pending')
+            ->whereNotNull('qr_string')
+            ->latest('id')
+            ->first();
+
+        if ($invoiceQr) {
+            WatchKhqrPayment::dispatch((int) $invoiceQr->id);
+            $this->rielpayPayments->scheduleAutoConfirm($invoiceQr, $order);
+
+            return [
+                'id' => $invoiceQr->id,
+                'qr_string' => $invoiceQr->qr_string,
+                'amount' => $invoiceQr->amount,
+                'currency' => $invoiceQr->currency ?: 'KHR',
+                'expires_at' => null,
+                'status' => $invoiceQr->status,
+            ];
+        }
+
         if ($order->payment_method === 'cod') {
             $result = $this->codCollection->createCodKhqr($order);
 
@@ -826,15 +1588,27 @@ class TelegramService
             ->first();
 
         if ($existing && $existing->qr_string) {
-            return [
-                'qr_string' => $existing->qr_string,
-                'amount' => $existing->amount,
-                'currency' => $existing->currency,
-                'status' => $existing->status,
-            ];
+            $expectedKhr = $this->rielpayPayments->khrAmountForOrder($order);
+            $payload = is_array($existing->khqr_payload) ? $existing->khqr_payload : [];
+            $raw = is_array($existing->raw_response) ? $existing->raw_response : [];
+            $encoded = (int) round((float) ($payload['amount'] ?? $raw['amount'] ?? 0));
+            if ($encoded === $expectedKhr) {
+                WatchKhqrPayment::dispatch((int) $existing->id);
+                $this->rielpayPayments->scheduleAutoConfirm($existing, $order);
+
+                return [
+                    'id' => $existing->id,
+                    'qr_string' => $existing->qr_string,
+                    'amount' => $expectedKhr,
+                    'currency' => 'KHR',
+                    'status' => $existing->status,
+                    'expires_at' => optional($existing->expires_at)->toIso8601String(),
+                ];
+            }
+            $existing->update(['status' => 'expired']);
         }
 
-        return DB::transaction(function () use ($order, $existing) {
+        return DB::transaction(function () use ($order) {
             Payment::where('order_id', $order->id)
                 ->khqrProvider()
                 ->where('status', 'pending')
@@ -842,7 +1616,7 @@ class TelegramService
                 ->where('expires_at', '<=', now())
                 ->update(['status' => 'expired']);
 
-            $payment = $existing ?: Payment::create([
+            $payment = Payment::create([
                 'order_id' => $order->id,
                 'provider' => 'rielpay',
                 'amount' => $order->total,
@@ -852,6 +1626,7 @@ class TelegramService
             ]);
 
             $result = $this->rielpayPayments->generate($order, $payment);
+            $khrAmount = $result['khr_amount'] ?? $this->rielpayPayments->khrAmountForOrder($order);
             $payment->update([
                 'provider' => 'rielpay',
                 'bill_number' => $result['bill_number'],
@@ -860,15 +1635,21 @@ class TelegramService
                 'qr_string' => $result['qr_string'],
                 'expires_at' => $result['expires_at'],
                 'raw_response' => $result['payload'],
+                'amount' => $khrAmount,
+                'currency' => 'KHR',
             ]);
 
             $fresh = $payment->fresh();
+            WatchKhqrPayment::dispatch((int) $fresh->id);
+            $this->rielpayPayments->scheduleAutoConfirm($fresh, $order);
 
             return [
+                'id' => $fresh->id,
                 'qr_string' => $fresh->qr_string,
-                'amount' => $fresh->amount,
-                'currency' => $fresh->currency,
+                'amount' => $khrAmount,
+                'currency' => 'KHR',
                 'status' => $fresh->status,
+                'expires_at' => optional($fresh->expires_at)->toIso8601String(),
             ];
         });
     }
@@ -943,7 +1724,15 @@ class TelegramService
             return;
         }
 
-        $order->loadMissing('user');
+        $order->loadMissing(['user', 'payments']);
+        $codShopPaid = $order->payment_method === 'cod'
+            && $order->payment_status === 'paid'
+            && ! $this->codCollection->isPendingCustomerToDriverRemittance($order);
+
+        if ($codShopPaid) {
+            return;
+        }
+
         $label = $order->order_number ?: '#'.$order->id;
         $codPending = $order->payment_method === 'cod' && $order->payment_status !== 'paid';
 
@@ -964,41 +1753,18 @@ class TelegramService
 
             return [$message, $this->buildOrderActionKeyboard($order, null, $locale)];
         });
+
         $this->notifyAdminOrderDelivered($order);
     }
 
     public function notifyAdminOrderDelivered(Order $order): void
     {
-        $chatId = config('services.telegram.admin_chat_id');
-        if (! filled($chatId)) {
-            return;
-        }
-
-        $order->loadMissing(['user', 'items.product', 'shipment']);
-
-        $this->sendMessage(
-            (string) $chatId,
-            $this->formatAdminOrderCardHtml($order, 'completed'),
-            $this->buildAdminOrderKeyboard($order),
-            'HTML'
-        );
+        $this->notifyStaffOrderEvent($order, 'completed');
     }
 
     public function notifyAdminOfNewOrder(Order $order): void
     {
-        $chatId = config('services.telegram.admin_chat_id');
-        if (! filled($chatId)) {
-            return;
-        }
-
-        $order->loadMissing(['user', 'items.product', 'shipment']);
-
-        $this->sendMessage(
-            (string) $chatId,
-            $this->formatAdminOrderCardHtml($order, 'paid'),
-            $this->buildAdminOrderKeyboard($order),
-            'HTML'
-        );
+        $this->notifyStaffOrderEvent($order, 'paid');
     }
 
     public function upsertTelegramUser(array $from, int $chatId): TelegramUser
@@ -1021,6 +1787,192 @@ class TelegramService
         $telegramUser->update(['user_id' => $userId]);
     }
 
+    /**
+     * Copy Telegram name and profile photo onto the shop user.
+     */
+    public function syncTelegramProfileToUser(TelegramUser $telegramUser, User $user): User
+    {
+        $updates = [];
+        $name = trim(implode(' ', array_filter([
+            trim((string) $telegramUser->first_name),
+            trim((string) $telegramUser->last_name),
+        ])));
+        if ($name === '' && filled($telegramUser->username)) {
+            $name = (string) $telegramUser->username;
+        }
+        if ($name !== '' && trim((string) $user->name) !== $name) {
+            $updates['name'] = mb_substr($name, 0, 120);
+        }
+
+        $telegramPhotoMarker = 'telegram_'.$telegramUser->telegram_user_id;
+        $hasTelegramPhoto = filled($user->profile_image_path)
+            && str_contains((string) $user->profile_image_path, $telegramPhotoMarker);
+        $photoIsFresh = $hasTelegramPhoto
+            && $user->profile_image_updated_at
+            && $user->profile_image_updated_at->gt(now()->subHours(6));
+        $shouldImportPhoto = ! filled($user->profile_image_path) || ($hasTelegramPhoto && ! $photoIsFresh);
+
+        if ($shouldImportPhoto) {
+            $photoPath = $this->importProfilePhoto((int) $telegramUser->telegram_user_id);
+            if ($photoPath) {
+                $updates['profile_image_path'] = $photoPath;
+                $updates['profile_image_updated_at'] = now();
+            }
+        }
+
+        if ($updates !== []) {
+            $user->update($updates);
+        }
+
+        return $user->fresh() ?? $user;
+    }
+
+    /**
+     * Apply official Login Widget data (name, username, photo_url) onto the shop user.
+     *
+     * @param  array<string, mixed>  $widget
+     */
+    public function applyLoginWidgetProfile(User $user, array $widget, ?TelegramUser $telegramUser = null): User
+    {
+        $telegramId = (int) ($widget['id'] ?? $telegramUser?->telegram_user_id ?? 0);
+        $name = trim(implode(' ', array_filter([
+            trim((string) ($widget['first_name'] ?? '')),
+            trim((string) ($widget['last_name'] ?? '')),
+        ])));
+        if ($name === '' && filled($widget['username'] ?? null)) {
+            $name = (string) $widget['username'];
+        }
+
+        $updates = [];
+        if ($name !== '') {
+            $updates['name'] = mb_substr($name, 0, 120);
+        }
+
+        $photoUrl = trim((string) ($widget['photo_url'] ?? ''));
+        $marker = $telegramId > 0 ? 'telegram_'.$telegramId : '';
+        $canReplacePhoto = ! filled($user->profile_image_path)
+            || ($marker !== '' && str_contains((string) $user->profile_image_path, $marker));
+
+        if ($canReplacePhoto && $photoUrl !== '' && preg_match('#^https://#i', $photoUrl)) {
+            $stored = $this->importPhotoFromUrl($telegramId, $photoUrl);
+            if ($stored) {
+                $updates['profile_image_path'] = $stored;
+                $updates['profile_image_updated_at'] = now();
+            } elseif (! filled($user->profile_image_path)) {
+                $updates['profile_image_path'] = $photoUrl;
+                $updates['profile_image_updated_at'] = now();
+            }
+        }
+
+        if ($updates !== []) {
+            $user->update($updates);
+            $user = $user->fresh() ?? $user;
+        }
+
+        if ($telegramUser && ! filled($user->profile_image_path)) {
+            $user = $this->syncTelegramProfileToUser($telegramUser, $user);
+        }
+
+        return $user->fresh() ?? $user;
+    }
+
+    public function importPhotoFromUrl(int $telegramUserId, string $url): ?string
+    {
+        if ($telegramUserId <= 0 || ! preg_match('#^https://#i', $url)) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(20)->get($url);
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $bytes = $response->body();
+            if (! is_string($bytes) || strlen($bytes) < 200) {
+                return null;
+            }
+
+            $path = (string) (parse_url($url, PHP_URL_PATH) ?: '');
+            $ext = strtolower((string) pathinfo($path, PATHINFO_EXTENSION)) ?: 'jpg';
+            if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+                $ext = 'jpg';
+            }
+
+            return Media::put('profile_images/telegram_'.$telegramUserId.'.'.$ext, $bytes);
+        } catch (\Throwable $e) {
+            Log::warning('Telegram widget photo import failed', [
+                'telegram_user_id' => $telegramUserId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    public function importProfilePhoto(int $telegramUserId): ?string
+    {
+        if (! $this->isEnabled() || $telegramUserId <= 0) {
+            return null;
+        }
+
+        $token = trim((string) config('services.telegram.bot_token'));
+
+        try {
+            $photos = Http::timeout(15)->get(
+                'https://api.telegram.org/bot'.$token.'/getUserProfilePhotos',
+                ['user_id' => $telegramUserId, 'limit' => 1]
+            )->json();
+
+            if (($photos['ok'] ?? false) !== true) {
+                return null;
+            }
+
+            $sizes = $photos['result']['photos'][0] ?? [];
+            if (! is_array($sizes) || $sizes === []) {
+                return null;
+            }
+
+            $best = $sizes[array_key_last($sizes)] ?? null;
+            $fileId = is_array($best) ? ($best['file_id'] ?? null) : null;
+            if (! is_string($fileId) || $fileId === '') {
+                return null;
+            }
+
+            $file = Http::timeout(15)->get(
+                'https://api.telegram.org/bot'.$token.'/getFile',
+                ['file_id' => $fileId]
+            )->json();
+
+            $filePath = (string) ($file['result']['file_path'] ?? '');
+            if ($filePath === '') {
+                return null;
+            }
+
+            $bytes = Http::timeout(20)->get(
+                'https://api.telegram.org/file/bot'.$token.'/'.$filePath
+            )->body();
+
+            if (! is_string($bytes) || strlen($bytes) < 200) {
+                return null;
+            }
+
+            $ext = strtolower((string) pathinfo($filePath, PATHINFO_EXTENSION)) ?: 'jpg';
+            if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+                $ext = 'jpg';
+            }
+
+            return Media::put('profile_images/telegram_'.$telegramUserId.'.'.$ext, $bytes);
+        } catch (\Throwable $e) {
+            Log::warning('Telegram profile photo import failed', [
+                'telegram_user_id' => $telegramUserId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     public function subscribeChatToOrder(TelegramUser $telegramUser, Order $order): void
     {
         TelegramOrderSubscription::firstOrCreate(
@@ -1030,6 +1982,34 @@ class TelegramService
             ],
             ['telegram_user_id' => $telegramUser->id]
         );
+    }
+
+    /** Attach the customer's linked Telegram DM so status alerts can reach them. */
+    public function subscribeLinkedCustomerChats(Order $order): void
+    {
+        if (! $order->user_id) {
+            return;
+        }
+
+        $rows = TelegramUser::query()
+            ->where('user_id', $order->user_id)
+            ->whereNotNull('chat_id')
+            ->get();
+
+        foreach ($rows as $telegramUser) {
+            $chatId = (int) $telegramUser->chat_id;
+            if ($chatId === 0 || $this->isAdminChatId($chatId) || $this->isStaffOrDriverChat($chatId)) {
+                continue;
+            }
+
+            TelegramOrderSubscription::firstOrCreate(
+                [
+                    'order_id' => $order->id,
+                    'chat_id' => $chatId,
+                ],
+                ['telegram_user_id' => $telegramUser->id]
+            );
+        }
     }
 
     public function isUserConnected(int $userId): bool
@@ -1337,23 +2317,154 @@ class TelegramService
     }
 
     /**
+     * Customer Telegram chats only (never shop staff / driver / admin group).
+     *
      * @return Collection<int, int>
      */
-    private function resolveOrderChatIds(Order $order): Collection
+    private function resolveCustomerChatIds(Order $order): Collection
     {
         $chatIds = collect();
 
         if ($order->user_id) {
             $chatIds = $chatIds->merge(
-                TelegramUser::where('user_id', $order->user_id)->pluck('chat_id')
+                TelegramUser::query()->where('user_id', $order->user_id)->pluck('chat_id')
             );
         }
 
         $chatIds = $chatIds->merge(
-            TelegramOrderSubscription::where('order_id', $order->id)->pluck('chat_id')
+            TelegramOrderSubscription::query()->where('order_id', $order->id)->pluck('chat_id')
         );
 
-        return $chatIds->filter()->unique()->values();
+        $driverChats = $this->resolveDriverChatIds($order);
+
+        return $chatIds
+            ->map(fn ($chatId) => (int) $chatId)
+            ->filter(function (int $chatId) use ($driverChats) {
+                if (! $this->isDeliverableTelegramChatId($chatId)) {
+                    return false;
+                }
+                if ($this->isAdminChatId($chatId) || $this->isStaffOrDriverChat($chatId)) {
+                    return false;
+                }
+                if ($driverChats->contains($chatId)) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    private function resolveOrderChatIds(Order $order): Collection
+    {
+        return $this->resolveCustomerChatIds($order);
+    }
+
+    /**
+     * Driver / courier Telegram chats for a COD job — never the customer.
+     *
+     * @return Collection<int, int>
+     */
+    private function resolveDriverChatIds(Order $order): Collection
+    {
+        $ids = collect();
+        $cached = Cache::get('tg-cod-driver-chat:'.$order->id);
+        if ($cached) {
+            $ids->push((int) $cached);
+        }
+
+        $order->loadMissing(['payments', 'shipment']);
+        foreach ($order->payments as $payment) {
+            $raw = is_array($payment->raw_response) ? $payment->raw_response : [];
+            $stored = (int) ($raw['driver_telegram_chat_id'] ?? 0);
+            if ($stored > 0) {
+                $ids->push($stored);
+            }
+        }
+
+        $assignedDriverId = (int) ($order->shipment?->delivered_by_user_id ?? 0);
+        if ($assignedDriverId > 0) {
+            $ids = $ids->merge(
+                TelegramUser::query()->where('user_id', $assignedDriverId)->pluck('chat_id')
+            );
+        }
+
+        $customerChatIds = $order->user_id
+            ? TelegramUser::query()->where('user_id', $order->user_id)->pluck('chat_id')->filter()->map(fn ($id) => (int) $id)->all()
+            : [];
+
+        $subs = TelegramOrderSubscription::query()
+            ->where('order_id', $order->id)
+            ->get(['chat_id', 'telegram_user_id']);
+
+        foreach ($subs as $sub) {
+            $chatId = (int) $sub->chat_id;
+            if ($chatId <= 0 || $this->isAdminChatId($chatId) || in_array($chatId, $customerChatIds, true)) {
+                continue;
+            }
+
+            $tgUser = $sub->telegram_user_id
+                ? TelegramUser::query()->with('user')->find($sub->telegram_user_id)
+                : TelegramUser::query()->with('user')->where('chat_id', $chatId)->first();
+
+            $role = $tgUser?->user?->role;
+            $isUnlinkedCourier = ! $tgUser?->user_id;
+            if ($role === 'driver' || $isUnlinkedCourier) {
+                $ids->push($chatId);
+            }
+        }
+
+        return $ids
+            ->filter(fn ($chatId) => $this->isDeliverableTelegramChatId((int) $chatId) && ! $this->isAdminChatId((int) $chatId) && ! in_array((int) $chatId, $customerChatIds, true))
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Admin group plus every linked admin / superadmin Telegram chat.
+     *
+     * @return Collection<int, int>
+     */
+    private function resolveAdminChatIds(): Collection
+    {
+        $ids = collect();
+        $configured = trim((string) config('services.telegram.admin_chat_id', ''));
+        if ($configured !== '') {
+            $ids->push((int) $configured);
+        }
+
+        $adminUserIds = User::query()->whereIn('role', ['admin', 'superadmin'])->pluck('id');
+        if ($adminUserIds->isNotEmpty()) {
+            $ids = $ids->merge(
+                TelegramUser::query()->whereIn('user_id', $adminUserIds)->pluck('chat_id')
+            );
+        }
+
+        return $ids
+            ->map(fn ($chatId) => (int) $chatId)
+            ->filter(fn ($chatId) => $this->isDeliverableTelegramChatId($chatId))
+            ->unique()
+            ->values();
+    }
+
+    private function formatCodSettlementAmount(Order $order): string
+    {
+        $order->loadMissing('payments');
+        $payment = $order->payments->sortByDesc('id')->firstWhere('status', 'paid')
+            ?? $order->payments->sortByDesc('id')->first();
+        $raw = is_array($payment?->raw_response) ? $payment->raw_response : [];
+        $received = $raw['actual_amount_received'] ?? $payment?->amount ?? $order->total;
+        $currency = strtoupper((string) ($payment?->currency ?? $raw['currency'] ?? 'USD'));
+
+        if ($currency === 'KHR') {
+            return number_format((float) $received).' ៛';
+        }
+
+        return '$'.number_format((float) $received, 2);
     }
 
     /**
@@ -1361,10 +2472,9 @@ class TelegramService
      */
     private function notifyOrderRecipients(Order $order, \Closure $buildForLocale): void
     {
-        foreach ($this->resolveOrderChatIds($order) as $chatId) {
+        foreach ($this->resolveCustomerChatIds($order) as $chatId) {
             $locale = $this->resolveLocaleForOrderChat($order, (int) $chatId);
             [$message, $replyMarkup] = $buildForLocale($locale);
-            // HTML status templates (same as invoice) — Markdown often fails and looked like "English only".
             $this->sendMessage((string) $chatId, $message, $replyMarkup, 'HTML');
         }
     }
@@ -1533,9 +2643,15 @@ class TelegramService
             : '—';
 
         $title = match ($kind) {
+            'new' => "🔔 <b>ការបញ្ជាទិញថ្មី</b>\n<i>New order — awaiting payment</i>",
             'cod' => "🔔 <b>ការបញ្ជាទិញ COD ថ្មី</b>\n<i>New COD order</i>",
+            'failed' => "❌ <b>ការបង់ប្រាក់បរាជ័យ</b>\n<i>Payment failed</i>",
+            'expired' => "⌛ <b>QR / ការបង់ផុតកំណត់</b>\n<i>Payment expired</i>",
+            'cancelled' => "🚫 <b>ការបញ្ជាទិញត្រូវបានបោះបង់</b>\n<i>Order cancelled</i>",
             'completed' => "✅ <b>ដឹកដល់ / បញ្ចប់</b>\n<i>Order completed</i>",
-            default => "🔔 <b>ការបញ្ជាទិញបានបង់</b>\n<i>New paid order</i>",
+            'cod_driver_paid' => "✅ <b>អ្នកដឹកបានបង់មកហាងជោគជ័យ — បញ្ចប់</b>\n<i>Driver paid the shop — order complete</i>",
+            'cod_customer_paid' => "✅ <b>Customer បានបង់មកហាងជោគជ័យ — បញ្ចប់</b>\n<i>Customer paid the shop — order complete</i>",
+            default => "🔔 <b>ការបញ្ជាទិញបានបង់</b>\n<i>Payment successful</i>",
         };
 
         $lines = [
@@ -1632,9 +2748,52 @@ class TelegramService
             $lines[] = '<i>COD — ប្រមូល $'.number_format((float) $order->total, 2).' ពេលដឹកដល់</i>';
         }
 
-        if ($kind === 'completed') {
+        if ($kind === 'failed' || $kind === 'expired') {
             $lines[] = '';
-            $lines[] = '<i>Marked as delivered/completed.</i>';
+            $lines[] = $kind === 'expired'
+                ? '<i>The customer can still pay from a new QR or the paper invoice QR.</i>'
+                : '<i>Follow up with the customer if they still want this order.</i>';
+        }
+
+        if ($kind === 'cancelled') {
+            $lines[] = '';
+            $lines[] = '<i>This sale was cancelled.</i>';
+        }
+
+        if ($kind === 'cod_customer_paid') {
+            $lines[] = '';
+            $lines[] = '<b>Customer បង់មកហាង / Customer paid the shop</b>';
+            $lines[] = '<i>Shop KHQR — order completed.</i>';
+        }
+
+        if ($kind === 'cod_driver_paid') {
+            $order->loadMissing('payments');
+            $payment = $order->payments->sortByDesc('id')->firstWhere('status', 'paid')
+                ?? $order->payments->sortByDesc('id')->first();
+            $raw = is_array($payment?->raw_response) ? $payment->raw_response : [];
+            $settlementKm = trim((string) ($raw['settlement_label_km'] ?? ''));
+            $settlementEn = trim((string) ($raw['settlement_label_en'] ?? ''));
+            $qrLabel = trim((string) ($raw['qr_bank_label'] ?? $raw['qr_bank'] ?? ''));
+            $courier = trim((string) ($raw['courier_name'] ?? ''));
+            if ($courier === '' && $shipment?->provider && strtolower((string) $shipment->provider) !== 'internal') {
+                $courier = (string) $shipment->provider;
+            }
+
+            $lines[] = '';
+            $lines[] = '<b>ការបង់ជំនួស / Driver settlement</b>';
+            if ($settlementKm !== '') {
+                $lines[] = $e($settlementKm);
+            }
+            if ($settlementEn !== '' && $settlementEn !== $settlementKm) {
+                $lines[] = '<i>'.$e($settlementEn).'</i>';
+            }
+            if ($qrLabel !== '') {
+                $lines[] = 'QR: '.$e($qrLabel);
+            }
+            $lines[] = 'ទទួលពិត / Received: '.$e($this->formatCodSettlementAmount($order));
+            if ($courier !== '') {
+                $lines[] = 'អ្នកដឹក / Courier: '.$e($courier);
+            }
         }
 
         $message = implode("\n", $lines);
@@ -1651,6 +2810,10 @@ class TelegramService
     private function buildAdminOrderKeyboard(Order $order): ?array
     {
         $order->loadMissing('shipment');
+        if ($order->isSuccessfullyClosed()) {
+            return $this->buildClosedOrderKeyboard($order);
+        }
+
         $shipment = $order->shipment;
         $rows = [];
 
@@ -1666,6 +2829,19 @@ class TelegramService
         }
         $rows[] = $actionRow;
 
+        if ($order->payment_status !== 'paid' && $order->payment_method === 'cod') {
+            $rows[] = [
+                [
+                    'text' => TelegramBotTexts::get('km', 'btn_i_paid'),
+                    'callback_data' => 'paidok_'.$order->id,
+                ],
+                [
+                    'text' => TelegramBotTexts::get('km', 'btn_confirm_shop_received'),
+                    'callback_data' => 'shopok_'.$order->id,
+                ],
+            ];
+        }
+
         if ($shipment && filled($shipment->external_tracking_url)) {
             $provider = $shipment->provider && strtolower((string) $shipment->provider) !== 'internal'
                 ? (string) $shipment->provider
@@ -1676,20 +2852,100 @@ class TelegramService
             ]];
         }
 
+        $current = strtolower((string) ($shipment?->status ?? $order->status ?? ''));
+
         $rows[] = [
-            ['text' => '⏳ រៀបចំ', 'callback_data' => 'adminst_'.$order->id.'_processing'],
-            ['text' => '📦 ដឹកចេញ', 'callback_data' => 'adminst_'.$order->id.'_shipped'],
+            $this->telegramStatusButton('⏳ រៀបចំ', $order->id, 'processing', $current, 'adminst_'),
+            $this->telegramStatusButton('📦 ដឹកចេញ', $order->id, 'shipped', $current, 'adminst_'),
         ];
         $rows[] = [
-            ['text' => '🚚 កំពុងដឹក', 'callback_data' => 'adminst_'.$order->id.'_in_transit'],
-            ['text' => '✅ ដឹកដល់', 'callback_data' => 'adminst_'.$order->id.'_delivered'],
+            $this->telegramStatusButton('🚚 កំពុងដឹក', $order->id, 'in_transit', $current, 'adminst_'),
+            $this->telegramStatusButton('📍 មកដល់', $order->id, 'arrived', $current, 'adminst_'),
         ];
         $rows[] = [
-            ['text' => '⚠️ បរាជ័យ', 'callback_data' => 'adminst_'.$order->id.'_failed'],
-            ['text' => '↩️ ត្រឡប់', 'callback_data' => 'adminst_'.$order->id.'_returned'],
+            $this->telegramStatusButton('📦 បានទទួលអីវ៉ាន់', $order->id, 'delivered', $current, 'adminst_'),
+        ];
+        $rows[] = [
+            $this->telegramStatusButton('⚠️ បរាជ័យ', $order->id, 'failed', $current, 'adminst_'),
+            $this->telegramStatusButton('↩️ ត្រឡប់', $order->id, 'returned', $current, 'adminst_'),
         ];
 
         return ['inline_keyboard' => $rows];
+    }
+
+    /**
+     * Invoice / tracking only — no status or payment actions.
+     *
+     * @return array{inline_keyboard: list<list<array<string, string>>>}
+     */
+    private function buildClosedOrderKeyboard(Order $order, string $locale = 'km'): array
+    {
+        $order->loadMissing('shipment');
+        $rows = [[
+            ['text' => TelegramBotTexts::get($locale, 'btn_invoice'), 'callback_data' => 'invoice_'.$order->id],
+        ]];
+
+        $shipment = $order->shipment;
+        if ($shipment && filled($shipment->external_tracking_url)) {
+            $provider = $shipment->provider && strtolower((string) $shipment->provider) !== 'internal'
+                ? (string) $shipment->provider
+                : TelegramBotTexts::get($locale, 'courier_fallback');
+            $rows[] = [[
+                'text' => TelegramBotTexts::get($locale, 'btn_track_on', ['provider' => $provider]),
+                'url' => $shipment->external_tracking_url,
+            ]];
+        }
+
+        return ['inline_keyboard' => $rows];
+    }
+
+    /**
+     * @return array{text: string, callback_data: string}
+     */
+    private function telegramStatusButton(
+        string $label,
+        int $orderId,
+        string $status,
+        string $current,
+        string $prefix
+    ): array {
+        $normalized = $status === 'complete' ? 'delivered' : $status;
+        $active = $current === $normalized
+            || ($normalized === 'delivered' && in_array($current, ['delivered', 'completed'], true));
+
+        return [
+            'text' => ($active ? '✅ ' : '').$label,
+            'callback_data' => $active ? 'stused_'.$orderId : $prefix.$orderId.'_'.$status,
+        ];
+    }
+
+    public function editMessageReplyMarkup(int $chatId, int $messageId, ?array $replyMarkup): void
+    {
+        if (! $this->isEnabled() || $chatId === 0 || $messageId <= 0) {
+            return;
+        }
+
+        try {
+            $payload = [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'reply_markup' => json_encode(
+                    $replyMarkup ?? ['inline_keyboard' => []],
+                    JSON_UNESCAPED_UNICODE
+                ),
+            ];
+
+            Http::asForm()->timeout(10)->post(
+                'https://api.telegram.org/bot'.config('services.telegram.bot_token').'/editMessageReplyMarkup',
+                $payload
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Telegram editMessageReplyMarkup failed', [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function formatPaymentMethodLabel(Order $order): string

@@ -1,21 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import Swal from "sweetalert2";
 import { useCart } from "../state/cart";
 import { useAuth } from "../state/auth";
 import { useLanguage } from "../lib/i18n.jsx";
 import CheckoutPaymentKhqr from "../components/payments/CheckoutPaymentKhqr";
-import KhqrSuccessModal from "../components/alerts/KhqrSuccessModal";
 import { requestDeliveryPin } from "../lib/geolocation";
 import { resolveImageUrl } from "../lib/images";
 import { DEFAULT_DELIVERY_RATES, isPhnomPenhProvince, resolveDeliveryFee } from "../lib/deliveryFee.js";
 import { showStockLimitAlert } from "../lib/stockLimitAlert.js";
 
-const KHQR_REDIRECT_SECONDS = 60;
-
 export default function Checkout() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const cart = useCart();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -28,17 +26,10 @@ export default function Checkout() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [khqrOpen, setKhqrOpen] = useState(false);
   const [khqrOrder, setKhqrOrder] = useState(null);
-  const [khqrSuccessOpen, setKhqrSuccessOpen] = useState(false);
   const [loyalty, setLoyalty] = useState(null);
   const [deliveryRates, setDeliveryRates] = useState(DEFAULT_DELIVERY_RATES);
   const { t } = useLanguage();
   const cartItems = cart.cart?.items || [];
-
-  useEffect(() => {
-    if (!khqrSuccessOpen) return;
-    const t = setTimeout(() => nav("/orders"), KHQR_REDIRECT_SECONDS * 1000);
-    return () => clearTimeout(t);
-  }, [khqrSuccessOpen, nav]);
 
   useEffect(() => {
     let mounted = true;
@@ -101,6 +92,12 @@ export default function Checkout() {
 
   const selectedAddress = addresses.find((a) => String(a.id) === String(selectedAddressId));
   const codAvailable = selectedAddress ? isPhnomPenhProvince(selectedAddress.province) : false;
+
+  useEffect(() => {
+    if (searchParams.get("pay") === "khqr") {
+      setPaymentMethod("bakong_khqr");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!codAvailable && paymentMethod === "cod") {
@@ -804,28 +801,14 @@ export default function Checkout() {
           </div>{/* end right column */}
         </div>{/* end grid */}
       </div>
-      <KhqrSuccessModal
-        open={khqrSuccessOpen}
-        orderNumber={khqrOrder?.order_number}
-        total={khqrOrder?.total}
-        currency="KHR"
-        redirectSeconds={KHQR_REDIRECT_SECONDS}
-        onClose={() => {
-          setKhqrSuccessOpen(false);
-          nav("/orders");
-        }}
-      />
       <CheckoutPaymentKhqr
         open={khqrOpen}
         orderId={khqrOrder?.id}
         orderNumber={khqrOrder?.order_number}
-        amount={khqrOrder?.total}
-        currency="USD"
+        amount={khqrOrder?.khqr_amount ?? khqrOrder?.total}
+        currency={khqrOrder?.khqr_currency || "USD"}
         onClose={() => setKhqrOpen(false)}
-        onPaid={() => {
-          setKhqrOpen(false);
-          setKhqrSuccessOpen(true);
-        }}
+        onPaid={() => setKhqrOpen(false)}
       />
     </>
   );

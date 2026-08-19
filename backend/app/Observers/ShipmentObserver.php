@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Shipment;
 use App\Services\TelegramService;
+use Illuminate\Support\Facades\DB;
 
 class ShipmentObserver
 {
@@ -17,18 +18,21 @@ class ShipmentObserver
             return;
         }
 
-        $this->telegramService->notifyShipmentStatusChanged($shipment);
+        $shipmentId = (int) $shipment->id;
 
         if ($shipment->status === 'delivered') {
-            if (! $shipment->order) {
-                return;
+            $shipment->loadMissing('order');
+            if ($shipment->order && $shipment->order->status !== 'completed') {
+                $shipment->order->update(['status' => 'completed']);
             }
-
-            if ($shipment->order->status === 'completed') {
-                return;
-            }
-
-            $shipment->order->update(['status' => 'completed']);
         }
+
+        // Send customer Telegram after the DB lock/transaction commits so the alert is not dropped.
+        DB::afterCommit(function () use ($shipmentId) {
+            $fresh = Shipment::query()->with(['order.user', 'order.items.product'])->find($shipmentId);
+            if ($fresh) {
+                $this->telegramService->notifyShipmentStatusChanged($fresh);
+            }
+        });
     }
 }

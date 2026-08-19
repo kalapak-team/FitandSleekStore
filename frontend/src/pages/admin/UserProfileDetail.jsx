@@ -210,7 +210,9 @@ export default function UserProfileDetail() {
   // Superadmin can manage any staff link; admins manage their own only while telegram → edit stays on.
   const isOwnAccount =
     Boolean(sessionUser?.id) && Boolean(targetUser?.id) && Number(sessionUser.id) === Number(targetUser.id);
-  const showTelegramLink = isAdminTarget && (isSuperAdmin || (isOwnAccount && can("telegram", "view")));
+  const showTelegramLink =
+    (isAdminTarget || role === "customer" || isDriverTarget) &&
+    (isSuperAdmin || (isOwnAccount && can("telegram", "view")));
   const canManageTelegram = isSuperAdmin || (isOwnAccount && can("telegram", "edit"));
 
   const availableTabs = useMemo(() => {
@@ -542,6 +544,7 @@ export default function UserProfileDetail() {
                   <TelegramLinkPanel
                     userId={targetUser?.id}
                     telegram={targetUser?.telegram}
+                    role={targetUser?.role}
                     canManage={canManageTelegram}
                     showSuperAdminHint={isSuperAdmin}
                     onUpdated={(next) => {

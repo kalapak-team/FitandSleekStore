@@ -192,7 +192,7 @@ class ShipmentAdminController extends BaseAdminController
         }
 
         $validated = $request->validate([
-            'status' => 'required|in:pending,processing,shipped,in_transit,delivered,failed,returned',
+            'status' => 'required|in:pending,processing,shipped,in_transit,arrived,delivered,failed,returned',
             'shipped_at' => 'nullable|date',
             'delivered_at' => 'nullable|date',
         ]);
@@ -200,7 +200,7 @@ class ShipmentAdminController extends BaseAdminController
         $status = $validated['status'];
         $shippedAt = $validated['shipped_at'] ?? $shipment->shipped_at;
         $deliveredAt = $validated['delivered_at'] ?? $shipment->delivered_at;
-        if (in_array($status, ['shipped', 'in_transit', 'delivered'], true) && !$shippedAt) {
+        if (in_array($status, ['shipped', 'in_transit', 'arrived', 'delivered'], true) && !$shippedAt) {
             $shippedAt = now();
         }
         if ($status === 'delivered' && !$deliveredAt) {

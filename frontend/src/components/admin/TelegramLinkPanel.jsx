@@ -6,7 +6,7 @@ import api from "../../lib/api";
  * Generate / revoke one-time Telegram deep-link codes for staff & drivers.
  * @param {boolean} [showSuperAdminHint] — show that Superadmin can revoke anytime
  */
-export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdated, showSuperAdminHint = false }) {
+export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdated, showSuperAdminHint = false, role }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [codePayload, setCodePayload] = useState(null);
@@ -84,15 +84,18 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
   if (!userId) return null;
 
   const linked = Boolean(status?.linked);
+  const accountRole = String(codePayload?.role || status?.role || role || "").toLowerCase();
+  const roleLabel = accountRole || "this account";
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900/60 p-5">
-      <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">Telegram bot link</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Link your personal Telegram so you can press order buttons in the admin group. One-time code (~10 min).
-            External couriers do not need an account — unlock the order job QR after pickup confirm.
+            Link personal Telegram to this <span className="font-semibold text-slate-700 dark:text-slate-200">{roleLabel}</span> account.
+            Role does not change. Superadmin and admin can press order buttons in the admin group. Customers receive order updates.
+            One-time code (~10 min). External couriers do not need an account — unlock the order job QR after pickup confirm.
           </p>
           {showSuperAdminHint ? (
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -110,7 +113,7 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
               : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700")
           }
         >
-          {linked ? "Linked" : "Not linked"}
+          {linked ? `Linked · ${roleLabel}` : "Not linked"}
         </span>
       </div>
 
@@ -137,7 +140,10 @@ export default function TelegramLinkPanel({ userId, telegram, canManage, onUpdat
           ) : (
             <code className="block text-sm text-slate-800 dark:text-slate-100">{codePayload.bot_command}</code>
           )}
-          <p className="text-xs text-slate-500">Expires: {codePayload.expires_at ? new Date(codePayload.expires_at).toLocaleString() : "—"}</p>
+          <p className="text-xs text-slate-500">
+            Expires: {codePayload.expires_at ? new Date(codePayload.expires_at).toLocaleString() : "—"}
+            {accountRole ? ` · stays ${accountRole}` : ""}
+          </p>
           <button
             type="button"
             onClick={copyLink}

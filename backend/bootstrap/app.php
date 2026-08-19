@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         __DIR__.'/../app/Console/Commands',
     ])
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->trustProxies(at: '*');
         $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
         $middleware->redirectGuestsTo(function (Request $request) {
             return $request->is('api/*') ? null : '/';

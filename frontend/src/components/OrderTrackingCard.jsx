@@ -11,7 +11,7 @@ const TIMELINE_STEPS = [
 ];
 
 export function getOrderStatusStep(status) {
-  const steps = { pending: 0, pending_payment: 0, paid: 1, confirmed: 1, processing: 2, preparing: 2, shipped: 3, completed: 4, delivered: 4 };
+  const steps = { pending: 0, pending_payment: 0, paid: 1, confirmed: 1, processing: 2, preparing: 2, shipped: 3, in_transit: 3, arrived: 3, completed: 4, delivered: 4 };
   return steps[String(status || "").toLowerCase()] ?? 0;
 }
 

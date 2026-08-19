@@ -485,6 +485,177 @@ select:focus {
   --fs-storefront-chrome-desktop: 8.25rem;
 }
 
+/* Telegram Mini App only — compact action dock, no storefront header/footer */
+html[data-telegram-miniapp="1"] .fs-site {
+  --fs-storefront-chrome-mobile: 0rem;
+  --fs-storefront-chrome-desktop: 0rem;
+}
+
+.fs-tg-mini-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid rgba(24, 24, 27, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.fs-tg-mini-dock__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.25rem;
+  border: 0;
+  background: transparent;
+  color: #71717a;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fs-tg-mini-dock__item.is-active {
+  color: #18181b;
+}
+
+.fs-tg-mini-dock__icon {
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  border: 1px solid #e4e4e7;
+  background: #fff;
+  color: inherit;
+}
+
+.fs-tg-mini-dock__item.is-active .fs-tg-mini-dock__icon {
+  background: #18181b;
+  border-color: #18181b;
+  color: #fff;
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-dock {
+  background: rgba(24, 24, 27, 0.96);
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-dock__item {
+  color: #a1a1aa;
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-dock__item.is-active {
+  color: #fafafa;
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-dock__icon {
+  background: #27272a;
+  border-color: #3f3f46;
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-dock__item.is-active .fs-tg-mini-dock__icon {
+  background: #fafafa;
+  border-color: #fafafa;
+  color: #18181b;
+}
+
+.fs-tg-mini-back {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: calc(0.35rem + env(safe-area-inset-top, 0px)) 0.75rem 0.35rem;
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid rgba(24, 24, 27, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+.fs-tg-mini-back__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.35rem 0.4rem 0.35rem 0.15rem;
+  border: 0;
+  background: transparent;
+  color: #18181b;
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-back {
+  background: rgba(24, 24, 27, 0.94);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-storefront-theme="dark"] .fs-tg-mini-back__btn {
+  color: #fafafa;
+}
+
+html[data-telegram-miniapp="1"],
+html[data-telegram-miniapp="1"] body,
+html[data-telegram-miniapp="1"] #root {
+  width: 100%;
+  min-height: var(--fs-tg-viewport-height, 100vh);
+}
+
+html[data-telegram-miniapp="1"] .fs-site {
+  width: 100%;
+  max-width: none;
+  min-height: var(--fs-tg-viewport-height, 100vh);
+}
+
+/* Computer Telegram Mini App: fill the window; keep phone Mini App compact */
+html[data-telegram-miniapp-desktop="1"] .fs-tg-mini-dock {
+  left: 50%;
+  right: auto;
+  bottom: 1rem;
+  width: min(36rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+  gap: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid rgba(24, 24, 27, 0.12);
+  border-radius: 1.25rem;
+  box-shadow: 0 12px 32px rgba(24, 24, 27, 0.16);
+}
+
+html[data-telegram-miniapp-desktop="1"] .fs-tg-mini-back {
+  padding-inline: clamp(1rem, 2vw, 2.5rem);
+}
+
+html[data-telegram-miniapp-desktop="1"] .brand-scroll > .shrink-0,
+html[data-telegram-miniapp-desktop="1"] .brand-scroll > .fs-card {
+  flex-basis: calc(25% - 0.75rem) !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-telegram-miniapp-desktop="1"] .brand-scroll > .shrink-0,
+  html[data-telegram-miniapp-desktop="1"] .brand-scroll > .fs-card {
+    flex-basis: calc(20% - 0.8rem) !important;
+  }
+}
+
+@media (min-width: 1400px) {
+  html[data-telegram-miniapp-desktop="1"] .brand-scroll > .shrink-0,
+  html[data-telegram-miniapp-desktop="1"] .brand-scroll > .fs-card {
+    flex-basis: calc(16.666% - 0.85rem) !important;
+  }
+}
+
 .fs-hero-shell {
   width: 100%;
   max-width: none;
@@ -505,6 +676,41 @@ select:focus {
   aspect-ratio: auto;
   min-height: calc(100svh - var(--fs-storefront-chrome-mobile));
   height: calc(100svh - var(--fs-storefront-chrome-mobile));
+  overflow: hidden;
+}
+
+/* Phone Telegram Mini App: chrome mobile is 0, so the hero becomes too tall.
+   Cap hero height so products/sections stay visible. */
+html[data-telegram-miniapp="1"]:not([data-telegram-miniapp-desktop="1"]) .fs-hero-banner__frame {
+  min-height: clamp(14rem, 34svh, 22rem);
+  height: clamp(14rem, 34svh, 22rem);
+}
+
+@keyframes fsHeroFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.fs-hero-banner__photo {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover;
+  object-position: center;
+  transform: none !important;
+}
+
+.fs-hero-banner__photo--in {
+  z-index: 1;
+  animation: fsHeroFadeIn 0.7s ease forwards;
 }
 
 @media (min-width: 1024px) {
@@ -1120,6 +1326,54 @@ select:focus {
 .fs-plp-toolbar__sort-menu button.is-active {
   background: #f4f4f5;
   font-weight: 600;
+}
+
+.fs-pdp-gallery-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.38) !important;
+  box-shadow: none !important;
+  color: #111111 !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.fs-pdp-gallery-arrow--prev {
+  left: 0.75rem;
+}
+
+.fs-pdp-gallery-arrow--next {
+  right: 0.75rem;
+}
+
+.fs-pdp-gallery-arrow:hover,
+.fs-pdp-gallery-arrow:focus {
+  background: rgba(255, 255, 255, 0.52) !important;
+  opacity: 1;
+}
+
+.fs-pdp-gallery-arrow:active {
+  background: rgba(255, 255, 255, 0.52) !important;
+  transform: translateY(-50%) scale(0.96);
+}
+
+html[data-storefront-theme="dark"] .fs-pdp-gallery-arrow {
+  background: rgba(255, 255, 255, 0.38) !important;
+  color: #111111 !important;
+  box-shadow: none !important;
 }
 
 .fs-carousel-nav-btn {

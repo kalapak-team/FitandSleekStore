@@ -18,6 +18,8 @@ class TelegramController extends Controller
     {
         return response()->json([
             'enabled' => $this->telegram->isEnabled(),
+            'bot_id' => $this->telegram->botId(),
+            'client_id' => $this->telegram->loginClientId(),
             'bot_username' => $this->telegram->botUsername(),
             'bot_url' => $this->telegram->botUsername()
                 ? 'https://t.me/'.$this->telegram->botUsername()

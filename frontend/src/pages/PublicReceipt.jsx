@@ -60,10 +60,10 @@ export default function PublicReceiptPage() {
   };
 
   useEffect(() => {
-    if (invoice && !isPaid) {
+    if (invoice && !isPaid && !isCod) {
       loadPayQr();
     }
-  }, [invoice, isPaid]);
+  }, [invoice, isPaid, isCod]);
 
   const pdfUrl = useMemo(() => `${apiBase}/receipt/${token}/pdf`, [apiBase, token]);
 
@@ -198,8 +198,16 @@ export default function PublicReceiptPage() {
               </div>
             ) : null}
 
-            {/* Payment QR on receipt page */}
-            {!isPaid ? (
+            {/* Payment QR on receipt page — online KHQR only. COD shop QR is driver/admin. */}
+            {!isPaid && isCod ? (
+              <div className="mt-6 rounded-2xl border border-[#708A7C]/25 bg-[#eef3f1]/70 p-5 text-center print:hidden">
+                <p className="text-sm font-bold text-[#497869]">បង់ពេលដឹកដល់ / Pay on delivery</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Pay the driver in cash, or scan the shop QR the driver shows you. This receipt does not generate shop QR.
+                </p>
+              </div>
+            ) : null}
+            {!isPaid && !isCod ? (
               <div className="mt-6 rounded-2xl border-2 border-[#C0272D]/20 bg-gradient-to-b from-red-50/80 to-white p-5 text-center print:hidden">
                 <p className="text-sm font-bold text-[#C0272D]">
                   {isCod ? "បង់ពេលដឹកដល់ — Scan KHQR" : "Complete payment — Scan KHQR"}

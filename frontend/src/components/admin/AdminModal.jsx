@@ -13,6 +13,7 @@ export default function AdminModal({
   titleId: titleIdProp,
   children,
   maxWidthClass = "max-w-3xl",
+  maxHeightClass = "max-h-[90vh]",
   zIndexClass = "z-50",
   initialFocusSelector = "button, select, input, textarea, [href]",
   closeOnBackdrop = true,
@@ -58,7 +59,7 @@ export default function AdminModal({
         className={`relative flex w-full flex-col rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/40 ${
           isSheet
             ? `${maxWidthClass} h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)]`
-            : `${maxWidthClass} max-h-[90vh] overflow-y-auto`
+            : `${maxWidthClass} ${maxHeightClass} overflow-y-auto`
         }`}
       >
         <div
