@@ -1,6 +1,22 @@
 #!/bin/sh
 set -e
 
+# Railway Variables often wrap DATABASE_URL in quotes, so Postgres sees
+# database name railway" → FATAL: database "railway"" does not exist
+# Do this before PHP so Laravel env() never sees the stray quote.
+strip_quotes_from_db_url() {
+  _name=$1
+  eval "_val=\${${_name}-}"
+  if [ -z "$_val" ]; then
+    return 0
+  fi
+  _val=$(printf '%s' "$_val" | tr -d '"' | sed 's/%22//g; s/%27//g')
+  export "${_name}=${_val}"
+}
+strip_quotes_from_db_url DATABASE_URL
+strip_quotes_from_db_url DATABASE_PRIVATE_URL
+strip_quotes_from_db_url DB_URL
+
 cd /var/www/html
 
 # Host-mounted composer.lock can be newer than vendor baked into the image (e.g. after git pull).

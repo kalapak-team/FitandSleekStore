@@ -7,15 +7,17 @@ $sanitizeDatabaseUrl = static function (mixed $url): ?string {
         return is_string($url) ? $url : null;
     }
 
-    $url = trim($url);
+    $url = trim(str_replace(["\r", "\n", "\t", "\0"], '', $url));
     $url = trim($url, "\"'");
-    $url = str_replace(["\r", "\n", "\t"], '', $url);
-    // Dashboard/dotenv often yields postgresql://.../railway"?sslmode=require
-    // (quote stuck on the database name). [^/?#] previously swallowed the quote.
-    $url = preg_replace('#"+(?=\?|$)#', '', $url) ?? $url;
-    $url = preg_replace('#/([^/?#"]+)"+#', '/$1', $url) ?? $url;
+    // Dashboard paste: …/railway"?sslmode=require or …/railway%22?sslmode=require
+    $url = str_replace(['%22', '%27'], '', $url);
+    $url = str_replace(
+        ["\u{201C}", "\u{201D}", "\u{2018}", "\u{2019}", '"', "'"],
+        '',
+        $url
+    );
 
-    return $url;
+    return $url === '' ? null : $url;
 };
 
 $sanitizeDbIdent = static function (mixed $value, mixed $fallback = null): mixed {
