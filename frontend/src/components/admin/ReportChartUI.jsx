@@ -68,7 +68,7 @@ export function ReportLegendPills({ rows, theme, formatValue }) {
   return (
     <ul className="w-full max-h-64 space-y-1.5 overflow-y-auto text-xs pr-0.5">
       {rows.map((row, index) => {
-        const color = row.fill || reportChartColor(index);
+        const color = row.fill || theme.chartColor?.(index) || reportChartColor(index);
         return (
           <li
             key={row.key || row.name || index}

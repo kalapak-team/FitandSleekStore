@@ -38,7 +38,7 @@ const DEFAULT_STATS = {
 };
 
 function readDashboardSnapshot(periodDays) {
-  return readAdminCache(adminCacheKey("dashboard", periodDays));
+  return readAdminCache(adminCacheKey("dashboard-v2", periodDays));
 }
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -391,7 +391,7 @@ export default function AdminDashboard() {
           setStats(nextStats);
           setSalesSeriesRaw(salesArr);
           setRecentOrders(nextRecentOrders);
-          writeAdminCache(adminCacheKey("dashboard", periodDays), {
+          writeAdminCache(adminCacheKey("dashboard-v2", periodDays), {
             stats: nextStats,
             salesSeriesRaw: salesArr,
             recentOrders: nextRecentOrders,

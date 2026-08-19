@@ -11,7 +11,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,8 +18,6 @@ import {
 } from "recharts";
 import {
   getReportChartTheme,
-  reportChartColor,
-  REPORT_CLUSTER,
 } from "../../lib/reportChartTheme.js";
 import {
   ReportChartPanel,
@@ -40,7 +37,7 @@ import StockDashboard from "../../components/admin/StockDashboard.jsx";
 import AdminReportExportMenu from "../../components/admin/AdminReportExportMenu.jsx";
 import { downloadBlobResponse, parseBlobErrorMessage } from "../../lib/adminReportDownload.js";
 import { useAdminUiPreference } from "../../lib/adminUiPreferences.js";
-import { ADMIN_NUMBER_FORMAT, formatNumber, formatUsd, formatUsdFull } from "../../lib/adminNumberFormat.js";
+import { ADMIN_NUMBER_FORMAT, formatNumber, formatUsd } from "../../lib/adminNumberFormat.js";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, "0");
@@ -214,22 +211,27 @@ function PeriodDropdown({ value, onChange, mode }) {
                     onClick={() => { onChange(item.key); setOpen(false); }}
                     className="w-full text-left px-4 py-2 text-xs transition-colors"
                     style={{
-                      color: isActive ? "#6366F1" : textColor,
+                      color: isActive ? "var(--admin-primary)" : textColor,
                       background: isActive
-                        ? isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)"
+                        ? "rgba(var(--admin-primary-rgb), 0.12)"
                         : "transparent",
                       fontWeight: isActive ? 700 : 500,
                     }}
                     onMouseEnter={(e) => {
                       if (!isActive) e.currentTarget.style.background = isDark
                         ? "rgba(255,255,255,0.05)"
-                        : "rgba(99,102,241,0.05)";
+                        : "rgba(var(--admin-primary-rgb), 0.06)";
                     }}
                     onMouseLeave={(e) => {
                       if (!isActive) e.currentTarget.style.background = "transparent";
                     }}
                   >
-                    {isActive && <span className="inline-block w-1 h-1 rounded-full bg-indigo-500 mr-2 mb-0.5" />}
+                    {isActive && (
+                      <span
+                        className="inline-block w-1 h-1 rounded-full mr-2 mb-0.5"
+                        style={{ background: "var(--admin-primary)" }}
+                      />
+                    )}
                     {item.label}
                   </button>
                 );
@@ -243,50 +245,24 @@ function PeriodDropdown({ value, onChange, mode }) {
 }
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
-const STAT_CARD_ACCENTS = [
-  { gradient: "linear-gradient(135deg, #6366F1, #818CF8)", light: "rgba(99,102,241,0.1)", color: "#6366F1" },
-  { gradient: "linear-gradient(135deg, #8B5CF6, #A78BFA)", light: "rgba(139,92,246,0.1)", color: "#8B5CF6" },
-  { gradient: "linear-gradient(135deg, #10B981, #34D399)", light: "rgba(16,185,129,0.1)", color: "#10B981" },
-  { gradient: "linear-gradient(135deg, #F59E0B, #FCD34D)", light: "rgba(245,158,11,0.1)", color: "#F59E0B" },
-];
-
-function StatCard({ title, value, subtext, icon, iconBoxStyle, index = 0, isDark = false }) {
-  const accent = STAT_CARD_ACCENTS[index % STAT_CARD_ACCENTS.length];
+function StatCard({ title, value, subtext, icon, iconBoxStyle }) {
   return (
-    <div className="admin-surface border admin-border rounded-2xl overflow-hidden hover:shadow-md transition-all duration-200">
-      <div className="h-0.5 w-full" style={{ background: accent.gradient }} />
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5"
-              style={{ color: isDark ? "rgba(139,148,158,0.95)" : "rgba(100,116,139,0.9)" }}>
-              {title}
-            </p>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white tabular-nums leading-none">
-              {value}
-            </p>
-            {subtext && (
-              <p
-                className="text-xs mt-2 font-medium"
-                style={{ color: isDark ? "rgba(139,148,158,0.85)" : "#94A3B8" }}
-              >
-                {subtext}
-              </p>
-            )}
-          </div>
-          <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-            style={{
-              ...iconBoxStyle,
-              boxShadow: isDark
-                ? "0 4px 16px rgba(1,4,9,0.4), inset 0 1px 0 rgba(255,255,255,0.08)"
-                : iconBoxStyle?.boxShadow,
-            }}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-            </svg>
-          </div>
+    <div className="admin-surface admin-spectrum-kpi rounded-2xl border admin-border p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{title}</p>
+          <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">{value}</p>
+          {subtext ? (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">{subtext}</p>
+          ) : null}
+        </div>
+        <div
+          className="admin-stat-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border admin-border"
+          style={iconBoxStyle}
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+          </svg>
         </div>
       </div>
     </div>
@@ -298,15 +274,16 @@ export default function Reports() {
   const { user, can, permissionsReady } = useAdminPermissions();
   const canViewReports = can("reports", "view");
   const { primaryColor, mode } = useTheme();
-  const { iconBoxStyle } = useAdminAccents();
-  const accentColor = primaryColor;
-  const reportTheme = useMemo(() => getReportChartTheme(mode), [mode]);
+  const { iconBoxStyle, colors } = useAdminAccents();
+  const reportTheme = useMemo(
+    () => getReportChartTheme(mode, { palette: colors, primaryColor }),
+    [mode, colors, primaryColor],
+  );
 
   const [dashboard, setDashboard] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
   const [categorySales, setCategorySales] = useState({
     revenue_by_category: [],
-    top_categories: [],
     total_revenue: 0,
     total_units: 0,
   });
@@ -315,7 +292,6 @@ export default function Reports() {
 
   const [top10Span, setTop10Span] = useAdminUiPreference("charts.reports.top10Span", 1);
   const [catRevenueSpan, setCatRevenueSpan] = useAdminUiPreference("charts.reports.catRevenueSpan", 1);
-  const [topCatSpan, setTopCatSpan] = useAdminUiPreference("charts.reports.topCatSpan", 1);
   const [numberFormat] = useAdminUiPreference("dashboard.numberFormat", ADMIN_NUMBER_FORMAT.COMPACT);
 
   const [chartFrom, setChartFrom] = useState("");
@@ -342,14 +318,13 @@ export default function Reports() {
       return;
     }
 
-    const cacheKey = adminCacheKey("reports", period, chartFrom, chartTo);
+    const cacheKey = adminCacheKey("reports-v2", period, chartFrom, chartTo);
     const cached = readAdminCache(cacheKey);
     if (cached) {
       setDashboard(cached.dashboard ?? null);
       setTopProducts(cached.topProducts ?? []);
       setCategorySales(cached.categorySales ?? {
         revenue_by_category: [],
-        top_categories: [],
         total_revenue: 0,
         total_units: 0,
       });
@@ -365,7 +340,7 @@ export default function Reports() {
         api.get("/admin/reports/dashboard", { params: periodParams }),
         api.get("/admin/reports/top-products", { params: { ...periodParams, limit: 10 } }).catch(() => ({ data: { data: [] } })),
         api.get("/admin/reports/category-sales", { params: { ...periodParams, limit: 10 } }).catch(() => ({
-          data: { revenue_by_category: [], top_categories: [], total_revenue: 0, total_units: 0 },
+          data: { revenue_by_category: [], total_revenue: 0, total_units: 0 },
         })),
       ]);
 
@@ -373,14 +348,11 @@ export default function Reports() {
       const nextDashboard = {
         revenue: dashData.revenue || { total: 0, month: 0, today: 0 },
         orders: dashData.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
-        products: dashData.products || { total: 0, active: 0, low_stock: 0 },
-        customers: dashData.customers || { total: 0, new_this_month: 0 },
       };
 
       const nextTopProducts = productsRes.data?.data || [];
       const nextCategorySales = {
         revenue_by_category: categorySalesRes.data?.revenue_by_category || [],
-        top_categories: categorySalesRes.data?.top_categories || [],
         total_revenue: categorySalesRes.data?.total_revenue || 0,
         total_units: categorySalesRes.data?.total_units || 0,
       };
@@ -507,20 +479,9 @@ export default function Reports() {
         name: row.name,
         revenue: Number(row.revenue) || 0,
         percentage: row.percentage,
-        fill: reportChartColor(index),
+        fill: reportTheme.chartColor(index),
       })),
-    [categorySales.revenue_by_category],
-  );
-
-  const topCategoryClusterData = useMemo(
-    () =>
-      (categorySales.top_categories || []).map((row) => ({
-        name: row.name,
-        shortLabel: truncateChartLabel(row.name, 14),
-        unitsSold: Number(row.units_sold) || 0,
-        revenue: Number(row.revenue) || 0,
-      })),
-    [categorySales.top_categories],
+    [categorySales.revenue_by_category, reportTheme],
   );
 
   const topSellingChartData = useMemo(
@@ -533,10 +494,10 @@ export default function Reports() {
           shortLabel: truncateChartLabel(fullName),
           unitsSold: Number(item.total_sold) || 0,
           revenue: Number(item.total_revenue) || 0,
-          fill: reportChartColor(index),
+          fill: reportTheme.chartColor(index),
         };
       }),
-    [topProducts],
+    [topProducts, reportTheme],
   );
 
   if (!permissionsReady || (loading && !dashboard)) {
@@ -559,8 +520,8 @@ export default function Reports() {
             <div
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 mb-2.5 text-[11px] font-bold uppercase tracking-widest"
               style={{
-                background: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.1)",
-                color: "#6366F1",
+                background: "rgba(var(--admin-primary-rgb), 0.12)",
+                color: "var(--admin-primary)",
               }}
             >
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -586,9 +547,9 @@ export default function Reports() {
                 onClick={() => setGenOpen((p) => !p)}
                 className="flex items-center gap-2 h-9 px-4 rounded-xl text-xs font-bold text-white transition-all"
                 style={{
-                  background: "linear-gradient(135deg, #6366F1, #8B5CF6)",
-                  boxShadow: "0 4px 14px rgba(99,102,241,0.35)",
-                  border: "1px solid rgba(99,102,241,0.3)",
+                  background: `linear-gradient(135deg, ${primaryColor}, ${reportTheme.accentSecondary})`,
+                  boxShadow: `0 4px 14px rgba(var(--admin-primary-rgb), 0.28)`,
+                  border: "1px solid rgba(var(--admin-primary-rgb), 0.28)",
                 }}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -618,7 +579,7 @@ export default function Reports() {
                   <div className="flex items-center gap-2.5 mb-5">
                     <div
                       className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}
+                      style={{ background: `linear-gradient(135deg, ${primaryColor}, ${reportTheme.accentSecondary})` }}
                     >
                       <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -689,9 +650,9 @@ export default function Reports() {
                         className="h-10 px-4 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-white transition disabled:opacity-60 disabled:cursor-not-allowed flex-1"
                         style={{
                           background: generating
-                            ? "rgba(99,102,241,0.7)"
-                            : "linear-gradient(135deg, #6366F1, #8B5CF6)",
-                          boxShadow: generating ? "none" : "0 4px 14px rgba(99,102,241,0.3)",
+                            ? "rgba(var(--admin-primary-rgb), 0.65)"
+                            : `linear-gradient(135deg, ${primaryColor}, ${reportTheme.accentSecondary})`,
+                          boxShadow: generating ? "none" : "0 4px 14px rgba(var(--admin-primary-rgb), 0.28)",
                         }}
                       >
                         {generating ? (
@@ -716,7 +677,7 @@ export default function Reports() {
                         onExportPdf={handleDownloadPdf}
                         onExportExcel={handleDownloadExcel}
                         busy={exportBusy}
-                        accentColor="#6366F1"
+                        accentColor={primaryColor}
                         mode={mode}
                       />
                     </div>
@@ -726,32 +687,34 @@ export default function Reports() {
                     <div
                       className="mt-4 p-3.5 rounded-xl text-xs"
                       style={{
-                        background: isDark ? "rgba(99,102,241,0.12)" : "rgba(99,102,241,0.06)",
-                        border: "1px solid rgba(99,102,241,0.2)",
+                        background: "rgba(var(--admin-primary-rgb), 0.1)",
+                        border: "1px solid rgba(var(--admin-primary-rgb), 0.22)",
                       }}
                     >
                       <div className="flex items-center gap-1.5 mb-1.5">
-                        <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center">
+                        <div
+                          className="w-4 h-4 rounded-full flex items-center justify-center"
+                          style={{ background: "var(--admin-primary)" }}
+                        >
                           <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         </div>
-                        <span className="font-bold" style={{ color: "#6366F1" }}>Generated Successfully</span>
+                        <span className="font-bold" style={{ color: "var(--admin-primary)" }}>Generated Successfully</span>
                       </div>
                       <div className="text-slate-600 dark:text-slate-300 leading-relaxed">
                         {generated.type === "dashboard" && (
                           <>
                             Dashboard summary from {generated.from} to {generated.to}.{" "}
-                            Revenue: <strong>${Number(generated.revenue?.total || 0).toFixed(2)}</strong> ·{" "}
-                            Orders: <strong>{generated.orders?.total || 0}</strong> ({generated.orders?.pending || 0} pending) ·{" "}
-                            Products: <strong>{generated.products?.total || 0}</strong>
+                            Revenue: <strong>{formatUsd(generated.revenue?.total || 0, numberFormat)}</strong> ·{" "}
+                            Orders: <strong>{formatNumber(generated.orders?.total || 0, numberFormat)}</strong> ({formatNumber(generated.orders?.pending || 0, numberFormat)} pending)
                           </>
                         )}
                         {generated.type === "sales" && (
                           <>
                             Sales report from {generated.from} to {generated.to}.{" "}
-                            Orders: <strong>{generated.summary?.total_orders}</strong> ·{" "}
-                            Revenue: <strong>${Number(generated.summary?.total_revenue || 0).toFixed(2)}</strong>
+                            Orders: <strong>{formatNumber(generated.summary?.total_orders || 0, numberFormat)}</strong> ·{" "}
+                            Revenue: <strong>{formatUsd(generated.summary?.total_revenue || 0, numberFormat)}</strong>
                           </>
                         )}
                       </div>
@@ -792,193 +755,134 @@ export default function Reports() {
         ) : (
           <>
             {/* ── KPI Stats Grid ──────────────────────────────────────────── */}
-            <div className="admin-stat-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="admin-stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
               <StatCard
-                index={0}
                 title={`Revenue · ${periodLabel(period)}`}
                 value={formatUsd(dashboard?.revenue?.total || 0, numberFormat)}
-                subtext={`Today: ${formatUsd(dashboard?.revenue?.today || 0, numberFormat)}`}
+                subtext={`Today: ${formatUsd(dashboard?.revenue?.today || 0, numberFormat)} · non-cancelled orders`}
                 icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 iconBoxStyle={iconBoxStyle(0)}
-                isDark={isDark}
               />
               <StatCard
-                index={1}
                 title={`Orders · ${periodLabel(period)}`}
                 value={formatNumber(dashboard?.orders?.total || 0, numberFormat)}
-                subtext={`${formatNumber(dashboard?.orders?.pending || 0, numberFormat)} pending · ${formatNumber(dashboard?.orders?.completed || 0, numberFormat)} completed`}
+                subtext={`${formatNumber(dashboard?.orders?.pending || 0, numberFormat)} pending · ${formatNumber(dashboard?.orders?.completed || 0, numberFormat)} completed · excludes cancelled`}
                 icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                 iconBoxStyle={iconBoxStyle(1)}
-                isDark={isDark}
-              />
-              <StatCard
-                index={2}
-                title="Products"
-                value={dashboard?.products?.total || 0}
-                subtext={`${dashboard?.products?.active || 0} active · ${dashboard?.products?.low_stock || 0} low stock`}
-                icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                iconBoxStyle={iconBoxStyle(2)}
-                isDark={isDark}
-              />
-              <StatCard
-                index={3}
-                title={`Customers · ${periodLabel(period)}`}
-                value={formatNumber(dashboard?.customers?.total || 0, numberFormat)}
-                subtext={`${formatNumber(dashboard?.customers?.new_this_month || 0, numberFormat)} new in period`}
-                icon="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                iconBoxStyle={iconBoxStyle(3)}
-                isDark={isDark}
               />
             </div>
 
-            <StockDashboard theme={reportTheme} />
+            <StockDashboard theme={reportTheme} numberFormat={numberFormat} />
 
-            {/* ── Product Analysis ─────────────────────────────────────────── */}
             <ReportSection
-              title="Product Analysis"
-              subtitle={`${dashboard?.products?.total || 0} products in catalogue · sales for ${periodLabel(period)}`}
+              title="Top Selling Products"
+              subtitle={`By revenue · non-cancelled · ${periodLabel(period)}`}
               theme={reportTheme}
             >
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Top 10 Selling Products"
-                  subtitle={`Units sold · ${periodLabel(period)}`}
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${top10Span}` }}
-                  action={<ChartResizeMenu colSpan={top10Span} maxCols={2} onChange={setTop10Span} />}
-                >
-                  {topSellingChartData.length === 0 ? (
-                    <ReportEmptyChart message="No products sold in this period" theme={reportTheme} />
-                  ) : (
-                    <>
-                      <div
-                        className="mb-4 w-full [&_.recharts-surface]:outline-none"
-                        style={{ height: Math.max(280, topSellingChartData.length * 42 + 48) }}
-                      >
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={topSellingChartData} layout="vertical" margin={{ top: 4, right: 20, bottom: 4, left: 4 }} barCategoryGap="16%">
-                            <CartesianGrid stroke={reportTheme.grid} strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={reportAxisLineProps(reportTheme)} allowDecimals={false} />
-                            <YAxis type="category" dataKey="shortLabel" width={148} tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={false} />
-                            <Tooltip
-                              cursor={{ fill: reportTheme.cursor }}
-                              content={(props) => (
-                                <ReportChartTooltip
-                                  {...props}
-                                  theme={reportTheme}
-                                  label={props.payload?.[0]?.payload?.fullName}
-                                  formatLine={(e) =>
-                                    e.dataKey === "revenue" ? formatUsdFull(Number(e.value) || 0) : `${e.value} units`
-                                  }
-                                />
-                              )}
-                            />
-                            <Bar dataKey="unitsSold" name="Units sold" radius={[0, 6, 6, 0]} maxBarSize={30}>
-                              {topSellingChartData.map((row) => (
-                                <Cell key={row.productId} fill={row.fill} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <ReportLegendPills
-                        rows={topSellingChartData.map((row) => ({ name: row.fullName, fill: row.fill, key: row.productId, unitsSold: row.unitsSold, revenue: row.revenue }))}
-                        theme={reportTheme}
-                        formatValue={(row) => `${row.unitsSold} · ${formatUsdFull(row.revenue)}`}
-                      />
-                    </>
-                  )}
-                </ReportChartPanel>
-              </div>
-            </ReportSection>
-
-            {/* ── Category Analysis ────────────────────────────────────────── */}
-            <ReportSection
-              title="Category Analysis"
-              subtitle={`${formatUsdFull(categorySales.total_revenue || 0)} revenue · ${categorySales.total_units || 0} units · ${periodLabel(period)}`}
-              theme={reportTheme}
-            >
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Categories Revenue"
-                  subtitle="Revenue share by storefront category"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${catRevenueSpan}` }}
-                  action={<ChartResizeMenu colSpan={catRevenueSpan} maxCols={2} onChange={setCatRevenueSpan} />}
-                >
-                  {categoryRevenueDonutData.length === 0 ? (
-                    <ReportEmptyChart message="No category sales in this period" theme={reportTheme} />
-                  ) : (
-                    <ReportDonutChart
-                      data={categoryRevenueDonutData}
-                      dataKey="revenue"
-                      centerTitle="Revenue"
-                      centerValue={formatUsdFull(categorySales.total_revenue || 0)}
-                      theme={reportTheme}
-                      legendRows={categoryRevenueDonutData}
-                      formatLegendValue={(row) => `${formatUsdFull(row.revenue)} (${row.percentage}%)`}
-                      tooltipContent={(props) => (
-                        <ReportChartTooltip
-                          {...props}
-                          theme={reportTheme}
-                          formatLine={(e) => `${formatUsdFull(Number(e.payload?.revenue ?? e.value) || 0)} (${e.payload?.percentage ?? 0}%)`}
-                        />
-                      )}
-                    />
-                  )}
-                </ReportChartPanel>
-
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Top Sale Categories"
-                  subtitle="Units sold vs revenue (clustered comparison)"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${topCatSpan}` }}
-                  action={<ChartResizeMenu colSpan={topCatSpan} maxCols={2} onChange={setTopCatSpan} />}
-                >
-                  {topCategoryClusterData.length === 0 ? (
-                    <ReportEmptyChart message="No category sales in this period" theme={reportTheme} />
-                  ) : (
-                    <div className="h-[min(22rem,calc(100vw-4rem))] min-h-[300px] w-full [&_.recharts-surface]:outline-none">
+              <ReportChartPanel
+                className="report-chart-panel"
+                title="Top 10 by revenue"
+                subtitle={`Units shown in the legend · ${periodLabel(period)}`}
+                theme={reportTheme}
+                style={{ gridColumn: `span ${top10Span}` }}
+                action={<ChartResizeMenu colSpan={top10Span} maxCols={2} onChange={setTop10Span} />}
+              >
+                {topSellingChartData.length === 0 ? (
+                  <ReportEmptyChart message="No products sold in this period" theme={reportTheme} />
+                ) : (
+                  <>
+                    <div
+                      className="mb-4 w-full [&_.recharts-surface]:outline-none"
+                      style={{ height: Math.max(280, topSellingChartData.length * 42 + 48) }}
+                    >
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={topCategoryClusterData} margin={{ top: 12, right: 12, bottom: topCategoryClusterData.length > 5 ? 56 : 28, left: 4 }} barGap={6} barCategoryGap="24%">
-                          <CartesianGrid stroke={reportTheme.grid} strokeDasharray="3 3" vertical={false} />
+                        <BarChart data={topSellingChartData} layout="vertical" margin={{ top: 4, right: 20, bottom: 4, left: 4 }} barCategoryGap="16%">
+                          <CartesianGrid stroke={reportTheme.grid} strokeDasharray="3 3" horizontal={false} />
                           <XAxis
-                            dataKey="shortLabel"
+                            type="number"
                             tick={reportAxisTickProps(reportTheme)}
                             axisLine={reportAxisLineProps(reportTheme)}
                             tickLine={reportAxisLineProps(reportTheme)}
-                            angle={topCategoryClusterData.length > 4 ? -28 : 0}
-                            textAnchor={topCategoryClusterData.length > 4 ? "end" : "middle"}
-                            height={topCategoryClusterData.length > 4 ? 52 : 32}
-                            interval={0}
+                            tickFormatter={(v) => formatUsd(Number(v), numberFormat)}
                           />
-                          <YAxis yAxisId="units" tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={reportAxisLineProps(reportTheme)} allowDecimals={false} width={44} />
-                          <YAxis yAxisId="revenue" orientation="right" tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={reportAxisLineProps(reportTheme)} tickFormatter={(v) => formatUsd(Number(v), numberFormat)} width={64} />
+                          <YAxis type="category" dataKey="shortLabel" width={148} tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={false} />
                           <Tooltip
                             cursor={{ fill: reportTheme.cursor }}
                             content={(props) => (
                               <ReportChartTooltip
                                 {...props}
                                 theme={reportTheme}
-                                label={props.payload?.[0]?.payload?.name}
+                                label={props.payload?.[0]?.payload?.fullName}
                                 formatLine={(e) =>
-                                  e.dataKey === "revenue" ? formatUsdFull(Number(e.value) || 0) : `${e.value} units`
+                                  e.dataKey === "revenue"
+                                    ? formatUsd(Number(e.value) || 0, numberFormat)
+                                    : `${formatNumber(e.value, numberFormat)} units`
                                 }
                               />
                             )}
                           />
-                          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} iconType="circle" formatter={(value) => <span style={{ color: reportTheme.subtitle, fontWeight: 600 }}>{value}</span>} />
-                          <Bar yAxisId="units" dataKey="unitsSold" name="Units sold" fill={REPORT_CLUSTER.primary} radius={[6, 6, 0, 0]} maxBarSize={34} />
-                          <Bar yAxisId="revenue" dataKey="revenue" name="Revenue" fill={REPORT_CLUSTER.secondary} radius={[6, 6, 0, 0]} maxBarSize={34} />
+                          <Bar dataKey="revenue" name="Revenue" radius={[0, 6, 6, 0]} maxBarSize={30}>
+                            {topSellingChartData.map((row) => (
+                              <Cell key={row.productId} fill={row.fill} />
+                            ))}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  )}
-                </ReportChartPanel>
-              </div>
+                    <ReportLegendPills
+                      rows={topSellingChartData.map((row) => ({
+                        name: row.fullName,
+                        fill: row.fill,
+                        key: row.productId,
+                        unitsSold: row.unitsSold,
+                        revenue: row.revenue,
+                      }))}
+                      theme={reportTheme}
+                      formatValue={(row) =>
+                        `${formatUsd(row.revenue, numberFormat)} · ${formatNumber(row.unitsSold, numberFormat)} units`
+                      }
+                    />
+                  </>
+                )}
+              </ReportChartPanel>
+            </ReportSection>
+
+            <ReportSection
+              title="Categories Revenue"
+              subtitle={`${formatUsd(categorySales.total_revenue || 0, numberFormat)} · ${formatNumber(categorySales.total_units || 0, numberFormat)} units · ${periodLabel(period)}`}
+              theme={reportTheme}
+            >
+              <ReportChartPanel
+                className="report-chart-panel"
+                title="Share by storefront category"
+                subtitle="Non-cancelled order lines · not inventory labels"
+                theme={reportTheme}
+                style={{ gridColumn: `span ${catRevenueSpan}` }}
+                action={<ChartResizeMenu colSpan={catRevenueSpan} maxCols={2} onChange={setCatRevenueSpan} />}
+              >
+                {categoryRevenueDonutData.length === 0 ? (
+                  <ReportEmptyChart message="No category sales in this period" theme={reportTheme} />
+                ) : (
+                  <ReportDonutChart
+                    data={categoryRevenueDonutData}
+                    dataKey="revenue"
+                    centerTitle="Revenue"
+                    centerValue={formatUsd(categorySales.total_revenue || 0, numberFormat)}
+                    theme={reportTheme}
+                    legendRows={categoryRevenueDonutData}
+                    formatLegendValue={(row) => `${formatUsd(row.revenue, numberFormat)} (${row.percentage}%)`}
+                    tooltipContent={(props) => (
+                      <ReportChartTooltip
+                        {...props}
+                        theme={reportTheme}
+                        formatLine={(e) =>
+                          `${formatUsd(Number(e.payload?.revenue ?? e.value) || 0, numberFormat)} (${e.payload?.percentage ?? 0}%)`
+                        }
+                      />
+                    )}
+                  />
+                )}
+              </ReportChartPanel>
             </ReportSection>
           </>
         )}

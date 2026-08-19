@@ -349,7 +349,7 @@ class ReportController extends Controller
     // Dashboard overview — respects from/to or period query params
     public function dashboard(Request $request)
     {
-        $cacheKey = 'admin_dashboard_v3:' . md5(json_encode([
+        $cacheKey = 'admin_dashboard_v4:' . md5(json_encode([
             'period' => $request->input('period'),
             'from' => $request->input('from'),
             'to' => $request->input('to'),
@@ -373,6 +373,7 @@ class ReportController extends Controller
 
         $ordersByStatusRows = Order::query()
             ->whereBetween('created_at', [$fromRange, $toRange])
+            ->where('status', '!=', 'cancelled')
             ->select('status', DB::raw('COUNT(*) as cnt'))
             ->groupBy('status')
             ->orderByDesc(DB::raw('COUNT(*)'))
@@ -749,7 +750,8 @@ class ReportController extends Controller
             'product_id',
             DB::raw('SUM(qty) as total_sold'),
             DB::raw('SUM(line_total) as total_revenue')
-        )->with('product:id,name,image_url,price');
+        )->with('product:id,name,image_url,price')
+            ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled'));
 
         // Filter order items through their parent order's created_at
         if ($request->filled('from') && $request->filled('to')) {
@@ -769,7 +771,7 @@ class ReportController extends Controller
 
         $topProducts = $query
             ->groupBy('product_id')
-            ->orderByDesc('total_sold')
+            ->orderByDesc('total_revenue')
             ->limit($limit)
             ->get()
             ->map(fn($item) => [

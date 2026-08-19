@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import ChartResizeMenu from "./ChartResizeMenu.jsx";
 import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import api from "../../lib/api";
-import { reportChartColor } from "../../lib/reportChartTheme.js";
+import { ADMIN_NUMBER_FORMAT, formatNumber } from "../../lib/adminNumberFormat.js";
 import {
   ReportChartPanel,
   ReportChartTooltip,
@@ -56,7 +56,7 @@ function FilterYearSelect({ label, value, onChange, options, theme }) {
   );
 }
 
-export default function StockDashboard({ theme }) {
+export default function StockDashboard({ theme, numberFormat = ADMIN_NUMBER_FORMAT.COMPACT }) {
   const currentYear = new Date().getFullYear();
   const [fromYear, setFromYear] = useState(String(currentYear - 1));
   const [toYear, setToYear] = useState(String(currentYear));
@@ -106,9 +106,9 @@ export default function StockDashboard({ theme }) {
         name: row.name,
         count: Number(row.count) || 0,
         percentage: row.percentage,
-        fill: reportChartColor(index),
+        fill: theme.chartColor?.(index) || theme.accentColor,
       })),
-    [data?.by_label],
+    [data?.by_label, theme],
   );
 
   const compareYears = data?.compare_years || [];
@@ -141,7 +141,7 @@ export default function StockDashboard({ theme }) {
     <ReportSection
       title="Stock"
       subtitle={
-        loading ? "Loading…" : `${totalStock.toLocaleString()} units on hand across inventory labels`
+        loading ? "Loading…" : `${formatNumber(totalStock, numberFormat)} units on hand across inventory labels`
       }
       theme={theme}
     >
@@ -166,16 +166,16 @@ export default function StockDashboard({ theme }) {
                 data={labelDonutData}
                 dataKey="count"
                 centerTitle="Units"
-                centerValue={totalStock.toLocaleString()}
+                centerValue={formatNumber(totalStock, numberFormat)}
                 theme={theme}
                 legendRows={labelDonutData}
-                formatLegendValue={(row) => `${row.count.toLocaleString()} (${row.percentage}%)`}
+                formatLegendValue={(row) => `${formatNumber(row.count, numberFormat)} (${row.percentage}%)`}
                 tooltipContent={(props) => (
                   <ReportChartTooltip
                     {...props}
                     theme={theme}
                     formatLine={(e) =>
-                      `${e.payload?.count ?? e.value} units (${e.payload?.percentage ?? 0}%)`
+                      `${formatNumber(e.payload?.count ?? e.value, numberFormat)} units (${e.payload?.percentage ?? 0}%)`
                     }
                   />
                 )}
@@ -239,6 +239,7 @@ export default function StockDashboard({ theme }) {
                       tickLine={reportAxisLineProps(theme)}
                       allowDecimals={false}
                       width={48}
+                      tickFormatter={(v) => formatNumber(Number(v), numberFormat)}
                     />
                     <Tooltip
                       cursor={{ fill: theme.cursor }}
@@ -247,7 +248,7 @@ export default function StockDashboard({ theme }) {
                           {...props}
                           theme={theme}
                           label={props.payload?.[0]?.payload?.month_label}
-                          formatLine={(e) => `${e.value} units`}
+                          formatLine={(e) => `${formatNumber(e.value, numberFormat)} units`}
                         />
                       )}
                     />
@@ -261,7 +262,7 @@ export default function StockDashboard({ theme }) {
                         key={yr}
                         dataKey={`y${yr}`}
                         name={String(yr)}
-                        fill={reportChartColor(index)}
+                        fill={theme.chartColor?.(index) || theme.accentColor}
                         radius={[8, 8, 0, 0]}
                         maxBarSize={compareYears.length > 4 ? 22 : 34}
                       />

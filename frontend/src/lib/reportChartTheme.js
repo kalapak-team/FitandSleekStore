@@ -1,42 +1,53 @@
-/** Professional dashboard palette – refined, accessible, modern. */
+/** Fallback palette when the admin theme is not Light Muted Palette. */
 export const REPORT_CHART_COLORS = [
-  "#6366F1", // Indigo 500
-  "#0EA5E9", // Sky 500
-  "#10B981", // Emerald 500
-  "#F59E0B", // Amber 500
-  "#EF4444", // Red 500
-  "#8B5CF6", // Violet 500
-  "#F97316", // Orange 500
-  "#06B6D4", // Cyan 500
-  "#EC4899", // Pink 500
-  "#14B8A6", // Teal 500
+  "#6E8B7E",
+  "#5B8DEF",
+  "#7A9A8D",
+  "#D4A574",
+  "#9BB0A5",
+  "#6B9BD1",
+  "#8FA89A",
 ];
 
 export const REPORT_CLUSTER = {
-  primary: "#6366F1",
-  secondary: "#10B981",
+  primary: "#6E8B7E",
+  secondary: "#5B8DEF",
 };
 
-export function reportChartColor(index = 0) {
-  return REPORT_CHART_COLORS[
-    ((index % REPORT_CHART_COLORS.length) + REPORT_CHART_COLORS.length) %
-      REPORT_CHART_COLORS.length
-  ];
+function hexToRgb(hex, fallback = "110, 139, 126") {
+  const h = String(hex || "").replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/i.test(h)) return fallback;
+  return `${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}`;
+}
+
+export function paletteColorAt(palette, index = 0) {
+  const colors = palette?.length ? palette : REPORT_CHART_COLORS;
+  const n = colors.length;
+  return colors[((index % n) + n) % n];
+}
+
+export function reportChartColor(index = 0, palette) {
+  return paletteColorAt(palette, index);
 }
 
 /** @param {'light' | 'dark'} mode */
-export function getReportChartTheme(mode) {
+export function getReportChartTheme(mode, options = {}) {
   const isDark = mode === "dark";
+  const palette = options.palette?.length >= 2
+    ? options.palette
+    : [options.primaryColor, ...REPORT_CHART_COLORS].filter(Boolean);
+  const primary = options.primaryColor || palette[0] || REPORT_CHART_COLORS[0];
+  const secondary = palette[1] || primary;
+  const rgb = hexToRgb(primary);
 
   return {
     isDark,
     pageBg: "transparent",
-    // Align dark report cards/panels with admin shell tokens for visual consistency.
     cardBg: isDark ? "var(--admin-card-bg, #161B22)" : "#ffffff",
     cardBorder: isDark ? "transparent" : "rgba(226, 232, 240, 0.8)",
     cardShadow: isDark
       ? "0 1px 2px rgba(1,4,9,0.6), 0 10px 26px rgba(1,4,9,0.42)"
-      : "0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(99,102,241,0.07)",
+      : `0 1px 3px rgba(0,0,0,0.04), 0 4px 20px rgba(${rgb},0.08)`,
     panelBg: isDark ? "var(--admin-elevated, #21262D)" : "#F8FAFC",
     panelHeaderBg: isDark ? "rgba(33,38,45,0.92)" : "#F1F5F9",
     title: isDark ? "var(--admin-heading, #F0F6FC)" : "#0F172A",
@@ -44,18 +55,18 @@ export function getReportChartTheme(mode) {
     grid: isDark ? "rgba(139, 148, 158, 0.16)" : "rgba(148, 163, 184, 0.2)",
     axis: isDark ? "rgba(139, 148, 158, 0.38)" : "#E2E8F0",
     tick: isDark ? "var(--admin-muted, #8B949E)" : "#94A3B8",
-    cursor: isDark ? "rgba(99,102,241,0.18)" : "rgba(99,102,241,0.06)",
+    cursor: isDark ? `rgba(${rgb},0.18)` : `rgba(${rgb},0.08)`,
     tooltipBg: isDark ? "rgba(22,27,34,0.98)" : "#ffffff",
     tooltipBorder: isDark ? "var(--admin-card-border, #30363D)" : "#E2E8F0",
     pillValueBg: isDark ? "rgba(148, 163, 184, 0.12)" : "#F1F5F9",
     donutStroke: isDark ? "var(--admin-elevated, #21262D)" : "#ffffff",
     barRadius: [6, 6, 0, 0],
     barRadiusH: [0, 6, 6, 0],
-    accentColor: "#6366F1",
-    accentSecondary: "#10B981",
-    sectionAccentGradient: isDark
-      ? "linear-gradient(to bottom, #818CF8, #A78BFA)"
-      : "linear-gradient(to bottom, #6366F1, #8B5CF6)",
+    accentColor: primary,
+    accentSecondary: secondary,
+    sectionAccentGradient: `linear-gradient(to bottom, ${primary}, ${secondary})`,
+    palette,
+    chartColor: (index = 0) => paletteColorAt(palette, index),
   };
 }
 
