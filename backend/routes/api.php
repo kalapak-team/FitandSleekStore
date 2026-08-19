@@ -95,6 +95,7 @@ Route::get('/health', function () {
     try {
         return response()->json([
             'ok' => true,
+            'release' => '2026-08-20-dbquote',
             'media' => \App\Support\Media::diagnostics(),
         ]);
     } catch (\Throwable $e) {
@@ -148,6 +149,7 @@ Route::get('/health/deps', function () {
 
     return response()->json([
         'ok' => $ok,
+        'release' => '2026-08-20-dbquote',
         'db' => $db,
         'cache' => $cache,
     ], $ok ? 200 : 503);

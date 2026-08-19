@@ -25,7 +25,10 @@ $sanitizeDbIdent = static function (mixed $value, mixed $fallback = null): mixed
         return $fallback ?? $value;
     }
 
-    return trim($value, " \t\n\r\0\x0B\"'");
+    $value = trim($value, " \t\n\r\0\x0B\"'");
+    $value = preg_replace('/[^A-Za-z0-9._-]/', '', $value) ?? $value;
+
+    return $value === '' ? ($fallback ?? $value) : $value;
 };
 
 // Railway Postgres plugin exposes DATABASE_PRIVATE_URL; Laravel expects DB_URL / DATABASE_URL.

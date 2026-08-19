@@ -28,12 +28,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->booting(function () {
             $name = (string) config('database.connections.pgsql.database', '');
-            if ($name !== '') {
-                $clean = trim($name, " \t\n\r\0\x0B\"'");
-                if ($clean !== $name) {
-                    config(['database.connections.pgsql.database' => $clean]);
-                }
+            $clean = preg_replace('/[^A-Za-z0-9._-]/', '', $name) ?? $name;
+            if ($clean !== '' && $clean !== $name) {
+                config(['database.connections.pgsql.database' => $clean]);
             }
+            // Never let Laravel re-parse a quoted DATABASE_URL into dbname.
+            config(['database.connections.pgsql.url' => null]);
         });
     }
 
