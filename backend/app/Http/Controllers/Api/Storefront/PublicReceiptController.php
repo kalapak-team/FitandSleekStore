@@ -63,14 +63,20 @@ class PublicReceiptController extends Controller
             $order->loadMissing(['user', 'items.product', 'shipment']),
             InvoiceService::AUDIENCE_CUSTOMER
         );
-        $invoice['logo_url'] = BrandLogo::url();
+        $invoice['logo_url'] = BrandLogo::invoiceLogoUrl();
 
         $pdf = Pdf::loadView('invoices.bulk', [
             'invoices' => [$invoice],
             'isBulk' => false,
             'brandName' => config('app.name', 'Fitandsleek'),
-            'logoUrl' => BrandLogo::url(),
-        ])->setPaper('A4', 'portrait');
+            'logoUrl' => BrandLogo::invoiceLogoUrl(),
+        ])
+            ->setOptions([
+                'isRemoteEnabled' => true,
+                'isHtml5ParserEnabled' => true,
+                'defaultFont' => 'DejaVu Sans',
+            ])
+            ->setPaper('A4', 'portrait');
 
         $filename = 'invoice-'.($invoice['order_number'] ?: $order->id).'.pdf';
 

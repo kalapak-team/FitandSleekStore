@@ -25,7 +25,7 @@ class InvoiceAdminController extends Controller
     public function downloadPdf(Order $order, InvoiceService $invoiceService, InvoiceKhqrService $invoiceKhqr)
     {
         $invoice = $this->shopInvoice($order, $invoiceService, $invoiceKhqr, true);
-        $invoice['logo_url'] = BrandLogo::url();
+        $invoice['logo_url'] = BrandLogo::invoiceLogoUrl();
 
         $pdf = Pdf::loadView('invoices.bulk', [
             'invoices' => [$invoice],
@@ -73,7 +73,7 @@ class InvoiceAdminController extends Controller
 
         $invoices = $orders->map(function (Order $order) use ($invoiceService, $invoiceKhqr) {
             $invoice = $this->shopInvoice($order, $invoiceService, $invoiceKhqr, true);
-            $invoice['logo_url'] = BrandLogo::url();
+            $invoice['logo_url'] = BrandLogo::invoiceLogoUrl();
             return $invoice;
         })->values()->all();
 

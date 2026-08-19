@@ -3,7 +3,10 @@
      *  BRAND — kept in sync with exports/table.blade.php and reports/*.blade.php
      * ─────────────────────────────────────────────────────────────────────── */
     $brandName      = 'FIT & SLEEK';
-    $logoUrl        = \App\Support\BrandLogo::url();
+    $logoUrl        = \App\Support\BrandLogo::invoiceLogoUrl();
+    $kmFontRegular  = \App\Support\PdfFonts::regularDataUri();
+    $kmFontBold     = \App\Support\PdfFonts::boldDataUri();
+    $kmFontFamily   = \App\Support\PdfFonts::khmerFamily();
 
     $headerNavy     = '#0F1923';
     $headerNavySoft = '#1B2638';
@@ -13,26 +16,20 @@
     $rowAlt         = '#F8FAFC';
 
     $generatedAt    = now()->format('M j, Y · g:i A');
-
-    /* Fontsource CDN (TTF over HTTPS) — DomPDF reads these because the
-     * controller sets isRemoteEnabled = true. */
-    $synFont       = 'https://cdn.jsdelivr.net/fontsource/fonts/syne/files/syne-latin-700-normal.ttf';
-    $synFontBlack  = 'https://cdn.jsdelivr.net/fontsource/fonts/syne/files/syne-latin-800-normal.ttf';
-    $dmSans400     = 'https://cdn.jsdelivr.net/fontsource/fonts/dm-sans/files/dm-sans-latin-400-normal.ttf';
-    $dmSans500     = 'https://cdn.jsdelivr.net/fontsource/fonts/dm-sans/files/dm-sans-latin-500-normal.ttf';
-    $dmSans700     = 'https://cdn.jsdelivr.net/fontsource/fonts/dm-sans/files/dm-sans-latin-700-normal.ttf';
 @endphp
 <!DOCTYPE html>
-<html lang="en">
+<html lang="km">
 <head>
     <meta charset="UTF-8">
     <title>{{ ($isBulk ?? false) ? 'Invoices' : 'Invoice' }}</title>
     <style>
-        @font-face { font-family: 'Syne'; font-weight: 700; font-style: normal; src: url("{{ $synFont }}") format("truetype"); }
-        @font-face { font-family: 'Syne'; font-weight: 800; font-style: normal; src: url("{{ $synFontBlack }}") format("truetype"); }
-        @font-face { font-family: 'DM Sans'; font-weight: 400; font-style: normal; src: url("{{ $dmSans400 }}") format("truetype"); }
-        @font-face { font-family: 'DM Sans'; font-weight: 500; font-style: normal; src: url("{{ $dmSans500 }}") format("truetype"); }
-        @font-face { font-family: 'DM Sans'; font-weight: 700; font-style: normal; src: url("{{ $dmSans700 }}") format("truetype"); }
+        @if ($kmFontRegular)
+        @font-face { font-family: '{{ $kmFontFamily }}'; font-weight: 400; font-style: normal; src: url("{{ $kmFontRegular }}") format("truetype"); }
+        @endif
+        @if ($kmFontBold)
+        @font-face { font-family: '{{ $kmFontFamily }}'; font-weight: 700; font-style: normal; src: url("{{ $kmFontBold }}") format("truetype"); }
+        @font-face { font-family: '{{ $kmFontFamily }}'; font-weight: 800; font-style: normal; src: url("{{ $kmFontBold }}") format("truetype"); }
+        @endif
 
         /* Full-bleed page so the navy header touches the paper edge.
          * Each invoice carries its own header so multi-invoice bulk PDFs
@@ -43,12 +40,12 @@
         html, body {
             margin: 0;
             padding: 0;
-            font-family: 'DM Sans', 'DejaVu Sans', Arial, sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             color: {{ $textPrimary }};
             font-size: 10px;
             line-height: 1.45;
         }
-        h1, h2, h3, .display { font-family: 'Syne', 'DM Sans', 'DejaVu Sans', Arial, sans-serif; margin: 0; }
+        h1, h2, h3, .display { font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif; margin: 0; }
 
         /* ── Per-invoice page wrapper ─────────────────────────────────────── */
         .invoice-page {
@@ -64,7 +61,7 @@
             top: 45%;
             left: 18%;
             transform: rotate(-28deg);
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 96px;
             font-weight: 800;
             letter-spacing: 6px;
@@ -83,17 +80,17 @@
         }
         .brand-header table { width: 100%; border-collapse: collapse; }
         .brand-header td { vertical-align: middle; padding: 0; }
-        .brand-header .logo-cell { width: 180px; }
+        .brand-header .logo-cell { width: 196px; }
         .brand-header .logo-cell img {
             display: block;
             width: 180px;
             height: auto;
-            border-radius: 6px;
-            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 8px;
+            background: #6e8b7e;
         }
         .brand-header .text-cell { padding-left: 18px; }
         .brand-header .doc-title-h {
-            font-family: 'Syne', 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-weight: 800;
             font-size: 22px;
             letter-spacing: 0.4px;
@@ -101,7 +98,7 @@
             color: #ffffff;
         }
         .brand-header .doc-subtitle-h {
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 10px;
             font-weight: 400;
             color: rgba(255,255,255,0.72);
@@ -116,7 +113,7 @@
             border: 1px solid rgba(255,255,255,0.10);
             border-radius: 14px;
             padding: 4px 12px;
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 9px;
             font-weight: 700;
             letter-spacing: 1px;
@@ -131,7 +128,7 @@
             border-color: rgba(255,255,255,0.18);
         }
         .brand-header .gen-line {
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 9px;
             color: rgba(255,255,255,0.62);
             margin-top: 6px;
@@ -151,7 +148,7 @@
         .info-card.accent-blue   { border-top: 3px solid #2563EB; }
         .info-card.accent-amber  { border-top: 3px solid #F59E0B; }
         .eyebrow {
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 8.5px;
             font-weight: 700;
             text-transform: uppercase;
@@ -160,7 +157,7 @@
             margin: 0 0 6px 0;
         }
         .bill-name {
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 15px;
             font-weight: 800;
             color: {{ $textPrimary }};
@@ -196,7 +193,7 @@
         table.report th {
             background: {{ $headerNavy }};
             color: #ffffff;
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-weight: 700;
             font-size: 9px;
             text-transform: uppercase;
@@ -219,7 +216,7 @@
         table.report tbody tr:nth-child(even) td { background: {{ $rowAlt }}; }
         table.report td.num,
         table.report th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-        table.report .sku { color: {{ $textMuted }}; font-size: 9px; font-family: 'DM Sans', 'DejaVu Sans', sans-serif; }
+        table.report .sku { color: {{ $textMuted }}; font-size: 9px; font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif; }
         table.report td.empty {
             text-align: center;
             color: {{ $textMuted }};
@@ -257,7 +254,7 @@
             text-align: center;
         }
         .qr-card .qr-label {
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 8px;
             color: {{ $textMuted }};
             text-transform: uppercase;
@@ -265,7 +262,7 @@
             margin: 0;
         }
         .qr-card .qr-code {
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 9px;
             color: {{ $textPrimary }};
             font-weight: 700;
@@ -293,7 +290,7 @@
         table.totals tr.grand td {
             background: {{ $headerNavy }};
             color: #ffffff;
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 13px;
             font-weight: 800;
             letter-spacing: 0.4px;
@@ -306,13 +303,13 @@
             font-size: 8.5px;
             color: {{ $textMuted }};
             text-align: center;
-            font-family: 'DM Sans', 'DejaVu Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             letter-spacing: 0.4px;
         }
         .footnote .brand {
             color: {{ $textPrimary }};
             font-weight: 800;
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             letter-spacing: 1.2px;
         }
 
@@ -335,7 +332,7 @@
             background: #f8fafc;
         }
         .pickup-box .pickup-title {
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 11px;
             font-weight: 800;
             letter-spacing: 0.6px;
@@ -403,7 +400,7 @@
             text-transform: uppercase;
         }
         .khqr-box .khqr-title {
-            font-family: 'Syne', 'DM Sans', sans-serif;
+            font-family: '{{ $kmFontFamily }}', 'DejaVu Sans', sans-serif;
             font-size: 13px;
             font-weight: 800;
             margin: 0 0 4px 0;

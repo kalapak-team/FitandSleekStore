@@ -17,7 +17,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCountryLabel } from "../../lib/countries.js";
 import {
   getReportChartTheme,
   reportChartColor,
@@ -37,9 +36,7 @@ import { AdminContentSkeleton } from "@/components/admin/AdminLoading";
 import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import { getFirstAccessibleAdminPath } from "../../lib/adminPermissions.js";
 import { adminCacheKey, readAdminCache, writeAdminCache } from "../../lib/adminPageCache.js";
-import RevenueDashboard from "../../components/admin/RevenueDashboard.jsx";
 import StockDashboard from "../../components/admin/StockDashboard.jsx";
-import PlanDashboard from "../../components/admin/PlanDashboard.jsx";
 import AdminReportExportMenu from "../../components/admin/AdminReportExportMenu.jsx";
 import { downloadBlobResponse, parseBlobErrorMessage } from "../../lib/adminReportDownload.js";
 import { useAdminUiPreference } from "../../lib/adminUiPreferences.js";
@@ -306,33 +303,19 @@ export default function Reports() {
   const reportTheme = useMemo(() => getReportChartTheme(mode), [mode]);
 
   const [dashboard, setDashboard] = useState(null);
-  const [sales, setSales] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
-  const [productAnalytics, setProductAnalytics] = useState({ by_category: [], by_country: [], total_products: 0 });
   const [categorySales, setCategorySales] = useState({
     revenue_by_category: [],
     top_categories: [],
     total_revenue: 0,
     total_units: 0,
   });
-  const [orderAnalytics, setOrderAnalytics] = useState({
-    total_orders: 0,
-    by_status: [],
-    by_category: [],
-    by_payment: [],
-    payment_methods: { cod: null, prepaid: null },
-  });
-  const [orderPaymentSpan, setOrderPaymentSpan] = useAdminUiPreference("charts.reports.orderPaymentSpan", 1);
   const [period, setPeriod] = useState("28d");
   const [loading, setLoading] = useState(true);
 
-  const [prodByCatSpan, setProdByCatSpan] = useAdminUiPreference("charts.reports.prodByCatSpan", 1);
-  const [prodByCountrySpan, setProdByCountrySpan] = useAdminUiPreference("charts.reports.prodByCountrySpan", 1);
   const [top10Span, setTop10Span] = useAdminUiPreference("charts.reports.top10Span", 1);
   const [catRevenueSpan, setCatRevenueSpan] = useAdminUiPreference("charts.reports.catRevenueSpan", 1);
   const [topCatSpan, setTopCatSpan] = useAdminUiPreference("charts.reports.topCatSpan", 1);
-  const [orderStatusSpan, setOrderStatusSpan] = useAdminUiPreference("charts.reports.orderStatusSpan", 1);
-  const [orderCatSpan, setOrderCatSpan] = useAdminUiPreference("charts.reports.orderCatSpan", 1);
   const [numberFormat] = useAdminUiPreference("dashboard.numberFormat", ADMIN_NUMBER_FORMAT.COMPACT);
 
   const [chartFrom, setChartFrom] = useState("");
@@ -363,21 +346,12 @@ export default function Reports() {
     const cached = readAdminCache(cacheKey);
     if (cached) {
       setDashboard(cached.dashboard ?? null);
-      setSales(cached.sales ?? []);
       setTopProducts(cached.topProducts ?? []);
-      setProductAnalytics(cached.productAnalytics ?? { by_category: [], by_country: [], total_products: 0 });
       setCategorySales(cached.categorySales ?? {
         revenue_by_category: [],
         top_categories: [],
         total_revenue: 0,
         total_units: 0,
-      });
-      setOrderAnalytics(cached.orderAnalytics ?? {
-        total_orders: 0,
-        by_status: [],
-        by_category: [],
-        by_payment: [],
-        payment_methods: { cod: null, prepaid: null },
       });
       setLoading(false);
     } else {
@@ -387,16 +361,11 @@ export default function Reports() {
     try {
       const periodParams = buildSalesParams(period, chartFrom, chartTo);
 
-      const [dashRes, salesRes, productsRes, productAnalyticsRes, categorySalesRes, orderAnalyticsRes] = await Promise.all([
+      const [dashRes, productsRes, categorySalesRes] = await Promise.all([
         api.get("/admin/reports/dashboard", { params: periodParams }),
-        api.get("/admin/reports/sales", { params: periodParams }),
         api.get("/admin/reports/top-products", { params: { ...periodParams, limit: 10 } }).catch(() => ({ data: { data: [] } })),
-        api.get("/admin/reports/product-analytics").catch(() => ({ data: { by_category: [], by_country: [], total_products: 0 } })),
         api.get("/admin/reports/category-sales", { params: { ...periodParams, limit: 10 } }).catch(() => ({
           data: { revenue_by_category: [], top_categories: [], total_revenue: 0, total_units: 0 },
-        })),
-        api.get("/admin/reports/order-analytics", { params: periodParams }).catch(() => ({
-          data: { total_orders: 0, by_status: [], by_category: [], by_payment: [], payment_methods: {} },
         })),
       ]);
 
@@ -406,46 +375,23 @@ export default function Reports() {
         orders: dashData.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
         products: dashData.products || { total: 0, active: 0, low_stock: 0 },
         customers: dashData.customers || { total: 0, new_this_month: 0 },
-        payment_methods: dashData.payment_methods || orderAnalyticsRes.data?.payment_methods || {
-          cod: { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 },
-          prepaid: { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 },
-        },
       };
 
-      const nextSales = salesRes.data?.sales || salesRes.data?.data || [];
       const nextTopProducts = productsRes.data?.data || [];
-      const nextProductAnalytics = {
-        by_category: productAnalyticsRes.data?.by_category || [],
-        by_country: productAnalyticsRes.data?.by_country || [],
-        total_products: productAnalyticsRes.data?.total_products || 0,
-      };
       const nextCategorySales = {
         revenue_by_category: categorySalesRes.data?.revenue_by_category || [],
         top_categories: categorySalesRes.data?.top_categories || [],
         total_revenue: categorySalesRes.data?.total_revenue || 0,
         total_units: categorySalesRes.data?.total_units || 0,
       };
-      const nextOrderAnalytics = {
-        total_orders: orderAnalyticsRes.data?.total_orders || 0,
-        by_status: orderAnalyticsRes.data?.by_status || [],
-        by_category: orderAnalyticsRes.data?.by_category || [],
-        by_payment: orderAnalyticsRes.data?.by_payment || [],
-        payment_methods: orderAnalyticsRes.data?.payment_methods || nextDashboard.payment_methods,
-      };
 
       setDashboard(nextDashboard);
-      setSales(nextSales);
       setTopProducts(nextTopProducts);
-      setProductAnalytics(nextProductAnalytics);
       setCategorySales(nextCategorySales);
-      setOrderAnalytics(nextOrderAnalytics);
       writeAdminCache(cacheKey, {
         dashboard: nextDashboard,
-        sales: nextSales,
         topProducts: nextTopProducts,
-        productAnalytics: nextProductAnalytics,
         categorySales: nextCategorySales,
-        orderAnalytics: nextOrderAnalytics,
       });
     } catch (e) {
       console.error("Failed to load reports", e);
@@ -555,34 +501,6 @@ export default function Reports() {
   const handleDownloadPdf = () => downloadGeneratedReport("pdf");
   const handleDownloadExcel = () => downloadGeneratedReport("excel");
 
-  const categoryDonutData = useMemo(
-    () =>
-      (productAnalytics.by_category || []).map((row, index) => ({
-        name: row.name,
-        count: row.count,
-        percentage: row.percentage,
-        fill: reportChartColor(index),
-      })),
-    [productAnalytics.by_category],
-  );
-
-  const countryBarData = useMemo(
-    () =>
-      (productAnalytics.by_country || []).map((row, index) => {
-        const label =
-          row.code && row.code !== "unknown" && row.code !== "other"
-            ? formatCountryLabel(row.code)
-            : row.name;
-        return {
-          label,
-          count: row.count,
-          percentage: row.percentage,
-          fill: reportChartColor(index),
-        };
-      }),
-    [productAnalytics.by_country],
-  );
-
   const categoryRevenueDonutData = useMemo(
     () =>
       (categorySales.revenue_by_category || []).map((row, index) => ({
@@ -619,74 +537,6 @@ export default function Reports() {
         };
       }),
     [topProducts],
-  );
-
-  const catalogueTotal = productAnalytics.total_products || dashboard?.products?.total || 0;
-  const orderTotal = orderAnalytics.total_orders || dashboard?.orders?.total || 0;
-
-  const orderStatusDonutData = useMemo(
-    () =>
-      (orderAnalytics.by_status || []).map((row, index) => ({
-        name: row.name,
-        count: Number(row.count) || 0,
-        percentage: row.percentage,
-        fill: reportChartColor(index),
-      })),
-    [orderAnalytics.by_status],
-  );
-
-  const orderCategoryDonutData = useMemo(
-    () =>
-      (orderAnalytics.by_category || []).map((row, index) => ({
-        name: row.name,
-        count: Number(row.count) || 0,
-        percentage: row.percentage,
-        fill: reportChartColor(index),
-      })),
-    [orderAnalytics.by_category],
-  );
-
-  const orderCategoryTotal = useMemo(
-    () => orderCategoryDonutData.reduce((sum, row) => sum + row.count, 0),
-    [orderCategoryDonutData],
-  );
-
-  const paymentMethods = dashboard?.payment_methods || orderAnalytics.payment_methods || {};
-  const prepaidStats = paymentMethods.prepaid || { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 };
-  const codStats = paymentMethods.cod || { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0 };
-
-  const orderPaymentDonutData = useMemo(
-    () =>
-      (orderAnalytics.by_payment || []).map((row, index) => ({
-        name: row.name,
-        count: Number(row.count) || 0,
-        revenue: Number(row.revenue) || 0,
-        percentage: row.percentage,
-        fill: row.key === "cod" ? "#EA580C" : reportChartColor(index),
-      })),
-    [orderAnalytics.by_payment],
-  );
-
-  const orderPaymentTotal = useMemo(
-    () => orderPaymentDonutData.reduce((sum, row) => sum + row.count, 0),
-    [orderPaymentDonutData],
-  );
-
-  const salesChartData = useMemo(
-    () =>
-      (sales || []).map((day) => {
-        const d = new Date(day.date);
-        const invalid = Number.isNaN(d.getTime());
-        return {
-          revenue: Number(day.revenue || 0),
-          dateKey: day.date,
-          dateLong: invalid
-            ? String(day.date)
-            : d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" }),
-          xLabel: invalid ? "—" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        };
-      }),
-    [sales]
   );
 
   if (!permissionsReady || (loading && !dashboard)) {
@@ -981,174 +831,15 @@ export default function Reports() {
               />
             </div>
 
-            <div className="admin-stat-grid grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <StatCard
-                index={4}
-                title={`Pay now (KHQR) · ${periodLabel(period)}`}
-                value={formatUsd(prepaidStats.revenue || 0, numberFormat)}
-                subtext={`${formatNumber(prepaidStats.orders || 0, numberFormat)} orders · ${formatNumber(prepaidStats.paid_orders || 0, numberFormat)} paid`}
-                icon="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-                iconBoxStyle={iconBoxStyle(0)}
-                isDark={isDark}
-              />
-              <StatCard
-                index={5}
-                title={`COD (Courier) · ${periodLabel(period)}`}
-                value={formatUsd(codStats.revenue || 0, numberFormat)}
-                subtext={`${formatNumber(codStats.orders || 0, numberFormat)} orders · ${formatNumber(codStats.unpaid_orders || 0, numberFormat)} to collect`}
-                icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                iconBoxStyle={iconBoxStyle(1)}
-                isDark={isDark}
-              />
-            </div>
-
-            <RevenueDashboard theme={reportTheme} />
             <StockDashboard theme={reportTheme} />
-            <PlanDashboard theme={reportTheme} />
-
-            {/* ── Sales Overview ──────────────────────────────────────────── */}
-            <ReportSection
-              title="Sales Overview"
-              subtitle={`${periodLabel(period)} · daily revenue trend`}
-              theme={reportTheme}
-            >
-              {sales.length === 0 ? (
-                <ReportEmptyChart message="No sales data for this period" theme={reportTheme} />
-              ) : (
-                <div className="report-chart-panel w-full h-[min(22rem,calc(100vw-4rem))] min-h-[280px] rounded-xl p-2 [&_.recharts-surface]:outline-none">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={salesChartData}
-                      margin={{ top: 8, right: 14, bottom: salesChartData.length > 31 ? 40 : salesChartData.length > 18 ? 28 : 12, left: 6 }}
-                      barCategoryGap="14%"
-                    >
-                      <CartesianGrid stroke={reportTheme.grid} strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="xLabel"
-                        tick={reportAxisTickProps(reportTheme)}
-                        axisLine={reportAxisLineProps(reportTheme)}
-                        tickLine={reportAxisLineProps(reportTheme)}
-                        minTickGap={salesChartData.length > 31 ? 6 : salesChartData.length > 14 ? 4 : 0}
-                        angle={salesChartData.length > 31 ? -35 : 0}
-                        textAnchor={salesChartData.length > 31 ? "end" : "middle"}
-                        height={salesChartData.length > 31 ? 48 : 28}
-                        interval="preserveStartEnd"
-                      />
-                      <YAxis
-                        width={72}
-                        tick={reportAxisTickProps(reportTheme)}
-                        axisLine={reportAxisLineProps(reportTheme)}
-                        tickLine={reportAxisLineProps(reportTheme)}
-                        tickFormatter={(v) => formatUsd(Number(v), numberFormat)}
-                        domain={[0, (max) => (max <= 0 ? 1 : max * 1.08)]}
-                      />
-                      <Tooltip
-                        cursor={{ fill: reportTheme.cursor }}
-                        content={(props) => (
-                          <ReportChartTooltip
-                            {...props}
-                            theme={reportTheme}
-                            label={props.payload?.[0]?.payload?.dateLong}
-                            formatLine={(e) => formatUsdFull(Number(e.value) || 0)}
-                          />
-                        )}
-                      />
-                      <Bar
-                        dataKey="revenue"
-                        name="Revenue"
-                        fill={REPORT_CLUSTER.primary}
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={48}
-                        animationDuration={500}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </ReportSection>
 
             {/* ── Product Analysis ─────────────────────────────────────────── */}
             <ReportSection
               title="Product Analysis"
-              subtitle={`${catalogueTotal} products in catalogue · sales for ${periodLabel(period)}`}
+              subtitle={`${dashboard?.products?.total || 0} products in catalogue · sales for ${periodLabel(period)}`}
               theme={reportTheme}
             >
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Products by Category"
-                  subtitle="Share of catalogue per storefront category"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${prodByCatSpan}` }}
-                  action={<ChartResizeMenu colSpan={prodByCatSpan} maxCols={2} onChange={setProdByCatSpan} />}
-                >
-                  {categoryDonutData.length === 0 ? (
-                    <ReportEmptyChart message="No products in catalogue yet" theme={reportTheme} />
-                  ) : (
-                    <ReportDonutChart
-                      data={categoryDonutData}
-                      dataKey="count"
-                      centerTitle="Products"
-                      centerValue={catalogueTotal}
-                      theme={reportTheme}
-                      legendRows={categoryDonutData}
-                      formatLegendValue={(row) => `${row.count} (${row.percentage}%)`}
-                      tooltipContent={(props) => (
-                        <ReportChartTooltip
-                          {...props}
-                          theme={reportTheme}
-                          formatLine={(e) =>
-                            e.dataKey === "count"
-                              ? `${e.payload?.count ?? e.value} (${e.payload?.percentage ?? 0}%)`
-                              : e.value
-                          }
-                        />
-                      )}
-                    />
-                  )}
-                </ReportChartPanel>
-
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Products by Country"
-                  subtitle="Based on stock label origin (inventory source)"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${prodByCountrySpan}` }}
-                  action={<ChartResizeMenu colSpan={prodByCountrySpan} maxCols={2} onChange={setProdByCountrySpan} />}
-                >
-                  {countryBarData.length === 0 ? (
-                    <ReportEmptyChart message="No country data yet" theme={reportTheme} />
-                  ) : (
-                    <div className="h-[min(20rem,calc(100vw-4rem))] min-h-[260px] w-full [&_.recharts-surface]:outline-none">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={countryBarData} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }} barCategoryGap="20%">
-                          <CartesianGrid stroke={reportTheme.grid} strokeDasharray="3 3" horizontal={false} />
-                          <XAxis type="number" tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={reportAxisLineProps(reportTheme)} allowDecimals={false} />
-                          <YAxis type="category" dataKey="label" width={124} tick={reportAxisTickProps(reportTheme)} axisLine={reportAxisLineProps(reportTheme)} tickLine={false} />
-                          <Tooltip
-                            cursor={{ fill: reportTheme.cursor }}
-                            content={(props) => (
-                              <ReportChartTooltip
-                                {...props}
-                                theme={reportTheme}
-                                label={props.payload?.[0]?.payload?.label}
-                                formatLine={(e) => `${e.payload?.count ?? e.value} (${e.payload?.percentage ?? 0}%)`}
-                              />
-                            )}
-                          />
-                          <Bar dataKey="count" name="Products" radius={[0, 6, 6, 0]} maxBarSize={26}>
-                            {countryBarData.map((row) => (
-                              <Cell key={row.label} fill={row.fill} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </ReportChartPanel>
-              </div>
-
-              <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-2">
                 <ReportChartPanel
                   className="report-chart-panel"
                   title="Top 10 Selling Products"
@@ -1288,224 +979,6 @@ export default function Reports() {
                   )}
                 </ReportChartPanel>
               </div>
-            </ReportSection>
-
-            {/* ── Order Analysis ───────────────────────────────────────────── */}
-            <ReportSection
-              title="Order Analysis"
-              subtitle={`${orderTotal} total orders · ${periodLabel(period)}`}
-              theme={reportTheme}
-            >
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Order Status"
-                  subtitle="Share of orders by lifecycle status"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${orderStatusSpan}` }}
-                  action={<ChartResizeMenu colSpan={orderStatusSpan} maxCols={3} onChange={setOrderStatusSpan} />}
-                >
-                  {orderStatusDonutData.length === 0 ? (
-                    <ReportEmptyChart message="No orders in this period" theme={reportTheme} />
-                  ) : (
-                    <ReportDonutChart
-                      data={orderStatusDonutData}
-                      dataKey="count"
-                      centerTitle="Orders"
-                      centerValue={orderTotal}
-                      theme={reportTheme}
-                      legendRows={orderStatusDonutData}
-                      formatLegendValue={(row) => `${row.count} (${row.percentage}%)`}
-                      tooltipContent={(props) => (
-                        <ReportChartTooltip
-                          {...props}
-                          theme={reportTheme}
-                          formatLine={(e) => `${e.payload?.count ?? e.value} (${e.payload?.percentage ?? 0}%)`}
-                        />
-                      )}
-                    />
-                  )}
-                </ReportChartPanel>
-
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Payment method"
-                  subtitle="Pay now (KHQR) vs COD courier"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${orderPaymentSpan}` }}
-                  action={<ChartResizeMenu colSpan={orderPaymentSpan} maxCols={3} onChange={setOrderPaymentSpan} />}
-                >
-                  {orderPaymentDonutData.length === 0 ? (
-                    <ReportEmptyChart message="No payment method data in this period" theme={reportTheme} />
-                  ) : (
-                    <ReportDonutChart
-                      data={orderPaymentDonutData}
-                      dataKey="count"
-                      centerTitle="Orders"
-                      centerValue={orderPaymentTotal}
-                      theme={reportTheme}
-                      legendRows={orderPaymentDonutData}
-                      formatLegendValue={(row) => `${row.count} · ${formatUsd(row.revenue || 0, numberFormat)}`}
-                      tooltipContent={(props) => (
-                        <ReportChartTooltip
-                          {...props}
-                          theme={reportTheme}
-                          formatLine={(e) =>
-                            `${e.payload?.count ?? e.value} orders · ${formatUsdFull(Number(e.payload?.revenue) || 0)}`
-                          }
-                        />
-                      )}
-                    />
-                  )}
-                </ReportChartPanel>
-
-                <ReportChartPanel
-                  className="report-chart-panel"
-                  title="Orders by Category"
-                  subtitle="Distinct orders with products in each category (non-cancelled)"
-                  theme={reportTheme}
-                  style={{ gridColumn: `span ${orderCatSpan}` }}
-                  action={<ChartResizeMenu colSpan={orderCatSpan} maxCols={3} onChange={setOrderCatSpan} />}
-                >
-                  {orderCategoryDonutData.length === 0 ? (
-                    <ReportEmptyChart message="No orders with category data in this period" theme={reportTheme} />
-                  ) : (
-                    <ReportDonutChart
-                      data={orderCategoryDonutData}
-                      dataKey="count"
-                      centerTitle="Orders"
-                      centerValue={orderCategoryTotal}
-                      theme={reportTheme}
-                      legendRows={orderCategoryDonutData}
-                      formatLegendValue={(row) => `${row.count} (${row.percentage}%)`}
-                      tooltipContent={(props) => (
-                        <ReportChartTooltip
-                          {...props}
-                          theme={reportTheme}
-                          formatLine={(e) => `${e.payload?.count ?? e.value} (${e.payload?.percentage ?? 0}%)`}
-                        />
-                      )}
-                    />
-                  )}
-                </ReportChartPanel>
-              </div>
-            </ReportSection>
-
-            {/* ── Top Products Table ───────────────────────────────────────── */}
-            <ReportSection
-              title="Top Selling Products"
-              subtitle={`Detailed breakdown · ${periodLabel(period)}`}
-              theme={reportTheme}
-            >
-              {topProducts.length === 0 ? (
-                <ReportEmptyChart message="No products sold yet" theme={reportTheme} />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr
-                        className="text-left border-b"
-                        style={{
-                          borderColor: reportTheme.cardBorder,
-                          background: isDark ? "rgba(255,255,255,0.02)" : "rgba(248,250,252,0.9)",
-                        }}
-                      >
-                        <th className="pb-3 pr-4 text-[11px] font-bold uppercase tracking-widest"
-                          style={{ color: reportTheme.subtitle }}>
-                          #
-                        </th>
-                        <th className="pb-3 pr-4 text-[11px] font-bold uppercase tracking-widest"
-                          style={{ color: reportTheme.subtitle }}>
-                          Product
-                        </th>
-                        <th className="pb-3 pr-4 text-right text-[11px] font-bold uppercase tracking-widest"
-                          style={{ color: reportTheme.subtitle }}>
-                          Units Sold
-                        </th>
-                        <th className="pb-3 text-right text-[11px] font-bold uppercase tracking-widest"
-                          style={{ color: reportTheme.subtitle }}>
-                          Revenue
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {topProducts.map((item, index) => (
-                        <tr
-                          key={item.product_id}
-                          className="border-b transition-colors"
-                          style={{
-                            borderColor: reportTheme.cardBorder,
-                            background: index % 2 === 0
-                              ? "transparent"
-                              : isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.02)",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = isDark
-                              ? "rgba(99,102,241,0.10)"
-                              : "rgba(99,102,241,0.05)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = index % 2 === 0
-                              ? "transparent"
-                              : isDark ? "rgba(255,255,255,0.03)" : "rgba(15,23,42,0.02)";
-                          }}
-                        >
-                          <td className="py-3.5 pr-4">
-                            <span
-                              className="inline-flex w-6 h-6 items-center justify-center rounded-full text-[11px] font-bold"
-                              style={{
-                                background: isDark ? `${reportChartColor(index)}26` : `${reportChartColor(index)}1A`,
-                                color: reportChartColor(index),
-                              }}
-                            >
-                              {index + 1}
-                            </span>
-                          </td>
-                          <td className="py-3.5 pr-4">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0"
-                                style={{
-                                background: isDark ? "rgba(255,255,255,0.07)" : "#F1F5F9",
-                                }}
-                              >
-                                {item.product?.image_url && (
-                                  <img src={item.product.image_url} alt={item.product.name} className="w-full h-full object-cover" />
-                                )}
-                              </div>
-                              <span
-                                className="font-semibold text-sm"
-                                style={{ color: reportTheme.title }}
-                              >
-                                {item.product?.name || `Product #${item.product_id}`}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 pr-4 text-right">
-                            <span
-                              className="inline-flex items-center justify-center rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
-                              style={{
-                                background: isDark ? "rgba(255,255,255,0.08)" : "#F1F5F9",
-                                color: reportTheme.title,
-                              }}
-                            >
-                              {item.total_sold}
-                            </span>
-                          </td>
-                          <td className="py-3.5 text-right">
-                            <span
-                              className="text-sm font-bold tabular-nums"
-                              style={{ color: isDark ? "#8EA2FF" : "#4F46E5" }}
-                            >
-                              ${item.total_revenue?.toLocaleString()}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </ReportSection>
           </>
         )}

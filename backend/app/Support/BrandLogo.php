@@ -13,6 +13,17 @@ final class BrandLogo
         return self::resolveRasterUrl((string) config('app.logo_png_url', '/logo.png'));
     }
 
+    /** Invoice PDF header only (`public/logo.png`). Do not use for emails, reports, or web UI. */
+    public static function invoiceLogoUrl(): string
+    {
+        $bannerPath = public_path('logo.png');
+        if (is_file($bannerPath)) {
+            return self::resolveRasterUrl('/logo.png');
+        }
+
+        return self::url();
+    }
+
     /** SVG logo for web and admin UI. */
     public static function svgUrl(): string
     {

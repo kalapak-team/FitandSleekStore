@@ -82,6 +82,8 @@ return [
         'https://api-fitandsleek.onrender.com',
         'https://norng-fitandsleek-backend.onrender.com',
         'https://fitandsleek-official-backend.onrender.com',
+        'https://fitandsleek-official-production.up.railway.app',
+        'https://fitandsleek-official-v2-production.up.railway.app',
         ...$extraApiOrigins,
     ]))),
 
@@ -91,6 +93,15 @@ return [
     */
     'trust_onrender_api_hosts' => filter_var(
         env('OAUTH_TRUST_ONRENDER_API_HOSTS', true),
+        FILTER_VALIDATE_BOOLEAN
+    ),
+
+    /*
+    | Trust any https://*.up.railway.app API host. Set false to restrict OAuth
+    | callbacks to allowed_api_origins only.
+    */
+    'trust_railway_api_hosts' => filter_var(
+        env('OAUTH_TRUST_RAILWAY_API_HOSTS', true),
         FILTER_VALIDATE_BOOLEAN
     ),
 

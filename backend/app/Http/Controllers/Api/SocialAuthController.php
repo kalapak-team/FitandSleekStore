@@ -79,6 +79,20 @@ class SocialAuthController extends Controller
         return (bool) config('oauth.trust_onrender_api_hosts', false);
     }
 
+    protected function trustsRailwayApiHosts(): bool
+    {
+        return (bool) config('oauth.trust_railway_api_hosts', false);
+    }
+
+    protected function isRailwayApiHost(?string $host): bool
+    {
+        if ($host === null || $host === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/\.up\.railway\.app$/i', $host);
+    }
+
     protected function isOnrenderApiHost(?string $host): bool
     {
         if ($host === null || $host === '') {
@@ -100,6 +114,10 @@ class SocialAuthController extends Controller
         }
 
         if ($this->trustsOnrenderApiHosts() && $this->isOnrenderApiHost($request->getHost())) {
+            return $request->getScheme() === 'https';
+        }
+
+        if ($this->trustsRailwayApiHosts() && $this->isRailwayApiHost($request->getHost())) {
             return $request->getScheme() === 'https';
         }
 
