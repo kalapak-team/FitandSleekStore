@@ -9,6 +9,7 @@ import {
   lotTierLabel,
 } from "../../lib/inventoryLotHelpers.js";
 import { splitMovementRefs } from "../../lib/movementRows.js";
+import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 
 function DetailField({ label, value, mono = false }) {
   const text = value == null || value === "" ? "—" : String(value);
@@ -40,6 +41,7 @@ function SectionCard({ title, children }) {
 }
 
 export default function MovementRowDetailModal({ open, onClose, skuRow, movement }) {
+  const { isSuperAdmin } = useAdminPermissions();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -135,7 +137,9 @@ export default function MovementRowDetailModal({ open, onClose, skuRow, movement
                 value={detail.purchase.received_at ? formatLotPriceEventAt(detail.purchase.received_at) : "—"}
               />
               <DetailField label="Qty received" value={detail.purchase.qty} />
+              {isSuperAdmin ? (
               <DetailField label="Cost/unit" value={formatPoMoney(detail.purchase.cost_per_unit)} />
+              ) : null}
               <DetailField
                 label="Sell price (PO)"
                 value={detail.purchase.sell_price != null ? formatPoMoney(detail.purchase.sell_price) : "—"}

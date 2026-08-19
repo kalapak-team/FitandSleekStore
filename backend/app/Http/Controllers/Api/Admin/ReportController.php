@@ -205,7 +205,7 @@ class ReportController extends Controller
 
             if ($validated['type'] === 'dashboard') {
                 $data = $this->buildDashboardReport($from, $to);
-                $data['logo'] = $logoDataUri;
+                $data['logo'] = \App\Support\BrandLogo::invoiceLogoUrl();
                 $pdf = Pdf::setOptions($pdfOptions)
                     ->loadView('reports.dashboard', $data)
                     ->setPaper('A4', 'portrait');
@@ -349,7 +349,7 @@ class ReportController extends Controller
     // Dashboard overview — respects from/to or period query params
     public function dashboard(Request $request)
     {
-        $cacheKey = 'admin_dashboard_v4:' . md5(json_encode([
+        $cacheKey = 'admin_dashboard_v5:' . md5(json_encode([
             'period' => $request->input('period'),
             'from' => $request->input('from'),
             'to' => $request->input('to'),
@@ -418,6 +418,7 @@ class ReportController extends Controller
                 'processing' => $processingOrders,
                 'completed' => $completedOrders,
             ],
+            'aov' => $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0,
             'payment_methods' => $paymentMethods,
             'orders_by_status' => $ordersByStatusRows->map(fn ($row) => [
                 'status' => (string) $row->status,
@@ -447,15 +448,22 @@ class ReportController extends Controller
 
         $bucket = function (Builder $query): array {
             $orders = (int) (clone $query)->count('orders.id');
-            $paidOrders = (int) (clone $query)
-                ->whereRaw("LOWER(COALESCE(orders.payment_status, '')) = 'paid'")
-                ->count('orders.id');
+            $paidQuery = (clone $query)->whereRaw("LOWER(COALESCE(orders.payment_status, '')) = 'paid'");
+            $unpaidQuery = (clone $query)->where(function (Builder $q) {
+                $q->whereNull('orders.payment_status')
+                    ->orWhereRaw("LOWER(COALESCE(orders.payment_status, '')) != 'paid'");
+            });
+            $paidOrders = (int) (clone $paidQuery)->count('orders.id');
+            $paidRevenue = round((float) (clone $paidQuery)->sum('orders.total'), 2);
+            $unpaidRevenue = round((float) (clone $unpaidQuery)->sum('orders.total'), 2);
 
             return [
                 'orders' => $orders,
                 'revenue' => round((float) (clone $query)->sum('orders.total'), 2),
                 'paid_orders' => $paidOrders,
                 'unpaid_orders' => max(0, $orders - $paidOrders),
+                'paid_revenue' => $paidRevenue,
+                'unpaid_revenue' => $unpaidRevenue,
             ];
         };
 
@@ -1314,6 +1322,8 @@ class ReportController extends Controller
             ->whereNull('parent_id')
             ->select(
                 'id',
+                'manage_stock',
+                'min_stock',
                 DB::raw("COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(slug), ''), 'Unnamed label') as label_name"),
                 DB::raw("GREATEST(COALESCE(stock, 0), 0) as stock")
             )
@@ -1321,6 +1331,30 @@ class ReportController extends Controller
             ->get();
 
         $totalStock = (int) $labelRows->sum('stock');
+
+        $lowStockLabels = $labelRows
+            ->map(function ($row) {
+                $stock = (int) $row->stock;
+                $manage = (bool) $row->manage_stock;
+                $min = max(0, (int) ($row->min_stock ?? 0));
+                $threshold = $manage ? $min : 20;
+                if ($stock > $threshold) {
+                    return null;
+                }
+
+                return [
+                    'id' => (int) $row->id,
+                    'name' => (string) $row->label_name,
+                    'stock' => $stock,
+                    'min_stock' => $threshold,
+                    'status' => $stock <= 0 ? 'out' : 'low',
+                ];
+            })
+            ->filter()
+            ->sortBy('stock')
+            ->values()
+            ->take(12)
+            ->all();
 
         $byLabel = $this->bucketChartSlices(
             $labelRows->map(fn ($row) => [
@@ -1376,6 +1410,7 @@ class ReportController extends Controller
         return response()->json([
             'total_stock' => $totalStock,
             'by_label' => $byLabel,
+            'low_stock_labels' => $lowStockLabels,
             'monthly_compare' => $monthlyCompare,
             'compare_years' => $compareYears,
             'year_range' => [

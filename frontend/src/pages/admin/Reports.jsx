@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import ChartResizeMenu from "../../components/admin/ChartResizeMenu.jsx";
 import AdminSearchSelect from "../../components/admin/AdminSearchSelect.jsx";
@@ -7,6 +7,8 @@ import { errorAlert, toastSuccess } from "../../lib/swal";
 import { useAdminAccents } from "../../lib/adminAccents.js";
 import { useTheme } from "../../state/theme.jsx";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -20,7 +22,6 @@ import {
   getReportChartTheme,
 } from "../../lib/reportChartTheme.js";
 import {
-  ReportChartPanel,
   ReportChartTooltip,
   ReportDonutChart,
   ReportEmptyChart,
@@ -77,6 +78,79 @@ function buildSalesParams(period, customFrom, customTo) {
   }
 
   return { period: 30 };
+}
+
+function buildSalesAreaSeries(salesRows, period, customFrom, customTo) {
+  const rows = salesRows || [];
+  const byKey = {};
+  rows.forEach((row) => {
+    const key = String(row.date || "").slice(0, 10);
+    if (!key) return;
+    byKey[key] = {
+      revenue: Number(row.revenue || 0),
+      orders: Number(row.orders || 0),
+    };
+  });
+
+  const params = buildSalesParams(period, customFrom, customTo);
+  const end = params.to
+    ? new Date(`${params.to}T00:00:00`)
+    : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const start = params.from
+    ? new Date(`${params.from}T00:00:00`)
+    : (() => {
+        const days = Math.min(Number(params.period) || 28, 3650);
+        const d = new Date(end);
+        d.setDate(d.getDate() - (days - 1));
+        return d;
+      })();
+
+  const daySpan = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+
+  if (daySpan > 92) {
+    const months = {};
+    rows.forEach((row) => {
+      const day = String(row.date || "").slice(0, 10);
+      if (!day) return;
+      const ym = day.slice(0, 7);
+      if (!months[ym]) months[ym] = { revenue: 0, orders: 0 };
+      months[ym].revenue += Number(row.revenue || 0);
+      months[ym].orders += Number(row.orders || 0);
+    });
+    return Object.keys(months)
+      .sort()
+      .map((ym) => {
+        const [y, m] = ym.split("-").map(Number);
+        const d = new Date(y, m - 1, 1);
+        return {
+          dateKey: ym,
+          revenue: months[ym].revenue,
+          orders: months[ym].orders,
+          xLabel: d.toLocaleDateString(undefined, { month: "short", year: "2-digit" }),
+          dateLong: d.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        };
+      });
+  }
+
+  const out = [];
+  for (let t = start.getTime(); t <= end.getTime(); t += 86400000) {
+    const d = new Date(t);
+    const key = fmtDate(d);
+    const bucket = byKey[key] || { revenue: 0, orders: 0 };
+    out.push({
+      dateKey: key,
+      revenue: bucket.revenue,
+      orders: bucket.orders,
+      xLabel: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      dateLong: d.toLocaleDateString(undefined, {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }),
+    });
+  }
+  return out;
 }
 
 function periodLabel(period) {
@@ -245,32 +319,74 @@ function PeriodDropdown({ value, onChange, mode }) {
 }
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
-function StatCard({ title, value, subtext, icon, iconBoxStyle }) {
+function KpiSparkline({ data, dataKey, color, gradientId }) {
+  if (!data?.length) return null;
   return (
-    <div className="admin-surface admin-spectrum-kpi rounded-2xl border admin-border p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-400">{title}</p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-900 dark:text-white">{value}</p>
-          {subtext ? (
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">{subtext}</p>
-          ) : null}
-        </div>
+    <div className="mt-3 -mx-1 h-11 w-[calc(100%+0.5rem)]">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey={dataKey}
+            stroke={color}
+            strokeWidth={1.75}
+            fill={`url(#${gradientId})`}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function kpiValueSize(text) {
+  const n = String(text || "").replace(/\s/g, "").length;
+  if (n >= 14) return "text-[1.05rem] sm:text-lg";
+  if (n >= 11) return "text-xl";
+  if (n >= 9) return "text-[1.4rem]";
+  return "text-[1.65rem]";
+}
+
+function StatCard({ title, value, subtext, icon, iconBoxStyle, className = "", sparkline }) {
+  return (
+    <div className={`admin-surface admin-spectrum-kpi flex h-full min-h-[148px] min-w-0 flex-col overflow-hidden rounded-2xl border admin-border p-5 ${className}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-[13px] font-medium text-slate-600 dark:text-slate-400">{title}</p>
         <div
-          className="admin-stat-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border admin-border"
+          className="admin-stat-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border admin-border"
           style={iconBoxStyle}
         >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
           </svg>
         </div>
       </div>
+      <p
+        className={`mt-3 min-w-0 truncate font-semibold tabular-nums leading-tight text-slate-900 dark:text-white ${kpiValueSize(value)}`}
+        title={String(value)}
+      >
+        {value}
+      </p>
+      {subtext ? (
+        <p className="mt-2 truncate text-xs text-slate-500 dark:text-slate-500" title={String(subtext)}>
+          {subtext}
+        </p>
+      ) : null}
+      {sparkline}
     </div>
   );
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Reports() {
+  const salesGradientId = useId().replace(/:/g, "");
   const { user, can, permissionsReady } = useAdminPermissions();
   const canViewReports = can("reports", "view");
   const { primaryColor, mode } = useTheme();
@@ -281,6 +397,7 @@ export default function Reports() {
   );
 
   const [dashboard, setDashboard] = useState(null);
+  const [sales, setSales] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [categorySales, setCategorySales] = useState({
     revenue_by_category: [],
@@ -318,10 +435,11 @@ export default function Reports() {
       return;
     }
 
-    const cacheKey = adminCacheKey("reports-v2", period, chartFrom, chartTo);
+    const cacheKey = adminCacheKey("reports-v4", period, chartFrom, chartTo);
     const cached = readAdminCache(cacheKey);
     if (cached) {
       setDashboard(cached.dashboard ?? null);
+      setSales(cached.sales ?? []);
       setTopProducts(cached.topProducts ?? []);
       setCategorySales(cached.categorySales ?? {
         revenue_by_category: [],
@@ -336,8 +454,9 @@ export default function Reports() {
     try {
       const periodParams = buildSalesParams(period, chartFrom, chartTo);
 
-      const [dashRes, productsRes, categorySalesRes] = await Promise.all([
+      const [dashRes, salesRes, productsRes, categorySalesRes] = await Promise.all([
         api.get("/admin/reports/dashboard", { params: periodParams }),
+        api.get("/admin/reports/sales", { params: periodParams }).catch(() => ({ data: { sales: [] } })),
         api.get("/admin/reports/top-products", { params: { ...periodParams, limit: 10 } }).catch(() => ({ data: { data: [] } })),
         api.get("/admin/reports/category-sales", { params: { ...periodParams, limit: 10 } }).catch(() => ({
           data: { revenue_by_category: [], total_revenue: 0, total_units: 0 },
@@ -348,9 +467,15 @@ export default function Reports() {
       const nextDashboard = {
         revenue: dashData.revenue || { total: 0, month: 0, today: 0 },
         orders: dashData.orders || { total: 0, pending: 0, processing: 0, completed: 0 },
+        aov: Number(dashData.aov) || 0,
+        payment_methods: dashData.payment_methods || {
+          prepaid: { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0, paid_revenue: 0, unpaid_revenue: 0 },
+          cod: { orders: 0, revenue: 0, paid_orders: 0, unpaid_orders: 0, paid_revenue: 0, unpaid_revenue: 0 },
+        },
       };
 
       const nextTopProducts = productsRes.data?.data || [];
+      const nextSales = salesRes.data?.sales || salesRes.data?.data || [];
       const nextCategorySales = {
         revenue_by_category: categorySalesRes.data?.revenue_by_category || [],
         total_revenue: categorySalesRes.data?.total_revenue || 0,
@@ -358,10 +483,12 @@ export default function Reports() {
       };
 
       setDashboard(nextDashboard);
+      setSales(nextSales);
       setTopProducts(nextTopProducts);
       setCategorySales(nextCategorySales);
       writeAdminCache(cacheKey, {
         dashboard: nextDashboard,
+        sales: nextSales,
         topProducts: nextTopProducts,
         categorySales: nextCategorySales,
       });
@@ -500,6 +627,22 @@ export default function Reports() {
     [topProducts, reportTheme],
   );
 
+  const salesAreaData = useMemo(
+    () => buildSalesAreaSeries(sales, period, chartFrom, chartTo),
+    [sales, period, chartFrom, chartTo],
+  );
+  const sparklineSeries = useMemo(() => salesAreaData.slice(-24), [salesAreaData]);
+  const aovSparkSeries = useMemo(
+    () =>
+      sparklineSeries.map((row) => ({
+        ...row,
+        aov: row.orders > 0 ? row.revenue / row.orders : 0,
+      })),
+    [sparklineSeries],
+  );
+  const showSalesDots = salesAreaData.length <= 28;
+  const salesTrendGrain = salesAreaData[0]?.dateKey?.length === 7 ? "Monthly" : "Daily";
+
   if (!permissionsReady || (loading && !dashboard)) {
     return <AdminContentSkeleton rows={8} />;
   }
@@ -515,24 +658,12 @@ export default function Reports() {
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 mb-2.5 text-[11px] font-bold uppercase tracking-widest"
-              style={{
-                background: "rgba(var(--admin-primary-rgb), 0.12)",
-                color: "var(--admin-primary)",
-              }}
-            >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-              </svg>
-              Analytics Dashboard
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight leading-none">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">
               Reports &amp; Analytics
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1.5 max-w-xl">
               Track store performance, revenue trends, and key business metrics
             </p>
           </div>
@@ -545,11 +676,11 @@ export default function Reports() {
               <button
                 type="button"
                 onClick={() => setGenOpen((p) => !p)}
-                className="flex items-center gap-2 h-9 px-4 rounded-xl text-xs font-bold text-white transition-all"
+                className="flex items-center gap-2 h-9 px-3.5 rounded-xl border text-xs font-semibold transition-all"
                 style={{
-                  background: `linear-gradient(135deg, ${primaryColor}, ${reportTheme.accentSecondary})`,
-                  boxShadow: `0 4px 14px rgba(var(--admin-primary-rgb), 0.28)`,
-                  border: "1px solid rgba(var(--admin-primary-rgb), 0.28)",
+                  background: isDark ? "rgba(255,255,255,0.06)" : "#F8FAFC",
+                  borderColor: isDark ? "rgba(255,255,255,0.08)" : "#E2E8F0",
+                  color: isDark ? "#E2E8F0" : "#334155",
                 }}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -755,45 +886,157 @@ export default function Reports() {
         ) : (
           <>
             {/* ── KPI Stats Grid ──────────────────────────────────────────── */}
-            <div className="admin-stat-grid grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
+            <div className="admin-stat-grid mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 [&>*]:min-w-0">
               <StatCard
-                title={`Revenue · ${periodLabel(period)}`}
+                title="Revenue"
                 value={formatUsd(dashboard?.revenue?.total || 0, numberFormat)}
-                subtext={`Today: ${formatUsd(dashboard?.revenue?.today || 0, numberFormat)} · non-cancelled orders`}
+                subtext={`Today ${formatUsd(dashboard?.revenue?.today || 0, numberFormat)}`}
                 icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 iconBoxStyle={iconBoxStyle(0)}
+                sparkline={(
+                  <KpiSparkline
+                    data={sparklineSeries}
+                    dataKey="revenue"
+                    color={reportTheme.chartColor(0)}
+                    gradientId={`${salesGradientId}-rev`}
+                  />
+                )}
               />
               <StatCard
-                title={`Orders · ${periodLabel(period)}`}
+                title="Orders"
                 value={formatNumber(dashboard?.orders?.total || 0, numberFormat)}
-                subtext={`${formatNumber(dashboard?.orders?.pending || 0, numberFormat)} pending · ${formatNumber(dashboard?.orders?.completed || 0, numberFormat)} completed · excludes cancelled`}
+                subtext={`${formatNumber(dashboard?.orders?.pending || 0, numberFormat)} pending`}
                 icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                 iconBoxStyle={iconBoxStyle(1)}
+                sparkline={(
+                  <KpiSparkline
+                    data={sparklineSeries}
+                    dataKey="orders"
+                    color={reportTheme.chartColor(1)}
+                    gradientId={`${salesGradientId}-ord`}
+                  />
+                )}
+              />
+              <StatCard
+                title="AOV"
+                value={formatUsd(
+                  dashboard?.aov
+                    || ((dashboard?.orders?.total || 0) > 0
+                      ? (dashboard?.revenue?.total || 0) / dashboard.orders.total
+                      : 0),
+                  numberFormat,
+                )}
+                subtext="Per order"
+                icon="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                iconBoxStyle={iconBoxStyle(2)}
+                sparkline={(
+                  <KpiSparkline
+                    data={aovSparkSeries}
+                    dataKey="aov"
+                    color={reportTheme.chartColor(2)}
+                    gradientId={`${salesGradientId}-aov`}
+                  />
+                )}
+              />
+              <StatCard
+                title="Pay now"
+                value={formatUsd(dashboard?.payment_methods?.prepaid?.paid_revenue || 0, numberFormat)}
+                subtext={`${formatNumber(dashboard?.payment_methods?.prepaid?.paid_orders || 0, numberFormat)} paid`}
+                icon="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                iconBoxStyle={iconBoxStyle(3)}
+              />
+              <StatCard
+                title="COD to collect"
+                value={formatUsd(dashboard?.payment_methods?.cod?.unpaid_revenue || 0, numberFormat)}
+                subtext={`${formatNumber(dashboard?.payment_methods?.cod?.unpaid_orders || 0, numberFormat)} unpaid`}
+                icon="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                iconBoxStyle={iconBoxStyle(4)}
               />
             </div>
+
+            <ReportSection
+              title="Sales details"
+              subtitle={`${salesTrendGrain} revenue · ${periodLabel(period)}`}
+              theme={reportTheme}
+            >
+              {salesAreaData.every((row) => row.revenue <= 0) ? (
+                <ReportEmptyChart message="No sales in this period" theme={reportTheme} />
+              ) : (
+                <div className="h-[min(22rem,calc(100vw-5rem))] min-h-[280px] w-full [&_.recharts-surface]:outline-none">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={salesAreaData} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
+                      <defs>
+                        <linearGradient id={salesGradientId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={primaryColor} stopOpacity={0.38} />
+                          <stop offset="100%" stopColor={primaryColor} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke={reportTheme.grid} strokeDasharray="4 4" vertical={false} />
+                      <XAxis
+                        dataKey="xLabel"
+                        tick={reportAxisTickProps(reportTheme)}
+                        axisLine={reportAxisLineProps(reportTheme)}
+                        tickLine={reportAxisLineProps(reportTheme)}
+                        minTickGap={salesAreaData.length > 40 ? 10 : 6}
+                        interval="preserveStartEnd"
+                        height={salesAreaData.length > 40 ? 40 : 28}
+                        angle={salesAreaData.length > 40 ? -28 : 0}
+                        textAnchor={salesAreaData.length > 40 ? "end" : "middle"}
+                      />
+                      <YAxis
+                        width={64}
+                        tick={reportAxisTickProps(reportTheme)}
+                        axisLine={reportAxisLineProps(reportTheme)}
+                        tickLine={reportAxisLineProps(reportTheme)}
+                        tickFormatter={(v) => formatUsd(Number(v), numberFormat)}
+                        domain={[0, "auto"]}
+                      />
+                      <Tooltip
+                        cursor={{ stroke: primaryColor, strokeWidth: 1, strokeOpacity: 0.35 }}
+                        content={(props) => (
+                          <ReportChartTooltip
+                            {...props}
+                            theme={reportTheme}
+                            label={props.payload?.[0]?.payload?.dateLong}
+                            formatLine={(e) =>
+                              e.dataKey === "revenue"
+                                ? formatUsd(Number(e.value) || 0, numberFormat)
+                                : `${formatNumber(e.value, numberFormat)} orders`
+                            }
+                          />
+                        )}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        name="Revenue"
+                        stroke={primaryColor}
+                        strokeWidth={2.25}
+                        fill={`url(#${salesGradientId})`}
+                        dot={showSalesDots ? { r: 3, fill: primaryColor, stroke: "#fff", strokeWidth: 2 } : false}
+                        activeDot={{ r: 5, fill: primaryColor, stroke: isDark ? "#0f172a" : "#fff", strokeWidth: 2 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </ReportSection>
 
             <StockDashboard theme={reportTheme} numberFormat={numberFormat} />
 
             <ReportSection
-              title="Top Selling Products"
+              title="Top selling products"
               subtitle={`By revenue · non-cancelled · ${periodLabel(period)}`}
               theme={reportTheme}
+              action={<ChartResizeMenu colSpan={top10Span} maxCols={2} onChange={setTop10Span} />}
             >
-              <ReportChartPanel
-                className="report-chart-panel"
-                title="Top 10 by revenue"
-                subtitle={`Units shown in the legend · ${periodLabel(period)}`}
-                theme={reportTheme}
-                style={{ gridColumn: `span ${top10Span}` }}
-                action={<ChartResizeMenu colSpan={top10Span} maxCols={2} onChange={setTop10Span} />}
-              >
                 {topSellingChartData.length === 0 ? (
                   <ReportEmptyChart message="No products sold in this period" theme={reportTheme} />
                 ) : (
                   <>
                     <div
-                      className="mb-4 w-full [&_.recharts-surface]:outline-none"
-                      style={{ height: Math.max(280, topSellingChartData.length * 42 + 48) }}
+                      className="mb-5 w-full [&_.recharts-surface]:outline-none"
+                      style={{ height: Math.max(260, topSellingChartData.length * 40 + 40) }}
                     >
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={topSellingChartData} layout="vertical" margin={{ top: 4, right: 20, bottom: 4, left: 4 }} barCategoryGap="16%">
@@ -844,22 +1087,14 @@ export default function Reports() {
                     />
                   </>
                 )}
-              </ReportChartPanel>
             </ReportSection>
 
             <ReportSection
-              title="Categories Revenue"
-              subtitle={`${formatUsd(categorySales.total_revenue || 0, numberFormat)} · ${formatNumber(categorySales.total_units || 0, numberFormat)} units · ${periodLabel(period)}`}
+              title="Categories revenue"
+              subtitle={`${formatUsd(categorySales.total_revenue || 0, numberFormat)} · ${formatNumber(categorySales.total_units || 0, numberFormat)} units · ${periodLabel(period)} · storefront categories`}
               theme={reportTheme}
+              action={<ChartResizeMenu colSpan={catRevenueSpan} maxCols={2} onChange={setCatRevenueSpan} />}
             >
-              <ReportChartPanel
-                className="report-chart-panel"
-                title="Share by storefront category"
-                subtitle="Non-cancelled order lines · not inventory labels"
-                theme={reportTheme}
-                style={{ gridColumn: `span ${catRevenueSpan}` }}
-                action={<ChartResizeMenu colSpan={catRevenueSpan} maxCols={2} onChange={setCatRevenueSpan} />}
-              >
                 {categoryRevenueDonutData.length === 0 ? (
                   <ReportEmptyChart message="No category sales in this period" theme={reportTheme} />
                 ) : (
@@ -882,7 +1117,6 @@ export default function Reports() {
                     )}
                   />
                 )}
-              </ReportChartPanel>
             </ReportSection>
           </>
         )}

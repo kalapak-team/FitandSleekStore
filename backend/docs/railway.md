@@ -42,7 +42,8 @@ APP_URL=https://fitandsleek-official-production.up.railway.app
 FRONTEND_URL=https://www.fitandsleek.online
 SANCTUM_STATEFUL_DOMAINS=fitandsleek.online,www.fitandsleek.online,fitandsleek-official-frontend.netlify.app,fitandsleek-official.vercel.app
 
-DATABASE_URL=postgresql://USER:PASS@HOST/neondb?sslmode=require
+DATABASE_URL=postgresql://USER:PASS@HOST/railway?sslmode=require
+# Do not wrap the URL in extra quotes in the Railway dashboard (that makes the DB name railway" and returns 503).
 DB_SSLMODE=require
 
 CACHE_STORE=database

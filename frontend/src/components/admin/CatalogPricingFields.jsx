@@ -26,7 +26,13 @@ function moneyInputDisplay(value) {
 }
 
 /** Product add/edit — mirrors next sellable lot; edit prices on PO or Inventory Lots only. */
-export function CatalogPricingReadOnly({ costPrice = null, sellPrice = null, productId = null, product = null }) {
+export function CatalogPricingReadOnly({
+  costPrice = null,
+  sellPrice = null,
+  productId = null,
+  product = null,
+  showCost = false,
+}) {
   const fromLots = product?.pricing_source === "inventory_lot";
   const costDisplay = fromLots
     ? moneyInputDisplay(formatCatalogLotMoney(product, "cost"))
@@ -41,8 +47,10 @@ export function CatalogPricingReadOnly({ costPrice = null, sellPrice = null, pro
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
-        <Field id="catalog-cost-readonly" label="Cost/unit (from lot)" displayValue={costDisplay} />
+      <div className={`grid grid-cols-1 gap-5 ${showCost ? "sm:grid-cols-2 sm:gap-6" : ""}`}>
+        {showCost ? (
+          <Field id="catalog-cost-readonly" label="Cost/unit (from lot)" displayValue={costDisplay} />
+        ) : null}
         <Field id="catalog-sell-readonly" label="Sell price (from lot)" displayValue={sellDisplay} />
       </div>
       <p className="text-xs text-slate-500 dark:text-slate-400">

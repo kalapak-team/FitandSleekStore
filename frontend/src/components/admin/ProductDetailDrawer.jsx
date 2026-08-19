@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { resolveImageUrl } from "../../lib/images";
-import { catalogLotPricingHint, formatCatalogLotMoney } from "../../lib/catalogLotPricing.js";
+import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 
 const EMPTY = "-";
 
@@ -88,6 +88,8 @@ export default function ProductDetailDrawer({
     };
   }, [open, onClose]);
 
+  const { isSuperAdmin } = useAdminPermissions();
+
   if (!open || !product) return null;
 
   const gallery = parseGallery(product.gallery);
@@ -155,11 +157,13 @@ export default function ProductDetailDrawer({
           <dl className="grid grid-cols-2 gap-4">
             <DetailField label="Brand">{brand}</DetailField>
             <DetailField label="Category">{category}</DetailField>
+            {isSuperAdmin ? (
             <DetailField label="Cost price">
               {product?.pricing_source === "inventory_lot"
                 ? formatCatalogLotMoney(product, "cost")
                 : formatMoney(product.cost_price)}
             </DetailField>
+            ) : null}
             <DetailField label="Sell price">
               <span className="font-semibold tabular-nums">
                 {product?.pricing_source === "inventory_lot"

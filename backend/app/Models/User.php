@@ -133,7 +133,9 @@ class User extends Authenticatable
     // Helper methods
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'superadmin';
+        $role = strtolower((string) preg_replace('/[\s_-]+/', '', (string) $this->role));
+
+        return $role === 'superadmin';
     }
 
     public function isAdmin(): bool

@@ -9,6 +9,7 @@ import { formatPoMoney } from "../../lib/purchaseOrderHelpers.js";
 import { lotTierLabel } from "../../lib/inventoryLotHelpers.js";
 import { alignMovementRows } from "../../lib/movementRows.js";
 import { rowMatchesSearch, sliceDetailTablePage } from "../../lib/adminListQuery.js";
+import { useAdminPermissions } from "../../hooks/useAdminPermissions.js";
 import AdminListQueryToolbar from "./AdminListQueryToolbar.jsx";
 import AdminTablePagination from "./AdminTablePagination.jsx";
 
@@ -194,6 +195,7 @@ export default function StockSkuDetailModal({
   onLotsChanged,
   initialSection = "overview",
 }) {
+  const { isSuperAdmin } = useAdminPermissions();
   const [movementDetailRow, setMovementDetailRow] = useState(null);
   const [openSections, setOpenSections] = useState(() => defaultOpenSections(initialSection));
   const [movementSearchDebounced, setMovementSearchDebounced] = useState(movementSearch);
@@ -296,16 +298,20 @@ export default function StockSkuDetailModal({
                         : null
                     }
                   />
+                  {isSuperAdmin ? (
                   <StatField
                     centered
                     label="Cost/unit"
                     value={formatPoMoney(row?.next_lot_cost ?? row?.wac_cost ?? 0)}
                   />
+                  ) : null}
                   {(() => {
                     const sell = sellPriceOverview(row);
                     return <StatField centered label={sell.label} value={sell.value} hint={sell.hint} />;
                   })()}
+                  {isSuperAdmin ? (
                   <StatField centered label="Stock value" value={formatPoMoney(row.stock_value)} />
+                  ) : null}
                   <div className="flex min-w-0 flex-col items-center">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
                       Status
@@ -415,7 +421,7 @@ export default function StockSkuDetailModal({
                           <th className="px-4 py-3 text-left">Type</th>
                           <th className="px-4 py-3 text-right text-emerald-700 dark:text-emerald-400">Qty in</th>
                           <th className="px-4 py-3 text-right text-red-600 dark:text-red-400">Qty out</th>
-                          <th className="px-4 py-3 text-right">Cost/unit</th>
+                          {isSuperAdmin ? <th className="px-4 py-3 text-right">Cost/unit</th> : null}
                           <th className="px-4 py-3 text-right">Sell/unit</th>
                           <th className="px-4 py-3 text-right">Balance</th>
                           <th className="px-4 py-3 text-left">Ref</th>
@@ -425,7 +431,7 @@ export default function StockSkuDetailModal({
                       <tbody>
                         {filteredMovements.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="bg-white px-4 py-10 text-center text-slate-500 dark:bg-slate-950/20">
+                            <td colSpan={isSuperAdmin ? 9 : 8} className="bg-white px-4 py-10 text-center text-slate-500 dark:bg-slate-950/20">
                               {movementHasFilters
                                 ? "No movements match your search or date range."
                                 : hasDateRange
@@ -448,9 +454,11 @@ export default function StockSkuDetailModal({
                               <td className="px-4 py-3 text-right tabular-nums font-semibold text-red-600 dark:text-red-400">
                                 {m.qty_out != null ? `-${m.qty_out}` : "—"}
                               </td>
+                              {isSuperAdmin ? (
                               <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
                                 {m.cost_per_unit != null ? formatPoMoney(m.cost_per_unit) : "—"}
                               </td>
+                              ) : null}
                               <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
                                 {m.sell_per_unit != null ? formatPoMoney(m.sell_per_unit) : "—"}
                               </td>

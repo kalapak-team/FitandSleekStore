@@ -26,7 +26,6 @@ import { matchesStockVariantRow, normalizeVariantPart } from "../../lib/inventor
 
 const LOW_STOCK_MAX = 5;
 const MOVEMENT_PREVIEW_COUNT = 3;
-const TABLE_COL_COUNT = 13;
 
 function formatDateIso(value) {
   if (!value) return "—";
@@ -101,12 +100,20 @@ function MovementTypeCell({ type }) {
   );
 }
 
-function ExpandedMovementsPreview({ movements, loading, hasDateRange, onShowDetails, skuRow }) {
+function ExpandedMovementsPreview({
+  movements,
+  loading,
+  hasDateRange,
+  onShowDetails,
+  skuRow,
+  showCost,
+  tableColCount = 13,
+}) {
   const [movementDetailRow, setMovementDetailRow] = useState(null);
   const alignedMovements = alignMovementRows(movements);
   if (loading) {
     return (
-      <td colSpan={TABLE_COL_COUNT} className="bg-[#f7f5f0] px-6 py-8 dark:bg-slate-900/50">
+      <td colSpan={tableColCount} className="bg-[#f7f5f0] px-6 py-8 dark:bg-slate-900/50">
         <p className="text-sm text-slate-500">Loading movement history…</p>
       </td>
     );
@@ -119,7 +126,7 @@ function ExpandedMovementsPreview({ movements, loading, hasDateRange, onShowDeta
   const tdClass = "px-4 py-2.5 whitespace-nowrap";
 
   return (
-    <td colSpan={TABLE_COL_COUNT} className="bg-[#f7f5f0] p-0 dark:bg-slate-900/50">
+    <td colSpan={tableColCount} className="bg-[#f7f5f0] p-0 dark:bg-slate-900/50">
       <div className="border-t border-slate-200/60 px-4 py-4 dark:border-slate-700/60">
         <div className="overflow-x-auto rounded-lg border border-slate-200/80 bg-white dark:border-slate-700 dark:bg-slate-950/40">
           <table className="w-full border-collapse text-sm">
@@ -129,7 +136,7 @@ function ExpandedMovementsPreview({ movements, loading, hasDateRange, onShowDeta
                 <th className={`${thClass} text-left`}>Type</th>
                 <th className={`${thClass} text-right text-emerald-700 dark:text-emerald-400`}>Qty in</th>
                 <th className={`${thClass} text-right text-red-600 dark:text-red-400`}>Qty out</th>
-                <th className={`${thClass} text-right`}>Cost/unit</th>
+                {showCost ? <th className={`${thClass} text-right`}>Cost/unit</th> : null}
                 <th className={`${thClass} text-right`}>Sell/unit</th>
                 <th className={`${thClass} text-right`}>Balance</th>
                 <th className={`${thClass} w-0 max-w-[11rem] text-left`}>Ref</th>
@@ -139,7 +146,7 @@ function ExpandedMovementsPreview({ movements, loading, hasDateRange, onShowDeta
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {total === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={showCost ? 9 : 8} className="px-4 py-6 text-center text-slate-500">
                     {hasDateRange
                       ? "No purchase or sale movements in the selected date range."
                       : "No movements recorded for this SKU yet."}
@@ -160,9 +167,11 @@ function ExpandedMovementsPreview({ movements, loading, hasDateRange, onShowDeta
                     <td className={`${tdClass} text-right tabular-nums font-medium text-red-600 dark:text-red-400`}>
                       {m.qty_out != null ? `-${m.qty_out}` : "—"}
                     </td>
+                    {showCost ? (
                     <td className={`${tdClass} text-right tabular-nums text-slate-600 dark:text-slate-300`}>
                       {m.cost_per_unit != null ? formatPoMoney(m.cost_per_unit) : "—"}
                     </td>
+                    ) : null}
                     <td className={`${tdClass} text-right tabular-nums text-slate-600 dark:text-slate-300`}>
                       {m.sell_per_unit != null ? formatPoMoney(m.sell_per_unit) : "—"}
                     </td>
@@ -230,19 +239,22 @@ const STOCK_CSV_HEADERS = [
   "Status",
 ];
 
-function stockRowsToCsvData(dataRows) {
-  return (Array.isArray(dataRows) ? dataRows : []).map((r) => [
-    r.sku ?? "",
-    r.product_name ?? "",
-    r.size ?? "",
-    r.color ?? "",
-    r.activity_date ? formatDateIso(r.activity_date).replace("—", "") : "",
-    Math.max(0, Number(r.in_stock) || 0),
-    Number(r.wac_cost) || 0,
-    Number(r.sell_price) || 0,
-    Number(r.stock_value) || 0,
-    r.status ?? "",
-  ]);
+function stockRowsToCsvData(dataRows, { includeCost = true } = {}) {
+  return (Array.isArray(dataRows) ? dataRows : []).map((r) => {
+    const row = [
+      r.sku ?? "",
+      r.product_name ?? "",
+      r.size ?? "",
+      r.color ?? "",
+      r.activity_date ? formatDateIso(r.activity_date).replace("—", "") : "",
+      Math.max(0, Number(r.in_stock) || 0),
+    ];
+    if (includeCost) row.push(Number(r.wac_cost) || 0);
+    row.push(Number(r.sell_price) || 0);
+    if (includeCost) row.push(Number(r.stock_value) || 0);
+    row.push(r.status ?? "");
+    return row;
+  });
 }
 
 function parseSkuDetailOpenRequest(searchParams) {
@@ -260,7 +272,7 @@ function parseSkuDetailOpenRequest(searchParams) {
 
 export default function StockInventoryList() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, can, permissionsReady } = useAdminPermissions();
+  const { user, can, permissionsReady, isSuperAdmin } = useAdminPermissions();
   const canViewStock = can("stock", "view");
   const canEditStock = can("stock", "edit");
   const canEditProducts = can("products", "edit");
@@ -341,8 +353,8 @@ export default function StockInventoryList() {
   }, [load, permissionsReady]);
 
   const displayRows = useMemo(
-    () => filterAndSortSkuStockList(rows, { search: "", stockFilter, sortBy, sortDir }),
-    [rows, stockFilter, sortBy, sortDir],
+    () => filterAndSortSkuStockList(rows, { search, stockFilter, sortBy, sortDir }),
+    [rows, search, stockFilter, sortBy, sortDir],
   );
 
   const listPage = useMemo(() => sliceAdminListPage(displayRows, page), [displayRows, page]);
@@ -431,6 +443,15 @@ export default function StockInventoryList() {
     [displayRows],
   );
 
+  const skuSortOptions = useMemo(
+    () =>
+      isSuperAdmin
+        ? SKU_STOCK_LIST_SORT_OPTIONS
+        : SKU_STOCK_LIST_SORT_OPTIONS.filter((opt) => opt.id !== "wac_cost" && opt.id !== "stock_value"),
+    [isSuperAdmin],
+  );
+
+  const tableColCount = isSuperAdmin ? 13 : 11;
   const hasDateRangeFilter = Boolean(fromDate || toDate);
 
   const clearToolbarFilters = () => {
@@ -542,8 +563,10 @@ export default function StockInventoryList() {
     const suffix = selectedIds.size > 0 ? "selected" : "all";
     downloadCsv({
       filename: `stock-inventory-${suffix}-${stamp}.csv`,
-      headers: STOCK_CSV_HEADERS,
-      rows: stockRowsToCsvData(exportTargetRows),
+      headers: isSuperAdmin
+        ? STOCK_CSV_HEADERS
+        : STOCK_CSV_HEADERS.filter((h) => h !== "WAC cost" && h !== "Stock value"),
+      rows: stockRowsToCsvData(exportTargetRows, { includeCost: isSuperAdmin }),
     });
     void toastSuccess({
       enText:
@@ -636,6 +659,7 @@ export default function StockInventoryList() {
             </div>
           </div>
           <AdminListQueryToolbar
+            embedded
             controlsAlign="right"
             search={search}
             onSearchChange={setSearch}
@@ -645,7 +669,7 @@ export default function StockInventoryList() {
             stockOptions={STOCK_INVENTORY_STOCK_FILTER_OPTIONS}
             sortBy={sortBy}
             onSortByChange={setSortBy}
-            sortOptions={SKU_STOCK_LIST_SORT_OPTIONS}
+            sortOptions={skuSortOptions}
             sortDir={sortDir}
             onSortDirChange={setSortDir}
             showingCount={usePagination ? paginatedRows.length : displayRows.length}
@@ -727,19 +751,19 @@ export default function StockInventoryList() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="admin-stock-inventory-table w-full min-w-[1320px] table-fixed text-sm">
+              <table className={`admin-stock-inventory-table w-full table-fixed text-sm ${isSuperAdmin ? "min-w-[1320px]" : "min-w-[1080px]"}`}>
                 <colgroup>
                   <col className="w-10" />
                   <col className="w-9" />
                   <col style={{ width: "228px" }} />
                   <col style={{ width: "140px" }} />
-                  <col style={{ width: "64px" }} />
                   <col style={{ width: "88px" }} />
+                  <col style={{ width: "100px" }} />
                   <col style={{ width: "96px" }} />
                   <col style={{ width: "108px" }} />
+                  {isSuperAdmin ? <col style={{ width: "84px" }} /> : null}
                   <col style={{ width: "84px" }} />
-                  <col style={{ width: "84px" }} />
-                  <col style={{ width: "92px" }} />
+                  {isSuperAdmin ? <col style={{ width: "92px" }} /> : null}
                   <col style={{ width: "108px" }} />
                   <col style={{ width: "44px" }} />
                 </colgroup>
@@ -751,7 +775,7 @@ export default function StockInventoryList() {
                     <th className="px-2 py-3" aria-hidden />
                     <th className="px-3 py-3 text-left">SKU</th>
                     <th className="px-3 py-3 text-left">Product</th>
-                    <th className="px-3 py-3 text-center">Size</th>
+                    <th className="px-3 py-3 text-left">Size</th>
                     <th className="px-3 py-3 text-left">Color</th>
                     <th
                       className="px-3 py-3 text-left"
@@ -760,9 +784,9 @@ export default function StockInventoryList() {
                       Date
                     </th>
                     <th className="px-3 py-3 text-right">In stock</th>
-                    <th className="px-3 py-3 text-right">WAC cost</th>
+                    {isSuperAdmin ? <th className="px-3 py-3 text-right">WAC cost</th> : null}
                     <th className="px-3 py-3 text-right">Sell price</th>
-                    <th className="px-3 py-3 text-right">Stock value</th>
+                    {isSuperAdmin ? <th className="px-3 py-3 text-right">Stock value</th> : null}
                     <th className="px-3 py-3 text-left">Status</th>
                     <th className="px-2 py-3" />
                   </tr>
@@ -781,162 +805,171 @@ export default function StockInventoryList() {
 
                     return (
                       <React.Fragment key={row.id}>
-                      <tr
-                        data-selected={isChecked ? "" : undefined}
-                        data-detail-open={isRowActive ? "" : undefined}
-                        className={`group cursor-pointer border-b transition-colors dark:border-slate-800/60 ${rowHighlighted ? "border-b-slate-200 dark:border-slate-700" : "border-slate-100"
-                          }`}
-                        onClick={(e) => toggleExpand(row, e)}
-                        aria-selected={isChecked}
-                        aria-expanded={isExpanded}
-                      >
-                        <td
-                          className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-2 py-3.5 text-center")}
-                          onClick={(e) => e.stopPropagation()}
+                        <tr
+                          data-selected={isChecked ? "" : undefined}
+                          data-detail-open={isRowActive ? "" : undefined}
+                          className={`group cursor-pointer border-b transition-colors dark:border-slate-800/60 ${rowHighlighted ? "border-b-slate-200 dark:border-slate-700" : "border-slate-100"
+                            }`}
+                          onClick={(e) => toggleExpand(row, e)}
+                          aria-selected={isChecked}
+                          aria-expanded={isExpanded}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleRowSelection(row.id)}
-                            className="h-4 w-4 rounded border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
-                            aria-label={`Select ${row.sku}`}
-                          />
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-2 py-3.5 text-slate-400")}>
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" aria-hidden />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" aria-hidden />
-                          )}
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5 align-top")}>
-                          <span
-                            className={`inline-block max-w-full break-all rounded border px-2 py-1 font-mono text-[11px] font-semibold leading-snug tracking-tight text-slate-700 dark:text-slate-200 ${rowHighlighted
+                          <td
+                            className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-2 py-3.5 text-center")}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleRowSelection(row.id)}
+                              className="h-4 w-4 rounded border-slate-300 text-[color:var(--admin-primary)] focus:ring-[color:var(--admin-primary)] dark:border-slate-600"
+                              aria-label={`Select ${row.sku}`}
+                            />
+                          </td>
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-2 py-3.5 text-slate-400")}>
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" aria-hidden />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" aria-hidden />
+                            )}
+                          </td>
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5 align-top")}>
+                            <span
+                              className={`inline-block max-w-full break-all rounded border px-2 py-1 font-mono text-[11px] font-semibold leading-snug tracking-tight text-slate-700 dark:text-slate-200 ${rowHighlighted
                                 ? "border-slate-200/70 bg-white dark:border-slate-600/80 dark:bg-slate-800/80"
                                 : "border-slate-200/90 bg-slate-100 dark:border-slate-600 dark:bg-slate-800"
-                              }`}
+                                }`}
+                            >
+                              {row.sku}
+                            </span>
+                          </td>
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5 font-bold text-slate-900 dark:text-slate-50")}>
+                            <span className="line-clamp-2 leading-snug">{row.product_name}</span>
+                            {row.lot_summary && (row.lot_summary.clearance > 0 || row.lot_summary.newer > 0) ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {row.lot_summary.newer > 0 ? (
+                                  <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-200">
+                                    Newer {row.lot_summary.newer}
+                                  </span>
+                                ) : null}
+                                {row.lot_summary.clearance > 0 ? (
+                                  <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+                                    CLR {row.lot_summary.clearance}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5")}>
+                            {row.size ? (
+                              <span
+                                className="inline-flex max-w-full items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold tabular-nums tracking-wide text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                                title={row.size}
+                              >
+                                <span className="truncate">{row.size}</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5")}>
+                            {row.color ? (
+                              <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+                                {row.color}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                          <td
+                            className={stockRowTdClass(
+                              tdBg,
+                              isChecked,
+                              isRowActive,
+                              "px-3 py-3.5 tabular-nums text-slate-600 dark:text-slate-300",
+                            )}
                           >
-                            {row.sku}
-                          </span>
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5 font-bold text-slate-900 dark:text-slate-50")}>
-                          <span className="line-clamp-2 leading-snug">{row.product_name}</span>
-                          {row.lot_summary && (row.lot_summary.clearance > 0 || row.lot_summary.newer > 0) ? (
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {row.lot_summary.newer > 0 ? (
-                                <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-200">
-                                  Newer {row.lot_summary.newer}
-                                </span>
-                              ) : null}
-                              {row.lot_summary.clearance > 0 ? (
-                                <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-                                  CLR {row.lot_summary.clearance}
-                                </span>
-                              ) : null}
+                            {formatDateIso(row.activity_date)}
+                          </td>
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5")}>
+                            <InStockCell qty={row.in_stock} maxHint={maxStockForBar} />
+                          </td>
+                          {isSuperAdmin ? (
+                          <td
+                            className={stockRowTdClass(
+                              tdBg,
+                              isChecked,
+                              isRowActive,
+                              "px-3 py-3.5 text-right tabular-nums text-slate-700 dark:text-slate-300",
+                            )}
+                          >
+                            {formatPoMoney(row.wac_cost)}
+                          </td>
+                          ) : null}
+                          <td
+                            className={stockRowTdClass(
+                              tdBg,
+                              isChecked,
+                              isRowActive,
+                              "px-3 py-3.5 text-right tabular-nums font-medium text-teal-700 dark:text-teal-400",
+                            )}
+                          >
+                            <div>
+                              {row.sell_price_source === "unsellable_lots"
+                                ? "—"
+                                : formatPoMoney(row.next_sell_price ?? row.sell_price)}
                             </div>
-                          ) : null}
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5 text-center")}>
-                          {row.size ? (
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300/90 bg-white text-xs font-bold text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-                              {row.size}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5")}>
-                          {row.color ? (
-                            <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                              {row.color}
-                            </span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td
-                          className={stockRowTdClass(
-                            tdBg,
-                            isChecked,
-                            isRowActive,
-                            "px-3 py-3.5 tabular-nums text-slate-600 dark:text-slate-300",
-                          )}
-                        >
-                          {formatDateIso(row.activity_date)}
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-3 py-3.5")}>
-                          <InStockCell qty={row.in_stock} maxHint={maxStockForBar} />
-                        </td>
-                        <td
-                          className={stockRowTdClass(
-                            tdBg,
-                            isChecked,
-                            isRowActive,
-                            "px-3 py-3.5 text-right tabular-nums text-slate-700 dark:text-slate-300",
-                          )}
-                        >
-                          {formatPoMoney(row.wac_cost)}
-                        </td>
-                        <td
-                          className={stockRowTdClass(
-                            tdBg,
-                            isChecked,
-                            isRowActive,
-                            "px-3 py-3.5 text-right tabular-nums font-medium text-teal-700 dark:text-teal-400",
-                          )}
-                        >
-                          <div>
-                            {row.sell_price_source === "unsellable_lots"
-                              ? "—"
-                              : formatPoMoney(row.next_sell_price ?? row.sell_price)}
-                          </div>
-                          {row.sell_price_source === "inventory_lot" && row.next_lot_tier ? (
-                            <p className="mt-0.5 text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                              FIFO lot
-                            </p>
-                          ) : null}
-                        </td>
-                        <td
-                          className={stockRowTdClass(
-                            tdBg,
-                            isChecked,
-                            isRowActive,
-                            "px-3 py-3.5 text-right tabular-nums font-semibold text-blue-600 dark:text-blue-400",
-                          )}
-                        >
-                          {formatPoMoney(row.stock_value)}
-                        </td>
-                        <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "min-w-[7.5rem] px-3 py-3.5")}>
-                          <StatusPill status={row.status} />
-                        </td>
-                        <td
-                          className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-2 py-3.5")}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {canEditProducts ? (
-                          <Link
-                            to={`/admin/products?edit=${row.product_id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                            title="Edit product"
-                            aria-label="Edit product"
+                            {row.sell_price_source === "inventory_lot" && row.next_lot_tier ? (
+                              <p className="mt-0.5 text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                                FIFO lot
+                              </p>
+                            ) : null}
+                          </td>
+                          {isSuperAdmin ? (
+                          <td
+                            className={stockRowTdClass(
+                              tdBg,
+                              isChecked,
+                              isRowActive,
+                              "px-3 py-3.5 text-right tabular-nums font-semibold text-blue-600 dark:text-blue-400",
+                            )}
                           >
-                            <Pencil className="h-4 w-4" />
-                          </Link>
+                            {formatPoMoney(row.stock_value)}
+                          </td>
                           ) : null}
-                        </td>
-                      </tr>
-                      {isExpanded ? (
-                        <tr>
-                          <ExpandedMovementsPreview
-                            movements={listMovements || []}
-                            loading={listMovementsBusy}
-                            hasDateRange={listHasDateRange}
-                            onShowDetails={() => openDetailSheet(row)}
-                            skuRow={row}
-                          />
+                          <td className={stockRowTdClass(tdBg, isChecked, isRowActive, "min-w-[7.5rem] px-3 py-3.5")}>
+                            <StatusPill status={row.status} />
+                          </td>
+                          <td
+                            className={stockRowTdClass(tdBg, isChecked, isRowActive, "px-2 py-3.5")}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {canEditProducts ? (
+                              <Link
+                                to={`/admin/products?edit=${row.product_id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                                title="Edit product"
+                                aria-label="Edit product"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Link>
+                            ) : null}
+                          </td>
                         </tr>
-                      ) : null}
+                        {isExpanded ? (
+                          <tr>
+                            <ExpandedMovementsPreview
+                              movements={listMovements || []}
+                              loading={listMovementsBusy}
+                              hasDateRange={listHasDateRange}
+                              onShowDetails={() => openDetailSheet(row)}
+                              skuRow={row}
+                              showCost={isSuperAdmin}
+                              tableColCount={tableColCount}
+                            />
+                          </tr>
+                        ) : null}
                       </React.Fragment>
                     );
                   })}
@@ -960,7 +993,9 @@ export default function StockInventoryList() {
                         </span>
                       </span>
                     </td>
-                    <td colSpan={2} />
+                    {isSuperAdmin ? <td /> : null}
+                    <td />
+                    {isSuperAdmin ? (
                     <td className="px-3 py-3.5 text-right">
                       <span className="text-slate-500">
                         Stock value:{" "}
@@ -969,6 +1004,7 @@ export default function StockInventoryList() {
                         </span>
                       </span>
                     </td>
+                    ) : null}
                     <td colSpan={2} />
                   </tr>
                 </tfoot>

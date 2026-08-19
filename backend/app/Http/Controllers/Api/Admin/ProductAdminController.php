@@ -347,7 +347,10 @@ class ProductAdminController extends Controller
             ->orderByDesc('id')
             ->paginate($perPage);
 
-        $paginator->getCollection()->transform(fn (Product $product) => $this->withLotCatalogPricing($product));
+        $viewer = $request->user();
+        $paginator->getCollection()->transform(
+            fn (Product $product) => $this->withLotCatalogPricing($product, $viewer),
+        );
 
         return $paginator;
     }
@@ -451,17 +454,18 @@ class ProductAdminController extends Controller
             // Ignore message creation failures
         }
 
-        return response()->json($product, 201);
+        return response()->json($this->hideCatalogCostUnlessSuperAdmin($product, $request->user()), 201);
     }
 
-    public function show(Product $product)
+    public function show(Request $request, Product $product)
     {
         return $this->withLotCatalogPricing(
             $product->load(['category', 'brand', 'supplier', 'activeDiscount']),
+            $request->user(),
         );
     }
 
-    private function withLotCatalogPricing(Product $product): Product
+    private function withLotCatalogPricing(Product $product, $viewer = null): Product
     {
         $product->setAttribute('sellable_stock', $this->inventoryLots->productSellableStock($product));
 
@@ -480,6 +484,18 @@ class ProductAdminController extends Controller
                 $product->setAttribute('lot_sell_price_max', $pricing['sell_max']);
             }
         }
+
+        return $this->hideCatalogCostUnlessSuperAdmin($product, $viewer);
+    }
+
+    private function hideCatalogCostUnlessSuperAdmin(Product $product, $viewer = null): Product
+    {
+        $viewer = $viewer ?? request()->user();
+        if ($viewer && $viewer->isSuperAdmin()) {
+            return $product;
+        }
+
+        $product->makeHidden(['cost_price', 'lot_cost_price_max']);
 
         return $product;
     }
@@ -566,7 +582,10 @@ class ProductAdminController extends Controller
 
         $product->update($data);
 
-        return $product->load(['category', 'brand', 'supplier', 'activeDiscount']);
+        return $this->hideCatalogCostUnlessSuperAdmin(
+            $product->load(['category', 'brand', 'supplier', 'activeDiscount']),
+            $request->user(),
+        );
     }
 
     public function destroy(Product $product)

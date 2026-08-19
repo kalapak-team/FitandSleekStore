@@ -75,6 +75,9 @@ import {
   sortProducts,
 } from "../../lib/productSort.js";
 import { formatCatalogLotMoney } from "../../lib/catalogLotPricing.js";
+import { useAdminAccents } from "../../lib/adminAccents.js";
+import { useAdminUiPreference } from "../../lib/adminUiPreferences.js";
+import { ADMIN_NUMBER_FORMAT, formatNumber, formatUsd } from "../../lib/adminNumberFormat.js";
 
 const PRODUCTS_TABLE_COLUMNS = [
   { id: "select", label: "Select" },
@@ -96,6 +99,43 @@ const PRODUCTS_SORT_STORAGE_KEY = "fitandsleek-products-sort";
 const EMPTY_TABLE_CELL = "-";
 
 const FILTER_NONE = "__none__";
+
+function kpiValueSize(text) {
+  const n = String(text || "").replace(/\s/g, "").length;
+  if (n >= 14) return "text-[1.05rem] sm:text-lg";
+  if (n >= 11) return "text-xl";
+  if (n >= 9) return "text-[1.4rem]";
+  return "text-[1.65rem]";
+}
+
+function ProductStatCard({ title, value, subtext, icon, iconBoxStyle }) {
+  return (
+    <div className="admin-surface admin-spectrum-kpi flex h-full min-h-[128px] min-w-0 flex-col overflow-hidden rounded-2xl border admin-border p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-[13px] font-medium text-slate-600 dark:text-slate-400">{title}</p>
+        <div
+          className="admin-stat-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border admin-border"
+          style={iconBoxStyle}
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+          </svg>
+        </div>
+      </div>
+      <p
+        className={`mt-3 min-w-0 truncate font-semibold tabular-nums leading-tight text-slate-900 dark:text-white ${kpiValueSize(value)}`}
+        title={String(value)}
+      >
+        {value}
+      </p>
+      {subtext ? (
+        <p className="mt-2 truncate text-xs text-slate-500 dark:text-slate-500" title={String(subtext)}>
+          {subtext}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function formatProductMoney(value) {
   if (value == null || value === "") return EMPTY_TABLE_CELL;
@@ -146,6 +186,15 @@ function totalStockForProduct(product) {
   if (matrixRows.length > 0) return variantMatrixTotalQty(product.variant_matrix);
   const stock = Number(product.stock);
   return Number.isFinite(stock) ? Math.max(0, stock) : 0;
+}
+
+function productIsOutOfStock(product) {
+  return totalStockForProduct(product) <= 0;
+}
+
+function productSellUnitPrice(product) {
+  const n = Number(product?.price);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function colorsAvailableLabel(rawColors) {
@@ -519,7 +568,7 @@ export default function AdminProducts({
     return true;
   };
   const { refresh: refreshAuth } = useAuth();
-  const { can } = useAdminPermissions();
+  const { can, isSuperAdmin } = useAdminPermissions();
   const canCreateProducts = can("products", "create");
   const canEditProducts = can("products", "edit");
   const canDeleteProducts = can("products", "delete");
@@ -527,6 +576,8 @@ export default function AdminProducts({
   const canCreateBrands = can("brands", "create");
   const canUploadProductMedia = canCreateProducts || canEditProducts;
   const { primaryColor, mode } = useTheme();
+  const { iconBoxStyle } = useAdminAccents();
+  const [numberFormat] = useAdminUiPreference("dashboard.numberFormat", ADMIN_NUMBER_FORMAT.COMPACT);
   const { settings: homepageSettings } = useHomepageSettings();
   const isDark = mode === "dark";
   const accentColor = primaryColor;
@@ -1479,14 +1530,22 @@ export default function AdminProducts({
     saveProductSortPrefs(PRODUCTS_SORT_STORAGE_KEY, productSort);
   }, [productSort]);
 
-  const isColVisible = (columnId) => columnVisibility[columnId] !== false;
+  const productTableColumns = useMemo(
+    () => (isSuperAdmin ? PRODUCTS_TABLE_COLUMNS : PRODUCTS_TABLE_COLUMNS.filter((col) => col.id !== "costPrice")),
+    [isSuperAdmin],
+  );
+
+  const isColVisible = (columnId) => {
+    if (columnId === "costPrice" && !isSuperAdmin) return false;
+    return columnVisibility[columnId] !== false;
+  };
 
   const toggleTableColumn = (columnId) => {
     setColumnVisibility((prev) => ({ ...prev, [columnId]: !isColVisible(columnId) }));
   };
 
   const setAllTableColumnsVisible = (visible) => {
-    setColumnVisibility(buildAllColumnsVisibility(PRODUCTS_TABLE_COLUMNS, visible, "productName"));
+    setColumnVisibility(buildAllColumnsVisibility(productTableColumns, visible, "productName"));
   };
 
   /** After labels load, apply average-bundle price from linked stock_label_id. */
@@ -2254,8 +2313,8 @@ export default function AdminProducts({
     const matchesSectionFilter = matchesSection(listFilters.applied, "section", (key) =>
       catName.includes(key.toLowerCase()) || catSlug.includes(key.toLowerCase()));
     const matchesStockFilter = matchesSection(listFilters.applied, "stock", (key) => {
-      if (key === "out") return Number(p.stock) === 0;
-      if (key === "in_stock") return Number(p.stock) > 0;
+      if (key === "out") return productIsOutOfStock(p);
+      if (key === "in_stock") return !productIsOutOfStock(p);
       if (key === "active") return !!p.is_active;
       if (key === "inactive") return !p.is_active;
       return false;
@@ -2334,7 +2393,7 @@ export default function AdminProducts({
     [paginatedRows, productSort.groupBy, sortContext],
   );
 
-  const visibleTableColumnCount = PRODUCTS_TABLE_COLUMNS.filter((col) => isColVisible(col.id)).length;
+  const visibleTableColumnCount = productTableColumns.filter((col) => isColVisible(col.id)).length;
 
   const splitColumns = [
     paginatedRows.filter((_, index) => index % 2 === 0),
@@ -2369,8 +2428,8 @@ export default function AdminProducts({
     ].map((opt) => ({
       ...opt,
       count: rows.filter((p) => {
-        if (opt.value === "out") return Number(p.stock) === 0;
-        if (opt.value === "in_stock") return Number(p.stock) > 0;
+        if (opt.value === "out") return productIsOutOfStock(p);
+        if (opt.value === "in_stock") return !productIsOutOfStock(p);
         if (opt.value === "active") return !!p.is_active;
         if (opt.value === "inactive") return !p.is_active;
         return false;
@@ -2578,6 +2637,26 @@ export default function AdminProducts({
     </tr>
   );
 
+  const catalogKpis = useMemo(() => {
+    const totalProducts = rows.length;
+    const activeProducts = rows.filter((p) => !!p.is_active).length;
+    const outOfStock = rows.filter((p) => productIsOutOfStock(p)).length;
+    const onHandValue = rows.reduce(
+      (sum, p) => sum + productSellUnitPrice(p) * totalStockForProduct(p),
+      0,
+    );
+    return {
+      sales: formatUsd(onHandValue, numberFormat),
+      products: formatNumber(totalProducts, numberFormat),
+      active: formatNumber(activeProducts, numberFormat),
+      outOfStock: formatNumber(outOfStock, numberFormat),
+      salesHint: "Sell price × on-hand stock",
+      productsHint: "In the current catalogue",
+      activeHint: `${formatNumber(totalProducts - activeProducts, numberFormat)} inactive`,
+      stockHint: outOfStock ? "Need restock" : "All listed items have stock",
+    };
+  }, [rows, numberFormat]);
+
   if (!embeddedInPo && loading) return <AdminContentSkeleton lines={3} imageHeight={240} />;
 
   if (embeddedInPo && loading) {
@@ -2610,13 +2689,13 @@ export default function AdminProducts({
   return (
  <>
       {!embeddedInPo ? (
-        <div>
+        <div className="mb-5">
           <div className="w-full min-w-0 space-y-5">
             {/* Page header */}
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Products</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your product catalog</p>
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Products</h1>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage your product catalog</p>
               </div>
               {canCreateProducts ? (
               <button
@@ -2637,20 +2716,35 @@ export default function AdminProducts({
               ) : null}
             </div>
 
-            {/* Stat cards */}
-            <div className="admin-stat-grid grid grid-cols-2 xl:grid-cols-4 gap-4">
-              {[
-                { label: "Total Sales", value: `$${Number(rows.reduce((s, p) => s + Number(p.price || 0) * (p.sold_count || 0), 0) || 0).toLocaleString()}`, sub: "+20.1%" },
-                { label: "Total Products", value: rows.length.toLocaleString(), sub: "+5.02%" },
-                { label: "Active Products", value: rows.filter((p) => p.is_active).length.toLocaleString(), sub: "+3.1%" },
-                { label: "Out of Stock", value: rows.filter((p) => Number(p.stock) === 0).length.toLocaleString(), sub: "-3.58%" },
-              ].map((c, index) => (
-                <div key={c.label} className="admin-surface admin-spectrum-kpi rounded-xl border admin-border p-4">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{c.label}</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1.5 leading-none">{c.value}</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">{c.sub} from last month</p>
-                </div>
-              ))}
+            <div className="admin-stat-grid grid grid-cols-2 gap-4 [&>*]:min-w-0 xl:grid-cols-4">
+              <ProductStatCard
+                title="On-hand value"
+                value={catalogKpis.sales}
+                subtext={catalogKpis.salesHint}
+                icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                iconBoxStyle={iconBoxStyle(0)}
+              />
+              <ProductStatCard
+                title="Total products"
+                value={catalogKpis.products}
+                subtext={catalogKpis.productsHint}
+                icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                iconBoxStyle={iconBoxStyle(1)}
+              />
+              <ProductStatCard
+                title="Active"
+                value={catalogKpis.active}
+                subtext={catalogKpis.activeHint}
+                icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                iconBoxStyle={iconBoxStyle(2)}
+              />
+              <ProductStatCard
+                title="Out of stock"
+                value={catalogKpis.outOfStock}
+                subtext={catalogKpis.stockHint}
+                icon="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                iconBoxStyle={iconBoxStyle(3)}
+              />
             </div>
 
             {/* Error Alert */}
@@ -2763,7 +2857,7 @@ export default function AdminProducts({
                   </FieldWithQuickCreate>
                 </div>
 
-                <CatalogPricingReadOnly />
+                <CatalogPricingReadOnly showCost={isSuperAdmin} />
 
               </fieldset>
 
@@ -3257,7 +3351,7 @@ export default function AdminProducts({
       {!embeddedInPo ? (
         <>
           {/* Products table card */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
             <div className="relative z-10 px-5 py-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between">
                 <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
@@ -3382,7 +3476,7 @@ export default function AdminProducts({
                 </button>
 
                 <TableColumnVisibilityMenu
-                  columns={PRODUCTS_TABLE_COLUMNS}
+                  columns={productTableColumns}
                   visibility={columnVisibility}
                   onToggle={toggleTableColumn}
                   onShowAll={() => setAllTableColumnsVisible(true)}
@@ -3766,7 +3860,7 @@ export default function AdminProducts({
                         </FieldWithQuickCreate>
                       </div>
 
-                      <CatalogPricingReadOnly productId={editing.id} product={editing} />
+                      <CatalogPricingReadOnly showCost={isSuperAdmin} productId={editing.id} product={editing} />
 
                     </fieldset>
 

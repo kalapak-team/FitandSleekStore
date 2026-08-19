@@ -66,36 +66,25 @@ export function ReportChartTooltip({ active, payload, label, theme, formatLine }
 export function ReportLegendPills({ rows, theme, formatValue }) {
   if (!rows?.length) return null;
   return (
-    <ul className="w-full max-h-64 space-y-1.5 overflow-y-auto text-xs pr-0.5">
+    <ul className="w-full max-h-64 space-y-0.5 overflow-y-auto text-xs pr-0.5">
       {rows.map((row, index) => {
         const color = row.fill || theme.chartColor?.(index) || reportChartColor(index);
         return (
           <li
             key={row.key || row.name || index}
-            className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 transition-colors"
-            style={{
-              backgroundColor: theme.isDark
-                ? "rgba(255,255,255,0.04)"
-                : "rgba(15,23,42,0.025)",
-            }}
+            className="flex items-center justify-between gap-3 rounded-lg px-1 py-2"
           >
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2.5">
               <span
-                className="h-2 w-2 shrink-0 rounded-full ring-2"
-                style={{ backgroundColor: color, ringColor: `${color}33` }}
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: color }}
                 aria-hidden
               />
-              <span className="truncate font-medium" style={{ color: theme.subtitle }}>
+              <span className="truncate font-medium" style={{ color: theme.title }}>
                 {row.name}
               </span>
             </span>
-            <span
-              className="shrink-0 rounded-md px-2 py-0.5 font-semibold tabular-nums text-[11px]"
-              style={{
-                backgroundColor: `${color}1A`,
-                color: color,
-              }}
-            >
+            <span className="shrink-0 font-semibold tabular-nums text-[11px]" style={{ color: theme.subtitle }}>
               {formatValue(row)}
             </span>
           </li>
@@ -176,74 +165,83 @@ export function ReportSection({
   children,
   theme,
   className = "",
-  showAccent = true,
+  action,
 }) {
   return (
     <section
       id={id}
-      className={`mb-6 rounded-2xl border overflow-hidden ${className}`}
+      className={`mb-8 overflow-hidden rounded-2xl border ${className}`}
       style={{
         background: theme.cardBg,
         borderColor: theme.cardBorder,
-        boxShadow: theme.cardShadow,
+        boxShadow: theme.isDark ? theme.cardShadow : "none",
       }}
     >
-      <header
-        className="flex items-center gap-3 px-6 py-4 border-b"
-        style={{
-          borderColor: theme.cardBorder,
-          background: theme.isDark
-            ? "rgba(255,255,255,0.025)"
-            : "rgba(248,250,252,0.8)",
-        }}
-      >
-        {showAccent ? (
-          <div
-            className="w-1 h-7 rounded-full flex-shrink-0"
-            style={{ background: theme.sectionAccentGradient || "#6366F1" }}
-          />
-        ) : null}
+      <header className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6 md:px-8 md:pt-7">
         <div className="min-w-0">
-          <h2
-            className="text-sm font-bold tracking-tight"
-            style={{ color: theme.title }}
-          >
+          <h2 className="text-base font-semibold tracking-tight" style={{ color: theme.title }}>
             {title}
           </h2>
           {subtitle ? (
-            <p className="mt-0.5 text-xs font-medium" style={{ color: theme.subtitle }}>
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: theme.subtitle }}>
               {subtitle}
             </p>
           ) : null}
         </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </header>
-      <div className="p-6">{children}</div>
+      <div className="px-6 pb-6 pt-5 md:px-8 md:pb-8">{children}</div>
     </section>
   );
 }
 
-export function ReportChartPanel({ title, subtitle, children, theme, className = "", action, style }) {
+export function ReportChartPanel({
+  title,
+  subtitle,
+  children,
+  theme,
+  className = "",
+  action,
+  style,
+  embedded = false,
+}) {
+  if (embedded) {
+    return (
+      <div className={`min-w-0 ${className}`} style={style}>
+        {(title || action) ? (
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              {title ? (
+                <h3 className="text-sm font-semibold tracking-tight" style={{ color: theme.title }}>
+                  {title}
+                </h3>
+              ) : null}
+              {subtitle ? (
+                <p className="mt-0.5 text-xs leading-relaxed" style={{ color: theme.subtitle }}>
+                  {subtitle}
+                </p>
+              ) : null}
+            </div>
+            {action ? <div className="shrink-0">{action}</div> : null}
+          </div>
+        ) : null}
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`rounded-xl overflow-hidden border ${className}`}
+      className={`overflow-hidden rounded-xl border ${className}`}
       style={{
         background: theme.cardBg,
         borderColor: theme.cardBorder,
-        boxShadow: theme.isDark
-          ? "0 1px 4px rgba(0,0,0,0.25)"
-          : "0 1px 4px rgba(15,23,42,0.05)",
         ...style,
       }}
     >
-      <div
-        className="flex items-start justify-between gap-3 px-4 py-3 border-b"
-        style={{
-          borderColor: theme.cardBorder,
-          background: theme.panelHeaderBg || theme.panelBg,
-        }}
-      >
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
-          <h3 className="text-xs font-bold tracking-tight" style={{ color: theme.title }}>
+          <h3 className="text-xs font-semibold tracking-tight" style={{ color: theme.title }}>
             {title}
           </h3>
           {subtitle ? (
@@ -254,7 +252,7 @@ export function ReportChartPanel({ title, subtitle, children, theme, className =
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="px-4 pb-4">{children}</div>
     </div>
   );
 }

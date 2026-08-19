@@ -323,6 +323,15 @@ class StockInventoryAdminController extends BaseAdminController
         }
         unset($event);
 
+        $canSeeCost = $request->user() instanceof \App\Models\User && $request->user()->isSuperAdmin();
+        if (! $canSeeCost) {
+            $events = array_map(function (array $event) {
+                unset($event['cost_per_unit']);
+
+                return $event;
+            }, $events);
+        }
+
         return response()->json(['data' => $events]);
     }
 
@@ -524,15 +533,6 @@ class StockInventoryAdminController extends BaseAdminController
             ->where('is_active', true)
             ->orderBy('name');
 
-        if ($search !== '') {
-            $like = '%'.$search.'%';
-            $query->where(function ($q) use ($like) {
-                $q->where('name', 'like', $like)
-                    ->orWhere('sku', 'like', $like)
-                    ->orWhere('barcode_code', 'like', $like);
-            });
-        }
-
         $products = $query->get();
         $rows = [];
         $lastActivityDates = $this->lastActivityDatesByVariant($fromDate, $toDate);
@@ -553,6 +553,7 @@ class StockInventoryAdminController extends BaseAdminController
                         $row['product_name'],
                         $row['size'],
                         $row['color'],
+                        (string) ($product->barcode_code ?? ''),
                     ]));
                     if (! str_contains($hay, strtolower($search))) {
                         continue;
@@ -565,8 +566,17 @@ class StockInventoryAdminController extends BaseAdminController
 
         usort($rows, fn ($a, $b) => strcmp((string) $a['sku'], (string) $b['sku']));
 
+        $canSeeCost = $request->user() instanceof \App\Models\User && $request->user()->isSuperAdmin();
+        if (! $canSeeCost) {
+            $rows = array_map(function (array $row) {
+                unset($row['wac_cost'], $row['stock_value'], $row['next_lot_cost']);
+
+                return $row;
+            }, $rows);
+        }
+
         $totalUnits = array_sum(array_column($rows, 'in_stock'));
-        $totalValue = round(array_sum(array_column($rows, 'stock_value')), 2);
+        $totalValue = $canSeeCost ? round(array_sum(array_column($rows, 'stock_value')), 2) : null;
 
         return response()->json([
             'data' => array_values($rows),

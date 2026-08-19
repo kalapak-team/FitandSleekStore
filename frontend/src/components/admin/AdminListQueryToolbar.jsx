@@ -82,7 +82,7 @@ export default function AdminListQueryToolbar({
 
   const dateLabelClass = "text-xs font-medium text-slate-600 dark:text-slate-400";
   const inlineFieldClass = singleRow ? "shrink-0 w-auto" : "w-full sm:w-auto";
-  const dateInputWidth = compact ? "w-[9.5rem]" : "sm:w-[10.5rem]";
+  const dateInputWidth = compact ? "w-[9.5rem]" : "w-[11.25rem]";
   const searchMinWidth = compact ? "min-w-[9rem]" : "min-w-[11rem]";
   const searchMaxWidth = compact ? "max-w-[12rem]" : "max-w-[16rem]";
   const selectMin = (wide, narrow) => (compact ? narrow : wide);
@@ -94,25 +94,25 @@ export default function AdminListQueryToolbar({
 
   const dateRangeFields = showDateRange ? (
     <>
-      <label className={`flex flex-col gap-1 ${singleRow ? "shrink-0" : "w-full sm:w-auto"}`}>
+      <label className={`flex flex-col gap-1 ${singleRow ? "shrink-0" : ""}`}>
         <span className={dateLabelClass}>From date</span>
         <input
           type="date"
           value={fromDate}
           onChange={(e) => onFromDateChange(e.target.value)}
           max={toDate || undefined}
-          className={`${fieldClass} w-full min-w-0 ${dateInputWidth}`}
+          className={`${fieldClass} ${dateInputWidth} max-w-full`}
           aria-label="From date"
         />
       </label>
-      <label className={`flex flex-col gap-1 ${singleRow ? "shrink-0" : "w-full sm:w-auto"}`}>
+      <label className={`flex flex-col gap-1 ${singleRow ? "shrink-0" : ""}`}>
         <span className={dateLabelClass}>To date</span>
         <input
           type="date"
           value={toDate}
           onChange={(e) => onToDateChange(e.target.value)}
           min={fromDate || undefined}
-          className={`${fieldClass} w-full min-w-0 ${dateInputWidth}`}
+          className={`${fieldClass} ${dateInputWidth} max-w-full`}
           aria-label="To date"
         />
       </label>
@@ -129,7 +129,7 @@ export default function AdminListQueryToolbar({
   });
   const showSort = Array.isArray(sortOptions) && sortOptions.length > 0;
 
-  const controlSelects = (
+  const filterSelects = (
     <>
       {statusOptions?.length ? (
         <ToolbarSearchSelect
@@ -138,7 +138,7 @@ export default function AdminListQueryToolbar({
           options={statusOptions}
           ariaLabel="Filter by status"
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[9.5rem]", "min-w-[8rem] max-w-[9rem]")}`}
-          wrapperClassName={inlineFieldClass}
+          wrapperClassName={`${inlineFieldClass} shrink-0`}
           menuMinWidth={152}
         />
       ) : null}
@@ -149,7 +149,7 @@ export default function AdminListQueryToolbar({
           options={supplierOptions}
           ariaLabel="Filter by supplier"
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[10rem]", "min-w-[8.5rem] max-w-[9.5rem]")}`}
-          wrapperClassName={inlineFieldClass}
+          wrapperClassName={`${inlineFieldClass} shrink-0`}
           menuMinWidth={160}
         />
       ) : null}
@@ -160,7 +160,7 @@ export default function AdminListQueryToolbar({
           options={stockOptions}
           ariaLabel={stockFilterAriaLabel}
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[9.5rem]", "min-w-[8rem] max-w-[9rem]")}`}
-          wrapperClassName={inlineFieldClass}
+          wrapperClassName={`${inlineFieldClass} shrink-0`}
           menuMinWidth={152}
         />
       ) : null}
@@ -171,7 +171,7 @@ export default function AdminListQueryToolbar({
           options={methodOptions}
           ariaLabel="Filter by method"
           className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[10rem]", "min-w-[8.5rem] max-w-[9.5rem]")}`}
-          wrapperClassName={inlineFieldClass}
+          wrapperClassName={`${inlineFieldClass} shrink-0`}
           menuMinWidth={160}
         />
       ) : null}
@@ -186,7 +186,7 @@ export default function AdminListQueryToolbar({
             }))}
             ariaLabel="Sort by"
             className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[10.5rem]", "min-w-[9rem] max-w-[10rem]")}`}
-            wrapperClassName={inlineFieldClass}
+            wrapperClassName={`${inlineFieldClass} shrink-0`}
             menuMinWidth={168}
           />
           {showSortDir ? (
@@ -196,21 +196,24 @@ export default function AdminListQueryToolbar({
               options={SORT_DIR_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label }))}
               ariaLabel="Sort direction"
               className={`${fieldClass} ${inlineFieldClass} ${selectMin("sm:min-w-[5.5rem]", "min-w-[5rem] max-w-[5.5rem]")}`}
-              wrapperClassName={inlineFieldClass}
+              wrapperClassName={`${inlineFieldClass} shrink-0`}
               menuMinWidth={120}
             />
           ) : null}
         </>
       ) : null}
+    </>
+  );
+
+  const controlSelects = (
+    <>
+      {filterSelects}
       {dateRangeFields}
     </>
   );
 
   const metaRow = (
-    <div
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400 ${controlsAlign === "right" ? "justify-end" : "justify-between"
-        }`}
-    >
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
       <span>
         Showing {showingCount} of {totalCount}
         {filtersActive ? " (filtered)" : ""}
@@ -249,22 +252,29 @@ export default function AdminListQueryToolbar({
   if (controlsAlign === "right") {
     return (
       <div className={shellClass}>
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:gap-3">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={searchPlaceholder}
-            className={`${ADMIN_LIST_FIELD_CLASS} min-w-0 flex-1`}
-            aria-label="Search list"
-          />
-          <div
-            className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end sm:justify-end lg:shrink-0"
-          >
-            {controlSelects}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={searchPlaceholder}
+              className={`${ADMIN_LIST_FIELD_CLASS} w-full min-w-[12rem] xl:flex-1 xl:min-w-[18rem]`}
+              aria-label="Search list"
+            />
+            <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
+              {filterSelects}
+            </div>
           </div>
+          {showDateRange ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+              <div className="flex flex-wrap items-end gap-2">{dateRangeFields}</div>
+              <div className="sm:mb-2.5">{metaRow}</div>
+            </div>
+          ) : (
+            metaRow
+          )}
         </div>
-        {metaRow}
       </div>
     );
   }

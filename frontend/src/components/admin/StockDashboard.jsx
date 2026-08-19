@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import ChartResizeMenu from "./ChartResizeMenu.jsx";
 import AdminSearchSelect from "./AdminSearchSelect.jsx";
 import api from "../../lib/api";
@@ -150,11 +151,12 @@ export default function StockDashboard({ theme, numberFormat = ADMIN_NUMBER_FORM
           Loading charts…
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-2 xl:gap-10">
           <ReportChartPanel
+            embedded
             className="report-chart-panel"
             title="Stock by label"
-            subtitle="Current on-hand units per inventory label"
+            subtitle="On-hand units per inventory label"
             theme={theme}
             style={{ gridColumn: `span ${labelSpan}` }}
             action={<ChartResizeMenu colSpan={labelSpan} maxCols={2} onChange={setLabelSpan} />}
@@ -184,6 +186,7 @@ export default function StockDashboard({ theme, numberFormat = ADMIN_NUMBER_FORM
           </ReportChartPanel>
 
           <ReportChartPanel
+            embedded
             className="report-chart-panel"
             title="Stock in by month"
             subtitle={`Units received · ${rangeLabel}`}
@@ -274,6 +277,46 @@ export default function StockDashboard({ theme, numberFormat = ADMIN_NUMBER_FORM
           </ReportChartPanel>
         </div>
       )}
+      {!loading ? (
+        <div
+          className="mt-8 pt-6"
+          style={{ borderTop: `1px solid ${theme.cardBorder}` }}
+        >
+          <h3 className="text-sm font-semibold tracking-tight" style={{ color: theme.title }}>
+            Low stock labels
+          </h3>
+          <p className="mt-0.5 mb-4 text-xs" style={{ color: theme.subtitle }}>
+            At or below min stock (or under 20 units if min is not set)
+          </p>
+            {(data?.low_stock_labels || []).length === 0 ? (
+              <p className="py-4 text-sm" style={{ color: theme.subtitle }}>
+                No inventory labels are low right now
+              </p>
+            ) : (
+              <ul>
+                {(data.low_stock_labels || []).map((row) => (
+                  <li key={row.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <Link
+                        to={`/admin/stock-inventory?search=${encodeURIComponent(row.name)}`}
+                        className="truncate font-medium hover:underline"
+                        style={{ color: theme.title }}
+                      >
+                        {row.name}
+                      </Link>
+                      <p className="mt-0.5 text-[11px]" style={{ color: theme.subtitle }}>
+                        {row.status === "out" ? "Out of stock" : `Low · min ${formatNumber(row.min_stock, numberFormat)}`}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-semibold tabular-nums" style={{ color: theme.subtitle }}>
+                      {formatNumber(row.stock, numberFormat)} units
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+        </div>
+      ) : null}
     </ReportSection>
   );
 }

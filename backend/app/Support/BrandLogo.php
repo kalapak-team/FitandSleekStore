@@ -13,7 +13,7 @@ final class BrandLogo
         return self::resolveRasterUrl((string) config('app.logo_png_url', '/logo.png'));
     }
 
-    /** Invoice PDF header only (`public/logo.png`). Do not use for emails, reports, or web UI. */
+    /** Wide wordmark (`public/logo.png`) for invoice and dashboard-report PDFs only. */
     public static function invoiceLogoUrl(): string
     {
         $bannerPath = public_path('logo.png');

@@ -22,9 +22,20 @@ final class PdfFonts
 
     public static function dataUri(string $filename): ?string
     {
-        $path = resource_path('fonts/'.$filename);
+        $candidates = [
+            public_path('fonts/'.$filename),
+            resource_path('fonts/'.$filename),
+        ];
 
-        if (! is_file($path) || ! is_readable($path)) {
+        $path = null;
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                $path = $candidate;
+                break;
+            }
+        }
+
+        if ($path === null) {
             return null;
         }
 

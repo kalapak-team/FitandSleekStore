@@ -2,6 +2,35 @@
 
 use Illuminate\Support\Str;
 
+$sanitizeDatabaseUrl = static function (mixed $url): ?string {
+    if (! is_string($url) || trim($url) === '') {
+        return is_string($url) ? $url : null;
+    }
+
+    $url = trim($url);
+    $url = trim($url, "\"'");
+    $url = str_replace(["\r", "\n", "\t"], '', $url);
+    // Railway/dotenv sometimes leaves a trailing quote on the DB name: /railway"
+    $url = preg_replace('#/([^/?#]+)"+#', '/$1', $url) ?? $url;
+
+    return $url;
+};
+
+$sanitizeDbIdent = static function (mixed $value, mixed $fallback = null): mixed {
+    if (! is_string($value) || $value === '') {
+        return $fallback ?? $value;
+    }
+
+    return trim($value, " \t\n\r\0\x0B\"'");
+};
+
+// Railway Postgres plugin exposes DATABASE_PRIVATE_URL; Laravel expects DB_URL / DATABASE_URL.
+$databaseUrl = $sanitizeDatabaseUrl(
+    env('DB_URL')
+    ?: env('DATABASE_URL')
+    ?: env('DATABASE_PRIVATE_URL')
+);
+
 return [
 
     /*
@@ -33,8 +62,8 @@ return [
 
         'sqlite' => [
             'driver' => 'sqlite',
-            'url' => env('DB_URL', env('DATABASE_URL')),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'url' => $databaseUrl,
+            'database' => $sanitizeDbIdent(env('DB_DATABASE'), database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
             'busy_timeout' => null,
@@ -45,7 +74,7 @@ return [
 
         'mysql' => [
             'driver' => 'mysql',
-            'url' => env('DB_URL', env('DATABASE_URL')),
+            'url' => $databaseUrl,
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -65,7 +94,7 @@ return [
 
         'mariadb' => [
             'driver' => 'mariadb',
-            'url' => env('DB_URL', env('DATABASE_URL')),
+            'url' => $databaseUrl,
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -85,10 +114,10 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DB_URL', env('DATABASE_URL')),
+            'url' => $databaseUrl,
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
-            'database' => env('DB_DATABASE', 'laravel'),
+            'database' => $sanitizeDbIdent(env('DB_DATABASE'), 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
             'charset' => env('DB_CHARSET', 'utf8'),
@@ -100,7 +129,7 @@ return [
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
-            'url' => env('DB_URL', env('DATABASE_URL')),
+            'url' => $databaseUrl,
             'host' => env('DB_HOST', 'localhost'),
             'port' => env('DB_PORT', '1433'),
             'database' => env('DB_DATABASE', 'laravel'),
