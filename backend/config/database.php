@@ -2,6 +2,22 @@
 
 use Illuminate\Support\Str;
 
+$envFirst = static function (string ...$keys): ?string {
+    foreach ($keys as $key) {
+        $candidates = [$_ENV[$key] ?? null, $_SERVER[$key] ?? null, getenv($key)];
+        if (function_exists('env')) {
+            $candidates[] = env($key);
+        }
+        foreach ($candidates as $value) {
+            if (is_string($value) && trim($value) !== '') {
+                return $value;
+            }
+        }
+    }
+
+    return null;
+};
+
 $sanitizeDatabaseUrl = static function (mixed $url): ?string {
     if (! is_string($url) || trim($url) === '') {
         return is_string($url) ? $url : null;
@@ -9,6 +25,10 @@ $sanitizeDatabaseUrl = static function (mixed $url): ?string {
 
     $url = trim(str_replace(["\r", "\n", "\t", "\0"], '', $url));
     $url = trim($url, "\"'");
+    // Unresolved Railway reference — treat as missing.
+    if (str_contains($url, '${{')) {
+        return null;
+    }
     // Dashboard paste: …/railway"?sslmode=require or …/railway%22?sslmode=require
     $url = str_replace(['%22', '%27'], '', $url);
     $url = str_replace(
@@ -31,22 +51,20 @@ $sanitizeDbIdent = static function (mixed $value, mixed $fallback = null): mixed
     return $value === '' ? ($fallback ?? $value) : $value;
 };
 
-// Railway Postgres plugin exposes DATABASE_PRIVATE_URL; Laravel expects DB_URL / DATABASE_URL.
+// Railway Postgres plugin: DATABASE_*_URL and/or PGHOST/PGUSER/PGPASSWORD/PGDATABASE.
 $databaseUrl = $sanitizeDatabaseUrl(
-    env('DB_URL')
-    ?: env('DATABASE_URL')
-    ?: env('DATABASE_PRIVATE_URL')
+    $envFirst('DB_URL', 'DATABASE_URL', 'DATABASE_PRIVATE_URL', 'DATABASE_PUBLIC_URL')
 );
 
 // Do not pass `url` to pgsql. Laravel re-parses it (rawurldecode) and a stray
 // quote on the path becomes database name railway" → every API returns 503.
 $pgsqlFromUrl = [
-    'host' => env('DB_HOST', '127.0.0.1'),
-    'port' => env('DB_PORT', '5432'),
-    'database' => $sanitizeDbIdent(env('DB_DATABASE'), 'laravel'),
-    'username' => env('DB_USERNAME', 'root'),
-    'password' => env('DB_PASSWORD', ''),
-    'sslmode' => env('DB_SSLMODE', 'prefer'),
+    'host' => $envFirst('DB_HOST', 'PGHOST', 'POSTGRES_HOST') ?: '127.0.0.1',
+    'port' => $envFirst('DB_PORT', 'PGPORT', 'POSTGRES_PORT') ?: '5432',
+    'database' => $sanitizeDbIdent($envFirst('DB_DATABASE', 'PGDATABASE', 'POSTGRES_DB'), 'laravel'),
+    'username' => $envFirst('DB_USERNAME', 'PGUSER', 'POSTGRES_USER') ?: 'root',
+    'password' => $envFirst('DB_PASSWORD', 'PGPASSWORD', 'POSTGRES_PASSWORD') ?: '',
+    'sslmode' => $envFirst('DB_SSLMODE') ?: 'prefer',
 ];
 if (is_string($databaseUrl) && $databaseUrl !== '') {
     $parsed = parse_url(preg_replace('#^postgres(ql)?:#i', 'https:', $databaseUrl) ?? $databaseUrl);

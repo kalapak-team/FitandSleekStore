@@ -105,11 +105,13 @@ Route::get('/health', function () {
 
 // Lightweight dependency probe (outside throttle) — helps diagnose storefront 500s on Render.
 Route::get('/health/deps', function () {
-    $dbUrl = (string) (env('DB_URL') ?: env('DATABASE_URL') ?: '');
+    $rawUrl = (string) (getenv('DATABASE_URL') ?: getenv('DATABASE_PRIVATE_URL') ?: env('DATABASE_URL') ?: env('DB_URL') ?: '');
     $db = [
         'ok' => false,
         'env' => [
-            'database_url_set' => $dbUrl !== '',
+            'database_url_set' => $rawUrl !== '',
+            'database_url_unresolved' => str_contains($rawUrl, '${{'),
+            'getenv_pghost' => is_string(getenv('PGHOST')) && getenv('PGHOST') !== '',
             'db_host' => env('DB_HOST'),
             'db_port' => env('DB_PORT'),
             'db_database' => env('DB_DATABASE'),

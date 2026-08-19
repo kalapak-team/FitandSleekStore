@@ -15,7 +15,23 @@ strip_quotes_from_db_url() {
 }
 strip_quotes_from_db_url DATABASE_URL
 strip_quotes_from_db_url DATABASE_PRIVATE_URL
+strip_quotes_from_db_url DATABASE_PUBLIC_URL
 strip_quotes_from_db_url DB_URL
+
+# Unresolved Railway template is not a real URL.
+for _k in DATABASE_URL DATABASE_PRIVATE_URL DATABASE_PUBLIC_URL DB_URL; do
+  eval "_v=\${${_k}-}"
+  case "${_v}" in
+    *'${{'*) unset "${_k}" ;;
+  esac
+done
+
+if [ -z "${DATABASE_URL:-}" ] && [ -n "${DATABASE_PRIVATE_URL:-}" ]; then
+  export DATABASE_URL="$DATABASE_PRIVATE_URL"
+fi
+if [ -z "${DATABASE_URL:-}" ] && [ -n "${DATABASE_PUBLIC_URL:-}" ]; then
+  export DATABASE_URL="$DATABASE_PUBLIC_URL"
+fi
 
 cd /var/www/html
 
@@ -54,6 +70,19 @@ case "$1" in
     rm -rf public/storage
     php artisan storage:link --relative --force || true
     php artisan config:clear || true
+
+    # php-fpm workers sometimes miss Railway DATABASE_URL; Laravel will read .env.
+    if [ -n "${DATABASE_URL:-}" ]; then
+      _esc=$(printf '%s' "$DATABASE_URL" | sed 's/\\/\\\\/g; s/"/\\"/g')
+      printf 'DATABASE_URL="%s"\nDB_CONNECTION=pgsql\n' "$_esc" > /var/www/html/.env.runtime
+      if [ -f /var/www/html/.env ]; then
+        grep -v -E '^(DATABASE_URL|DB_CONNECTION)=' /var/www/html/.env > /var/www/html/.env.noruntime || true
+        cat /var/www/html/.env.noruntime /var/www/html/.env.runtime > /var/www/html/.env
+        rm -f /var/www/html/.env.noruntime
+      else
+        cp /var/www/html/.env.runtime /var/www/html/.env
+      fi
+    fi
 
     php-fpm -D
     nginx -t
