@@ -29,48 +29,63 @@ chmod -R ug+rwx storage bootstrap/cache 2>/dev/null || true
 case "$1" in
   web)
     # Render/Railway set PORT; local Docker Compose uses 8000 (see nginx default.conf).
+    # Bind this port BEFORE migrate/warm — Railway healthchecks fail with
+    # "service unavailable" if nginx is not listening within the retry window.
     PORT="${PORT:-8000}"
-    sed -i "s/listen 8000;/listen ${PORT};/" /etc/nginx/conf.d/default.conf
-    sed -i "s/listen \[::\]:8000;/listen [::]:${PORT};/" /etc/nginx/conf.d/default.conf
+    sed -i -E "s/listen \\[::\\]:[0-9]+;/listen [::]:${PORT};/" /etc/nginx/conf.d/default.conf
+    sed -i -E "s/listen [0-9]+;/listen ${PORT};/" /etc/nginx/conf.d/default.conf
 
     rm -rf public/storage
-    php artisan storage:link --relative --force
-    php artisan config:clear
-
-    if [ "${RUN_MIGRATIONS:-true}" != "false" ]; then
-      php artisan migrate --force
-    fi
-
-    if [ "${RUN_QUEUE_WORKER:-false}" = "true" ]; then
-      php artisan queue:work database --sleep=3 --tries=3 --max-time=3600 --timeout=180 \
-        >> storage/logs/queue-worker.log 2>&1 &
-    fi
-
-    if [ "${RUN_SCHEDULER:-false}" = "true" ]; then
-      (
-        while true; do
-          php artisan schedule:run --no-interaction
-          sleep 60
-        done
-      ) >> storage/logs/scheduler.log 2>&1 &
-    fi
-
-    if [ "${QDRANT_SETUP_ON_BOOT:-false}" = "true" ]; then
-      php artisan qdrant:setup >> storage/logs/qdrant-index.log 2>&1 || true
-    fi
-
-    if [ "${QDRANT_INDEX_MISSING_ON_BOOT:-false}" = "true" ]; then
-      php artisan qdrant:index-products --only-missing --limit="${QDRANT_INDEX_BATCH_SIZE:-10}" \
-        >> storage/logs/qdrant-index.log 2>&1 &
-    fi
-
-    # A fresh container starts with an empty file cache, so the first visitor would
-    # otherwise trigger the slow homepage build and time out behind the CDN proxy.
-    if [ "${WARM_STOREFRONT_ON_BOOT:-true}" != "false" ]; then
-      php artisan storefront:warm >> storage/logs/storefront-warm.log 2>&1 &
-    fi
+    php artisan storage:link --relative --force || true
+    php artisan config:clear || true
 
     php-fpm -D
+    nginx -t
+
+    # Heavy boot work after the HTTP port is open so /api/health can succeed.
+    (
+      if [ "${RUN_MIGRATIONS:-true}" != "false" ]; then
+        php artisan migrate --force || true
+      fi
+
+      if [ "${RUN_QUEUE_WORKER:-false}" = "true" ]; then
+        php artisan queue:work database --sleep=3 --tries=3 --max-time=3600 --timeout=180 \
+          >> storage/logs/queue-worker.log 2>&1 &
+      fi
+
+      if [ "${RUN_SCHEDULER:-false}" = "true" ]; then
+        (
+          while true; do
+            php artisan schedule:run --no-interaction
+            sleep 60
+          done
+        ) >> storage/logs/scheduler.log 2>&1 &
+      fi
+
+      # KHQR has no browser poller in Telegram — check Bakong every few seconds.
+      if [ "${RUN_KHQR_POLLER:-true}" = "true" ]; then
+        (
+          while true; do
+            php artisan payments:poll-khqr --no-interaction || true
+            sleep 8
+          done
+        ) >> storage/logs/khqr-poll.log 2>&1 &
+      fi
+
+      if [ "${QDRANT_SETUP_ON_BOOT:-false}" = "true" ]; then
+        php artisan qdrant:setup >> storage/logs/qdrant-index.log 2>&1 || true
+      fi
+
+      if [ "${QDRANT_INDEX_MISSING_ON_BOOT:-false}" = "true" ]; then
+        php artisan qdrant:index-products --only-missing --limit="${QDRANT_INDEX_BATCH_SIZE:-10}" \
+          >> storage/logs/qdrant-index.log 2>&1 &
+      fi
+
+      if [ "${WARM_STOREFRONT_ON_BOOT:-true}" != "false" ]; then
+        php artisan storefront:warm >> storage/logs/storefront-warm.log 2>&1 || true
+      fi
+    ) >> storage/logs/boot.log 2>&1 &
+
     exec nginx -g 'daemon off;'
     ;;
   worker)
