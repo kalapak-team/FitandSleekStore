@@ -78,7 +78,7 @@ export default function ProductCard({ p }) {
   return (
     <div className="fs-card group flex h-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]">
       <div className="relative overflow-hidden bg-zinc-50">
-        <Link to={`/p/${p.slug}`} className="block aspect-[4/5] overflow-hidden">
+        <Link to={`/p/${p.slug}`} state={{ product: p }} className="block aspect-[4/5] overflow-hidden">
           <img
             src={src}
             alt={p.name}
@@ -139,6 +139,7 @@ export default function ProductCard({ p }) {
 
         <Link
           to={`/p/${p.slug}`}
+          state={{ product: p }}
           className="mt-1.5 line-clamp-2 text-sm font-semibold text-zinc-900 hover:text-[#F2A65A]"
         >
           {p.name}

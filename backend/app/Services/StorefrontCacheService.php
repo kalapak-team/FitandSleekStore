@@ -48,8 +48,7 @@ class StorefrontCacheService
                 if ($stale !== null) {
                     return $stale;
                 }
-
-                $lock->block(45);
+                // Do not wait on the lock — product pages were stalling up to 45s.
             }
         } catch (\Throwable) {
             $lock = null;

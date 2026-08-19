@@ -554,16 +554,22 @@ class ProductController extends Controller
             fn () => $this->buildStorefrontProductPayload($slug)
         );
 
-        $user = Auth::guard('sanctum')->user();
+        $userId = Auth::guard('sanctum')->user()?->id;
         $sessionId = request()->header('X-Session-Id') ?: request()->query('session_id');
         $productId = (int) ($payload['id'] ?? 0);
-        if ($productId > 0) {
-            $this->eventService->track(
-                'product_view',
-                $user?->id ? (int) $user->id : null,
-                $sessionId ? (string) $sessionId : null,
-                $productId
-            );
+        if ($productId > 0 && ($userId || $sessionId)) {
+            app()->terminating(function () use ($productId, $userId, $sessionId) {
+                try {
+                    app(StorefrontEventService::class)->track(
+                        'product_view',
+                        $userId ? (int) $userId : null,
+                        $sessionId ? (string) $sessionId : null,
+                        $productId
+                    );
+                } catch (\Throwable) {
+                    // Analytics must not delay the product payload.
+                }
+            });
         }
 
         return response()->json($payload);

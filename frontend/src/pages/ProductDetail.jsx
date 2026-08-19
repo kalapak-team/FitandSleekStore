@@ -173,8 +173,10 @@ export default function ProductDetail() {
   const { t } = useLanguage();
 
   // All state hooks at the top - always called in same order
-  const [p, setP] = useState(() => readProductDetailCache(slug));
-  const [loading, setLoading] = useState(() => !readProductDetailCache(slug));
+  const seeded = readProductDetailCache(slug)
+    || (location.state?.product?.slug === slug ? location.state.product : null);
+  const [p, setP] = useState(() => seeded);
+  const [loading, setLoading] = useState(() => !seeded);
   const [qty, setQty] = useState(1);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
@@ -238,7 +240,7 @@ export default function ProductDetail() {
         setP(cached);
         setLoading(false);
         applyVariants(cached);
-        await loadSimilar(cached);
+        void loadSimilar(cached);
         return;
       }
 
@@ -249,7 +251,8 @@ export default function ProductDetail() {
         setP(data);
         writeProductDetailCache(slug, data);
         applyVariants(data);
-        await loadSimilar(data);
+        if (active) setLoading(false);
+        void loadSimilar(data);
       } finally {
         if (active) setLoading(false);
       }
