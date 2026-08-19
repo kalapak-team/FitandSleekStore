@@ -4,7 +4,7 @@ import { wakeBackend } from "./wakeBackend";
 
 const CACHE_KEY = "fs_home_bootstrap_v1";
 const CACHE_TTL_MS = 15 * 60 * 1000;
-const RAILWAY_ORIGIN = "https://fitandsleek-official-production.up.railway.app";
+const RAILWAY_ORIGIN = "https://fitandsleek-official-v2-production.up.railway.app";
 
 export function readCachedBootstrap({ ignoreExpiry = false } = {}) {
   if (typeof window === "undefined") return null;

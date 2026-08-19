@@ -19,7 +19,7 @@ function getConfiguredValues() {
  * edge proxies time out while Railway cold/bootstrap can take longer.
  * Browser calls Railway directly (CORS + Bearer auth).
  */
-const RAILWAY_API_ORIGIN = "https://fitandsleek-official-production.up.railway.app";
+const RAILWAY_API_ORIGIN = "https://fitandsleek-official-v2-production.up.railway.app";
 
 const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
     "fitandsleek.kalapak-team.space": "https://fitandsleekapp.kalapak-team.space",
@@ -30,6 +30,7 @@ const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
     "www.norng-fitandsleek-store.vercel.app": "https://norng-fitandsleek-store-production.up.railway.app",
     "fitandsleek-official.vercel.app": RAILWAY_API_ORIGIN,
     "www.fitandsleek-official.vercel.app": RAILWAY_API_ORIGIN,
+    "fitandsleek-official-v2.vercel.app": RAILWAY_API_ORIGIN,
     "fitandsleek-official-frontend.netlify.app": RAILWAY_API_ORIGIN,
     "www.fitandsleek-official-frontend.netlify.app": RAILWAY_API_ORIGIN,
     "fitandsleek.online": RAILWAY_API_ORIGIN,
@@ -43,7 +44,7 @@ const PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN = {
 function railwayApiBaseForSplitStorefront() {
     if (typeof window === "undefined" || !window.location?.hostname) return null;
     const host = String(window.location.hostname).toLowerCase();
-    const origin = PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN[host];
+    const origin = laravelOriginForPublicStorefrontHostname(host);
     if (!origin || origin === window.location.origin) return null;
     if (!origin.includes("railway.app") && !origin.includes("onrender.com") && !origin.includes("kalapak-team.space")) {
         return null;
@@ -66,8 +67,19 @@ function sameOriginApiBaseIfProxied() {
 
 function laravelOriginForPublicStorefrontHostname(hostname) {
     if (!hostname) return null;
-    const origin = PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN[String(hostname).toLowerCase()];
-    return origin || null;
+    const host = String(hostname).toLowerCase();
+    if (PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN[host]) {
+        return PUBLIC_STOREFRONT_TO_LARAVEL_ORIGIN[host];
+    }
+    // Vercel production + git preview URLs for this app.
+    if (
+        host.endsWith(".vercel.app") &&
+        host.includes("fitandsleek-official") &&
+        !host.includes("norng-fitandsleek")
+    ) {
+        return RAILWAY_API_ORIGIN;
+    }
+    return null;
 }
 
 function currentOriginFallback() {

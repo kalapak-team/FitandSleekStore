@@ -37,6 +37,7 @@ return [
         'https://fitandsleek-official-backend.onrender.com',
         'https://fitandsleek-official.vercel.app',
         'https://www.fitandsleek-official.vercel.app',
+        'https://fitandsleek-official-v2.vercel.app',
         'https://fitandsleek.online',
         'https://www.fitandsleek.online',
         'https://fitandsleek-official-frontend.netlify.app',

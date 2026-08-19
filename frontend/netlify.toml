@@ -6,7 +6,7 @@
 # These redirects still help non-browser clients hitting fitandsleek.online/api/*.
 [[redirects]]
   from = "/api/*"
-  to = "https://fitandsleek-official-production.up.railway.app/api/:splat"
+  to = "https://fitandsleek-official-v2-production.up.railway.app/api/:splat"
   status = 200
   force = true
 

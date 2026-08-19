@@ -20,9 +20,9 @@ class AppConfig {
 
   /// Laravel API paired with [storefrontUrl] (Railway).
   static const String productionApiBaseUrl =
-      'https://fitandsleek-official-production.up.railway.app/api';
+      'https://fitandsleek-official-v2-production.up.railway.app/api';
   static const String productionBackendOrigin =
-      'https://fitandsleek-official-production.up.railway.app';
+      'https://fitandsleek-official-v2-production.up.railway.app';
 
   static String get defaultApiBaseUrl => productionApiBaseUrl;
 
