@@ -94,7 +94,7 @@ Whether you're managing thousands of products, tracking inventory across supplie
 ## 🏗️ Architecture
 
 <p align="center">
-  <img src="docs/system-architecture.svg" alt="System Architecture" width="720" />
+  <img src="docs/system-architecture-diagram.jpg" alt="System Architecture: FitandSleek E-Commerce Platform" width="900" />
 </p>
 
 ```
