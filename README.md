@@ -1,11 +1,9 @@
 <p align="center">
-  <img src="docs/system-architecture-illustrated.png" alt="FitandSleek" width="280" />
+  <img src="docs/fitandsleek-logo.png" alt="Fit & Sleek — Men Clothings" width="480" />
 </p>
 
-<h1 align="center">FitandSleek</h1>
-
 <p align="center">
-  <strong>Modern Full-Stack eCommerce Platform for Fashion &amp; Lifestyle</strong>
+  <strong>Modern Full-Stack eCommerce Platform for Men's Fashion &amp; Lifestyle</strong>
 </p>
 
 <p align="center">
