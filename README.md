@@ -1,116 +1,206 @@
-# FitandSleek Pro
+<p align="center">
+  <img src="docs/system-architecture-illustrated.png" alt="FitandSleek" width="280" />
+</p>
 
-Full-stack eCommerce platform: **Laravel API**, **React admin & storefront**, and **Flutter mobile** app.
+<h1 align="center">FitandSleek</h1>
 
-| Layer | Stack |
-| --- | --- |
-| Backend | Laravel 12, PHP, PostgreSQL, Sanctum |
-| Web | React 18, Vite, Tailwind CSS |
-| Mobile | Flutter (same Laravel API) |
-| AI / extras | Python services in `fastapi/` and `ai-service/` |
-| DevOps | Docker Compose, Composer, npm |
+<p align="center">
+  <strong>Modern Full-Stack eCommerce Platform for Fashion &amp; Lifestyle</strong>
+</p>
 
----
+<p align="center">
+  <a href="#features"><img src="https://img.shields.io/badge/status-active-success?style=flat-square" alt="Status" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/Laravel-12-FF2D20?style=flat-square&logo=laravel&logoColor=white" alt="Laravel" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/Flutter-3-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" /></a>
+  <a href="#tech-stack"><img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" /></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-proprietary-lightgrey?style=flat-square" alt="License" /></a>
+</p>
 
-## Table of Contents
-
-- [FitandSleek Pro](#fitandsleek-pro)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Repository structure](#repository-structure)
-  - [Prerequisites](#prerequisites)
-  - [Quick start](#quick-start)
-  - [Manual setup](#manual-setup)
-    - [Backend](#backend)
-    - [Frontend](#frontend)
-    - [Mobile (optional)](#mobile-optional)
-  - [Environment variables](#environment-variables)
-    - [Backend — `backend/.env`](#backend--backendenv)
-    - [Frontend — `frontend/.env`](#frontend--frontendenv)
-  - [Docker](#docker)
-  - [API overview](#api-overview)
-  - [Database](#database)
-  - [Development commands](#development-commands)
-  - [Troubleshooting](#troubleshooting)
-  - [Contributing](#contributing)
-  - [License](#license)
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#api-reference">API Reference</a> •
+  <a href="#deployment">Deployment</a> •
+  <a href="#contributing">Contributing</a>
+</p>
 
 ---
 
-## Features
+## 📋 Overview
 
-- **Storefront** — product listings, detail pages, cart, checkout
-- **Admin** — products, categories, orders, stock & inventory, discounts, customers
-- **Auth** — Laravel Sanctum (register, login, session/token)
-- **Stock & labels** — barcode/QR inventory labels linked to catalog products
-- **Media** — product images and static assets
-- **Multi-service** — Laravel + React + Flutter + optional AI services
+**FitandSleek** is a comprehensive eCommerce platform built for fashion and lifestyle retail. It combines a powerful **Laravel REST API**, a responsive **React admin dashboard & storefront**, a cross-platform **Flutter mobile app**, and an intelligent **AI chatbot** — all orchestrated through Docker Compose for seamless development and deployment.
+
+Whether you're managing thousands of products, tracking inventory across suppliers, processing orders with multiple payment gateways, or engaging customers through AI-powered chat, FitandSleek provides the tools to run a modern online store at scale.
 
 ---
 
-## Repository structure
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 🛍️ Storefront
+- Product catalog with categories, brands & collections
+- Advanced search with image-based product discovery
+- Shopping cart & multi-step checkout
+- Wishlist & personalized recommendations
+- Discount codes & promotional campaigns
+- Customer loyalty program & points system
+
+</td>
+<td width="50%">
+
+### 🔧 Admin Dashboard
+- Real-time sales dashboard & analytics
+- Product, category, brand & collection management
+- Order processing & shipment tracking
+- Inventory management with barcode/QR scanning
+- Purchase orders & supplier management
+- Customer management & loyalty administration
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🤖 AI & Smart Features
+- AI-powered customer chatbot (RAG + NLU)
+- Image-based product search
+- Product taxonomy intelligence
+- Text analytics & customer sentiment
+- Vector search with Qdrant integration
+
+</td>
+<td width="50%">
+
+### 🔐 Security & Operations
+- Laravel Sanctum authentication (session + token)
+- Two-factor authentication (2FA)
+- OAuth social login integration
+- Telegram bot notifications & order alerts
+- Bakong & COD payment processing
+- Role-based access control (RBAC)
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🏗️ Architecture
+
+<p align="center">
+  <img src="docs/system-architecture.svg" alt="System Architecture" width="720" />
+</p>
 
 ```
 fitandsleek/
-├── backend/          # Laravel API, migrations, seeders
-├── frontend/         # React (Vite + Tailwind) — admin + storefront
-├── mobile/           # Flutter mobile storefront
-├── fastapi/          # Python API helpers
-├── ai-service/       # AI integration utilities
-├── docker-compose.yml
-├── docker-compose.fullstack.yml
-├── setup.bat         # Windows bootstrap
-└── setup.sh          # macOS / Linux bootstrap
+├── backend/                # Laravel 12 REST API
+│   ├── app/
+│   │   ├── Http/Controllers/   # API, Admin, Storefront & Driver controllers
+│   │   ├── Models/             # 40+ Eloquent models
+│   │   ├── Services/           # Business logic layer
+│   │   ├── Jobs/               # Queue jobs (email, notifications)
+│   │   └── Mail/               # Transactional email templates
+│   ├── database/
+│   │   ├── migrations/         # Schema versioning
+│   │   └── seeders/            # Sample data
+│   └── routes/api.php          # RESTful route definitions
+│
+├── frontend/               # React 18 + Vite + Tailwind CSS
+│   └── src/
+│       ├── pages/              # 70+ pages (admin + storefront)
+│       ├── components/         # Reusable UI component library
+│       ├── state/              # Global state management
+│       └── hooks/              # Custom React hooks
+│
+├── mobile/                 # Flutter cross-platform app
+│   └── lib/
+│       ├── screens/            # App screens (shop, auth, profile…)
+│       ├── providers/          # State management
+│       ├── services/           # API service layer
+│       └── widgets/            # Shared widgets
+│
+├── fitandsleekAIchat/      # Python AI chatbot service
+│   └── services/               # RAG, NLU, session memory, analytics
+│
+├── fitandsleek_vector/     # Vector search microservice
+│   ├── backend/                # FastAPI + Qdrant
+│   └── frontend/               # Next.js search UI
+│
+├── docker-compose.yml      # Multi-service orchestration
+├── scripts/                # DevOps & utility scripts
+├── docs/                   # Architecture diagrams & guides
+├── setup.bat               # Windows bootstrap
+└── setup.sh                # macOS / Linux bootstrap
 ```
 
 ---
 
-## Prerequisites
+## 🛠️ Tech Stack
 
-- PHP 8.1+ and [Composer](https://getcomposer.org/)
-- Node.js 18+ and npm
-- PostgreSQL 13+
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (recommended)
-- Flutter SDK (only if you run the mobile app)
+| Layer | Technologies |
+|:---|:---|
+| **Backend** | Laravel 12 · PHP 8.1+ · PostgreSQL · Laravel Sanctum · Queue Workers |
+| **Frontend** | React 18 · Vite · Tailwind CSS · ShadCN UI · Framer Motion |
+| **Mobile** | Flutter 3 · Dart · Provider State Management |
+| **AI Services** | Python · FastAPI · Qdrant · HuggingFace · RAG Pipeline |
+| **Payments** | Bakong QR · Cash on Delivery (COD) |
+| **Notifications** | Telegram Bot API · Email (Laravel Mail) |
+| **DevOps** | Docker Compose · Cloudflare Tunnel · pgAdmin |
 
 ---
 
-## Quick start
+## 🚀 Quick Start
 
-Run from the **project root**.
+### Prerequisites
+
+| Tool | Version |
+|:---|:---|
+| PHP | 8.1+ |
+| Composer | Latest |
+| Node.js | 18+ |
+| PostgreSQL | 13+ |
+| Docker Desktop | Latest (recommended) |
+| Flutter SDK | Latest (mobile only) |
+
+### One-Command Setup
 
 **Windows**
-
 ```bat
 setup.bat
 ```
 
 **macOS / Linux**
-
 ```bash
 sh setup.sh
 ```
 
-The setup scripts will:
+The setup script will:
+1. Create `backend/.env` from `.env.example`
+2. Install PHP and Node.js dependencies
+3. Generate the application key
+4. Run database migrations
+5. Start all services via Docker Compose
 
-1. Create `backend/.env` from `backend/.env.example` if missing
-2. Run `composer install` and `npm install`
-3. Run Laravel migrations
-4. Start services via Docker Compose (when configured)
+### Default Service URLs
 
-**Default URLs**
-
-| Service | URL |
-| --- | --- |
-| API | http://127.0.0.1:8001 |
-| Web (Vite) | http://127.0.0.1:5173 |
-| Flutter web (optional) | http://127.0.0.1:3000 |
+| Service | URL | Description |
+|:---|:---|:---|
+| 🔌 API | `http://127.0.0.1:8001` | Laravel REST API |
+| 🌐 Web App | `http://127.0.0.1:5173` | React storefront & admin |
+| 📱 Mobile Web | `http://127.0.0.1:3000` | Flutter web preview |
 
 ---
 
-## Manual setup
+## 📖 Manual Setup
 
-### Backend
+<details>
+<summary><strong>Backend (Laravel API)</strong></summary>
 
 ```bash
 cd backend
@@ -122,7 +212,10 @@ php artisan storage:link
 php artisan serve
 ```
 
-### Frontend
+</details>
+
+<details>
+<summary><strong>Frontend (React + Vite)</strong></summary>
 
 ```bash
 cd frontend
@@ -130,7 +223,10 @@ npm install
 npm run dev
 ```
 
-### Mobile (optional)
+</details>
+
+<details>
+<summary><strong>Mobile (Flutter)</strong></summary>
 
 ```bash
 cd mobile
@@ -138,13 +234,41 @@ flutter pub get
 flutter run -d web-server --web-port=3000 --web-hostname=0.0.0.0
 ```
 
+</details>
+
+<details>
+<summary><strong>AI Chatbot Service</strong></summary>
+
+```bash
+cd fitandsleekAIchat
+pip install -r requirements.txt
+python app.py
+```
+
+Or via Docker:
+```bash
+cd fitandsleekAIchat
+docker compose up -d
+```
+
+</details>
+
 ---
 
-## Environment variables
+## ⚙️ Environment Variables
 
 ### Backend — `backend/.env`
 
-Set database credentials, `APP_URL`, mail, and any third-party keys. **Do not commit secrets.**
+| Variable | Description |
+|:---|:---|
+| `APP_URL` | Application base URL |
+| `DB_HOST`, `DB_PORT`, `DB_DATABASE` | PostgreSQL connection |
+| `DB_USERNAME`, `DB_PASSWORD` | Database credentials |
+| `MAIL_*` | SMTP / email configuration |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot integration |
+
+> [!CAUTION]
+> Never commit `.env` files containing secrets to version control.
 
 ### Frontend — `frontend/.env`
 
@@ -155,98 +279,180 @@ VITE_BACKEND_ORIGIN=http://127.0.0.1:8001
 
 ---
 
-## Docker
+## 🐳 Docker
 
-**Light dev stack** (Postgres + API + frontend):
-
-```powershell
+**Light dev stack** — PostgreSQL + API + Frontend:
+```bash
 pwsh scripts/docker-up.ps1
 ```
 
-**Full stack** (queue, scheduler, Qdrant, AI, pgAdmin):
-
-```powershell
+**Full stack** — adds Queue, Scheduler, Qdrant, AI service, pgAdmin:
+```bash
 pwsh scripts/docker-up.ps1 -Mode full
 ```
 
-Or with Compose directly:
-
+**Using Compose directly:**
 ```bash
+# Light stack
 docker compose up -d --build --remove-orphans
+
+# Full stack (all profiles)
 docker compose --profile full up -d --build
-```
 
-Stop:
-
-```bash
+# Stop everything
 docker compose down
 ```
 
 ---
 
-## API overview
+## 📡 API Reference
 
-| Area | Examples |
-| --- | --- |
-| Auth | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/me` |
-| Catalog | `GET /api/categories`, `GET /api/products`, `GET /api/products/{slug}` |
-| Cart | `GET /api/cart`, `POST /api/cart/items` |
-| Orders | `POST /api/checkout`, `GET /api/orders` |
-| Admin | `/api/admin/categories`, `/api/admin/products`, `/api/admin/orders` |
+### Authentication
+
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `POST` | `/api/auth/register` | Register a new customer |
+| `POST` | `/api/auth/login` | Log in & receive token |
+| `POST` | `/api/auth/logout` | Revoke current session |
+| `GET` | `/api/me` | Get authenticated user profile |
+| `POST` | `/api/auth/2fa/verify` | Verify two-factor code |
+
+### Catalog
+
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `GET` | `/api/categories` | List all categories |
+| `GET` | `/api/products` | List products (paginated, filterable) |
+| `GET` | `/api/products/{slug}` | Product detail by slug |
+| `GET` | `/api/brands` | List all brands |
+| `GET` | `/api/collections` | List product collections |
+
+### Shopping
+
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `GET` | `/api/cart` | View current cart |
+| `POST` | `/api/cart/items` | Add item to cart |
+| `POST` | `/api/checkout` | Place an order |
+| `GET` | `/api/orders` | List customer orders |
+| `GET` | `/api/wishlist` | View wishlist |
+
+### Admin
+
+| Method | Endpoint | Description |
+|:---|:---|:---|
+| `GET` | `/api/admin/dashboard` | Dashboard analytics |
+| `CRUD` | `/api/admin/products` | Manage products |
+| `CRUD` | `/api/admin/categories` | Manage categories |
+| `CRUD` | `/api/admin/orders` | Manage orders |
+| `CRUD` | `/api/admin/inventory` | Stock & inventory |
+| `CRUD` | `/api/admin/suppliers` | Supplier management |
+| `CRUD` | `/api/admin/discounts` | Discount campaigns |
 
 ---
 
-## Database
+## 🗄️ Database
 
-- Migrations: `backend/database/migrations/`
-- Seeders: `backend/database/seeders/`
-- Optional SQL dump: `fitandsleekpro.sql` (if present locally)
+- **Migrations:** `backend/database/migrations/` — versioned schema changes
+- **Seeders:** `backend/database/seeders/` — sample & test data
+- **40+ Models:** Products, Orders, Inventory, Payments, Users, Loyalty, Shipments, and more
+
+### Key Models
+
+```
+User ─── Cart ─── CartItem ─── Product ─── Category
+  │                                │           │
+  ├── Order ─── OrderItem ─────────┘           │
+  │    └── Payment                        Brand
+  │    └── Shipment                   Collection
+  │                                    Discount
+  ├── WishlistItem
+  ├── LoyaltyProfile
+  └── Address
+```
 
 ---
 
-## Development commands
+## 🧪 Development Commands
+
+<table>
+<tr>
+<td>
 
 **Backend**
-
 ```bash
 cd backend
-php artisan serve
-php artisan migrate
-php artisan test
+php artisan serve          # Start dev server
+php artisan migrate        # Run migrations
+php artisan migrate:fresh --seed  # Reset & seed DB
+php artisan test           # Run test suite
+php artisan queue:work     # Start queue worker
 ```
+
+</td>
+<td>
 
 **Frontend**
-
 ```bash
 cd frontend
-npm run dev
-npm run build
-npm run preview
+npm run dev       # Start Vite dev server
+npm run build     # Production build
+npm run preview   # Preview production build
+npm run lint      # Lint check
 ```
 
+</td>
+</tr>
+</table>
+
 ---
 
-## Troubleshooting
+## 🔍 Troubleshooting
 
-| Issue | What to check |
-| --- | --- |
-| README or repo looks broken on GitHub | Ensure `README.md` is UTF-8 with normal line breaks (no binary/null bytes at end of file). |
+<details>
+<summary><strong>Common Issues</strong></summary>
+
+| Issue | Solution |
+|:---|:---|
+| README or repo looks broken on GitHub | Ensure `README.md` is UTF-8 with normal line breaks (no binary/null bytes). |
 | `frontend/` shows as a submodule | Remove nested `frontend/.git` and recommit frontend as normal files. |
-| `npm install` / `composer install` fails | Verify Node, npm, PHP, and Composer versions. |
-| Database connection error | `DB_*` settings in `backend/.env`. |
-| CORS / API errors | `VITE_API_BASE_URL` and `VITE_BACKEND_ORIGIN` in `frontend/.env`. |
+| `npm install` or `composer install` fails | Verify Node.js (18+), npm, PHP (8.1+), and Composer versions match prerequisites. |
+| Database connection error | Check `DB_*` settings in `backend/.env`. Ensure PostgreSQL is running. |
+| CORS / API errors | Verify `VITE_API_BASE_URL` and `VITE_BACKEND_ORIGIN` in `frontend/.env`. |
+| Docker containers won't start | Run `docker compose down -v` then `docker compose up -d --build`. |
+| AI chatbot not responding | Ensure the AI service is running and Qdrant is accessible. |
+
+</details>
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-1. Branch from `main`
-2. Keep commits focused
-3. Run tests/build before opening a PR
-4. Request review before merge
+We welcome contributions! Please follow these guidelines:
+
+1. **Fork** the repository and create a feature branch from `main`
+2. **Keep commits focused** — one logical change per commit
+3. **Write tests** for new features and bug fixes
+4. **Run the full test suite** and build before opening a PR
+5. **Request a review** from at least one team member before merge
+
+> [!NOTE]
+> Please open an issue first to discuss major changes before submitting a pull request.
 
 ---
 
-## License
+## 👥 Team
 
-All rights reserved unless stated otherwise by the repository owner.
+**Group 64** — Project Standard 2026
+
+---
+
+## 📄 License
+
+All rights reserved. This project and its source code are proprietary unless stated otherwise by the repository owner.
+
+---
+
+<p align="center">
+  Built with ❤️ by the <strong>FitandSleek</strong> team
+</p>
