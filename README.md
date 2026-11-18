@@ -1,4 +1,6 @@
 <p align="center">
+  <img src="docs/fitandsleek-icon.png" alt="Fit & Sleek Icon" width="80" />
+  <br/>
   <img src="docs/fitandsleek-logo.png" alt="Fit & Sleek — Men Clothings" width="480" />
 </p>
 
